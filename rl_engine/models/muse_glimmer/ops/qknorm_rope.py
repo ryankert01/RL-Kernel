@@ -234,14 +234,17 @@ def rope_rows(
     device: torch.device | str | int | None = None,
     theta: float = ROPE_THETA,
     dim: int = HEAD_DIM,
+    check_range: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """fp32 ``(cos, sin)`` rows ``(T, dim)`` for absolute ``positions``, gathered (exact copies,
     ``index_select``) from :func:`canonical_rope_table` on ``device`` (default: the positions'
     CUDA device, else the current one).  Bitwise equal to ``rope_table(positions)``.
 
     Positions must be int32/int64, 1-D and inside ``[0, ROPE_TABLE_POSITIONS)``; out-of-range
-    positions raise ``ValueError`` (checked on the host, one sync; skipped during CUDA-graph
-    capture, where ``index_select``'s device-side bounds check still fails loudly)."""
+    positions raise ``ValueError``.  The check costs one device->host sync for CUDA positions;
+    it is skipped during CUDA-graph capture or with ``check_range=False`` (hot loops that
+    validated the positions once), where ``index_select``'s device-side bounds check still
+    fails loudly (it never clamps).  Hoist one call per forward out of the layer loop."""
     positions = torch.as_tensor(positions)
     if positions.dim() != 1:
         raise ValueError(f"positions must be 1-D (T,), got shape {tuple(positions.shape)}")
@@ -251,8 +254,8 @@ def rope_rows(
         device = positions.device
     cos, sin = canonical_rope_table(device, theta=theta, dim=dim)
     capturing = positions.device.type == "cuda" and torch.cuda.is_current_stream_capturing()
-    if positions.numel() and not capturing:
-        lo, hi = int(positions.min()), int(positions.max())
+    if check_range and positions.numel() and not capturing:
+        lo, hi = torch.stack(torch.aminmax(positions)).tolist()  # one sync
         if lo < 0 or hi >= ROPE_TABLE_POSITIONS:
             raise ValueError(
                 f"position out of range: [{lo}, {hi}] not inside [0, {ROPE_TABLE_POSITIONS}) "
@@ -504,6 +507,7 @@ def qknorm_scaled_rope_at(
     layer_idx: int | None = None,
     eps: float = RMS_NORM_EPS,
     qk_scale: float = QK_SCALE,
+    check_range: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """The contract's assembly signature ``qknorm_scaled_rope(q, k, pos, local?)``.
 
@@ -511,7 +515,8 @@ def qknorm_scaled_rope_at(
     layers gather ``cos``/``sin`` rows for ``positions`` from :func:`canonical_rope_table` on
     ``q``'s device (so the table bits cannot come from another builder); global layers ignore
     ``positions`` (may be None).  Same bits as :func:`qknorm_scaled_rope` with ``rope_table``
-    rows."""
+    rows.  ``check_range`` is passed to :func:`rope_rows` (one host sync per call when True;
+    in a 52-layer loop prefer one ``rope_rows`` per forward + ``qknorm_scaled_rope(local=..)``)."""
     if local is None and layer_idx is None:
         raise ValueError("give local=True/False or layer_idx: the layer kind must be explicit")
     if layer_idx is not None:
@@ -530,7 +535,7 @@ def qknorm_scaled_rope_at(
         raise ValueError(
             f"positions must be (T,) with T={q.shape[0]}; got shape {tuple(positions.shape)}"
         )
-    cos, sin = rope_rows(positions, device=q.device)
+    cos, sin = rope_rows(positions, device=q.device, check_range=check_range)
     return qknorm_scaled_rope(q, k, cos, sin, eps=eps, qk_scale=qk_scale, local=True)
 
 

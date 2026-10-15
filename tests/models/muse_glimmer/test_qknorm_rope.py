@@ -555,11 +555,12 @@ class TestF1RopeTableIdentity:
 
     def test_rope_rows_gathers_the_canonical_table(self):
         pos = torch.tensor([0, 1, 2047, 2048, 4095, 777, ROPE_POSITIONS - 1], device=DEV)
+        rc, rs = rope_table(pos, device=DEV)
         for p in (pos, pos.to(torch.int32), pos.cpu()):
-            c, s = op.rope_rows(p)
-            rc, rs = rope_table(pos, device=DEV)
-            assert c.device.type == "cuda"
-            assert torch.equal(c, rc) and torch.equal(s, rs)
+            for check in (True, False):
+                c, s = op.rope_rows(p, check_range=check)
+                assert c.device.type == "cuda"
+                assert torch.equal(c, rc) and torch.equal(s, rs)
 
     def test_rope_rows_rejects_out_of_range_positions(self):
         for bad in ([ROPE_POSITIONS], [-1], [3, ROPE_POSITIONS + 5]):
@@ -725,6 +726,8 @@ class TestF4ExplicitLayerSelection:
         ):
             got = op.qknorm_scaled_rope_at(q, k, pos, **kw)
             assert torch.equal(got[0], ref[0]) and torch.equal(got[1], ref[1]), kw
+        got = op.qknorm_scaled_rope_at(q, k, pos, local=True, check_range=False)
+        assert torch.equal(got[0], ref_l[0]) and torch.equal(got[1], ref_l[1])
         # global layers ignore positions (may be None)
         got = op.qknorm_scaled_rope_at(q, k, None, local=False)
         assert torch.equal(got[0], ref_g[0])
