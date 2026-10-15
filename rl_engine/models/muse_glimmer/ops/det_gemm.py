@@ -14,8 +14,10 @@ bf16 for every layer GEMM and fp32 for the lm_head logits (O7).
 
 Reduction-order / cast summary (details in the kernel module docstring):
   forward   y  = round_out( tree_c( sum_{k in chunk c} a[m,k] * w[n,k] ) ),  chunks over K;
-            K % 256 != 0 raises unless the caller opts into the ragged rule (``ragged_k=True``,
-            only for reductions over the token axis, e.g. a weight gradient written as a GEMM)
+            K % 256 != 0 raises unless the caller opts into the masked tail rule
+            (``ragged_k=True``), which is only for backward reductions written as a forward GEMM:
+            a weight gradient (K = tokens, the dW rule) or an input gradient (K = output
+            features, the dA rule) -- e.g. the lm_head / FFN backward
   backward  dY -> bf16 once (declared cast, also for the fp32-output lm_head path),
             dA = tree over N   of dY_bf16[m,n] * w[n,k]            -> bf16  (K-rule on N;
                  N % 256 != 0 uses the masked rule below with N_pad = roundup(N, 256), which
@@ -80,8 +82,8 @@ BLOCK_K_RULE = (
 )
 K_RULE = (
     "K % 256 == 0 required (8 chunks x 32); otherwise ValueError, unless the caller passes "
-    "ragged_k=True (token-axis reductions only): K_pad = roundup(K, 256), 8 chunks of K_pad/8, "
-    "columns >= K masked to zero"
+    "ragged_k=True (backward reductions only: dW over tokens, dA over output features): "
+    "K_pad = roundup(K, 256), 8 chunks of K_pad/8, columns >= K masked to zero"
 )
 DA_CHUNK_RULE = (
     "reduction over N with the canonical rule (8 chunks of N/8); N % 256 != 0 (never for the "
@@ -197,8 +199,9 @@ def fast_det_gemm(
     strides) or ``(K, N)`` when ``w_kn=True``.  ``out_dtype`` is bf16 (default) or fp32 (lm_head
     logits).  ``k_chunks`` is 8 under the contract; 1, 2 and 4 are accepted for sub-tree
     experiments only (the backward reductions over N and M always use 8 chunks).
-    ``ragged_k=True`` opts into the declared ragged rule for K % 256 != 0 (``K_RULE``); use it
-    only for reductions over the token axis.  The result is ``(..., N)``.
+    ``ragged_k=True`` opts into the declared masked tail rule for K % 256 != 0 (``K_RULE``); use
+    it only for backward reductions written as a GEMM (dW over tokens, dA over output features).
+    The result is ``(..., N)``.
     """
 
     if k_chunks not in _SUPPORTED_CHUNK_COUNTS:

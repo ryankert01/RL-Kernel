@@ -24,7 +24,8 @@ once.  No cuBLAS / ``torch.matmul`` anywhere on the strict path.
 Backward (deterministic, tile by tile, same tree)::
 
     dz_t  = (onehot_t - exp(zhat_t - logZ)) * dlogp * (m * (1 - tanh**2))   fp32 -> bf16 once
-    dh    = tree_t( gemm(dz_t, W_lm[tile t]^T) )  fp32 partials -> bf16 once   (K = tile, 8 chunks)
+    dh    = tree_t( gemm(dz_t, W_lm[tile t]^T, ragged_k=True) )  fp32 partials -> bf16 once
+                    (K = tile, 8 chunks; a tile that is not a multiple of 256 uses the masked tail)
     dW_lm[tile t] = gemm(dz_t^T, h, ragged_k=True) fp32 -> bf16 ; padded rows are exactly 0
                     (K = T tokens: T_pad = roundup(T, 256), 8 chunks of T_pad/8, rows >= T masked)
 
@@ -471,8 +472,10 @@ def _backward_tiles(
         )
         del z_t
         if need_dh:
-            # dh_t = dz_t @ W_t  ->  gemm(a=dz_t (T,Vt), w=W_t^T (H,Vt)) = dz_t @ W_t
-            dh_partials.append(gemm_fn(dz_t, w_t.t(), out_dtype=torch.float32))
+            # dh_t = dz_t @ W_t  ->  gemm(a=dz_t (T,Vt), w=W_t^T (H,Vt)) = dz_t @ W_t.  K = Vt is
+            # an input-gradient reduction over output features: det_gemm's dA rule (8 chunks;
+            # Vt % 256 != 0, e.g. toy vocabularies, uses the masked tail; 25344 needs none).
+            dh_partials.append(gemm_fn(dz_t, w_t.t(), out_dtype=torch.float32, ragged_k=True))
         if dw is not None:
             # dW_t = dz_t^T @ h  ->  gemm(a=dz_t^T (Vt,T), w=h^T (H,T)) = dz_t^T @ h.  K = T is the
             # token axis: declared ragged rule (T_pad = roundup(T, 256), masked rows), any T.
@@ -735,9 +738,10 @@ def trace(*, gemm: GemmFn | None = None) -> dict[str, Any]:
     if backend == "fast_det_gemm":
         gemm_order = (
             "logits z_t = gemm(h, W_t) fp32 out, K = H in 8 canonical chunks (mma.sync chain per "
-            "chunk, fixed fp32 tree ((0+1)+(2+3))+((4+5)+(6+7)), no split-K); dh_t = gemm(dz_t, "
-            "W_t^T) K = tile in 8 chunks; dW_t = gemm(dz_t^T, h, ragged_k=True) K = T: "
-            "T_pad = roundup(T, 256), 8 chunks, rows >= T masked; backend fast_det_gemm"
+            "chunk, fixed fp32 tree ((0+1)+(2+3))+((4+5)+(6+7)), no split-K; H % 256 == 0 "
+            "required); dh_t = gemm(dz_t, W_t^T, ragged_k=True) K = tile in 8 chunks (masked "
+            "tail if tile % 256 != 0; 25344 needs none); dW_t = gemm(dz_t^T, h, ragged_k=True) "
+            "K = T: T_pad = roundup(T, 256), 8 chunks, rows >= T masked; backend fast_det_gemm"
         )
     else:
         gemm_order = f"explicit non-default backend {backend} (see gemm.reduction_order)"
