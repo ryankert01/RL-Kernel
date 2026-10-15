@@ -433,6 +433,23 @@ class TestStrictSiblings:
                 assert torch.equal(s_strict[3].bool(), s_fb[3].bool())
 
 
+@gpu
+class TestTPSimulation:
+    def test_tp2_tp4_tp8_layer_and_logp_equal_tp1(self):
+        """Binding arithmetic at simulated TP 2/4/8 (threads + in-process all-gather, real shapes,
+        KV replicated at TP4/8, LoRA sharded) equals TP1 bit for bit."""
+
+        from rl_engine.models.muse_glimmer.runtime.vllm_tp_sim import simulate
+
+        report = simulate((2, 4, 8), tokens=19, device=DEVICE)
+        bad = [
+            (e["tp"], e["lora"], e.get("errors"), e.get("equal_to_tp1"))
+            for e in report["results"]
+            if not e["all_equal"]
+        ]
+        assert report["all_equal"], bad
+
+
 # ------------------------------------------------------------------------------------------
 # E2E (opt-in)
 # ------------------------------------------------------------------------------------------

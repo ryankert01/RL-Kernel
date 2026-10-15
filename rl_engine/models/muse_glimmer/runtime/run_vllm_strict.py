@@ -380,15 +380,29 @@ def run_profile(engine: Any, prompts: list[list[int]], *, batch: int) -> dict[st
 
     def params(max_tokens: int) -> list[Any]:
         return [
-            SamplingParams(max_tokens=max_tokens, temperature=1.0, seed=7 + i, ignore_eos=True,
-                           logprobs=0, detokenize=False)
+            SamplingParams(
+                max_tokens=max_tokens,
+                temperature=1.0,
+                seed=7 + i,
+                ignore_eos=True,
+                logprobs=0,
+                detokenize=False,
+            )
             for i in range(batch)
         ]
 
     out: dict[str, Any] = {}
-    for label, step_index, max_tokens in (("prefill", 0, 1), ("decode", 1, 3)):
+    prompt_tokens = sum(len(p) for p in _bench_prompts(prompts, batch))
+    for label, max_tokens in (("prefill", 1), ("decode", 4)):
         llm.collective_rpc(
-            tools.worker_profile, kwargs={"action": "arm", "step_index": step_index, "top": 25}
+            tools.worker_profile,
+            kwargs={
+                "action": "arm",
+                "kind": label,
+                "min_tokens": prompt_tokens // 2,
+                "reqs": batch,
+                "top": 25,
+            },
         )
         llm.generate(batch_prompts, params(max_tokens), use_tqdm=False)
         results = llm.collective_rpc(tools.worker_profile, kwargs={"action": "result"})
@@ -411,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--strict", action="store_true", default=True)
     mode.add_argument("--native", action="store_true")
     parser.add_argument("--prompt-file", default=None)
-    parser.add_argument("--xrt-filter", default="gsm8k_")
+    parser.add_argument("--xrt-filter", default="gsm8k_test_")
     parser.add_argument("--chat-template", action="store_true")
     parser.add_argument("--no-generate", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=64)

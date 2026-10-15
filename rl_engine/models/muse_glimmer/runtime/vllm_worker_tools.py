@@ -163,13 +163,22 @@ def _top_ops(prof: Any, top: int) -> list[dict[str, Any]]:
 
 
 def worker_profile(
-    worker: Any, action: str = "arm", step_index: int = 0, top: int = 25
+    worker: Any,
+    action: str = "arm",
+    kind: str = "any",
+    min_tokens: int = 0,
+    reqs: int = 0,
+    top: int = 25,
 ) -> dict[str, Any] | None:
     """Profile exactly one engine step.
 
-    ``action='arm'``: the ``step_index``-th non-empty ``execute_model`` after arming (0 = the next
-    one) runs under ``torch.profiler`` until its ``sample_tokens`` returns.  ``action='result'``
-    returns ``{"step": {...}, "top_ops": [...], "total_self_cuda_ms": x}`` and disarms.
+    ``action='arm'``: the first non-empty ``execute_model`` after arming that matches ``kind``
+    runs under ``torch.profiler`` until its ``sample_tokens`` returns.  ``kind='decode'`` matches a
+    pure decode step (scheduled tokens == requests) with at least ``reqs`` requests;
+    ``kind='prefill'`` matches a step with at least ``min_tokens`` scheduled tokens and more
+    tokens than requests; ``kind='any'`` matches the next step.  (Requests reach the engine core
+    asynchronously, so step indices are not a reliable selector.)  ``action='result'`` returns
+    ``{"step": {...}, "top_ops": [...], "total_self_cuda_ms": x}`` and disarms.
     """
 
     if action == "arm":
@@ -191,12 +200,18 @@ def worker_profile(
             state["prof"] = None
 
         def execute_model(scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
-            tokens, reqs = _scheduled(scheduler_output)
+            tokens, reqs_now = _scheduled(scheduler_output)
             if tokens == 0 or state["result"] is not None or state["prof"] is not None:
                 return original_execute(scheduler_output, *args, **kwargs)
             index = state["seen"]
             state["seen"] += 1
-            if index != int(step_index):
+            if kind == "decode":
+                match = tokens == reqs_now and reqs_now >= int(reqs)
+            elif kind == "prefill":
+                match = tokens > reqs_now and tokens >= int(min_tokens)
+            else:
+                match = True
+            if not match:
                 return original_execute(scheduler_output, *args, **kwargs)
             torch.cuda.synchronize()
             prof = torch.profiler.profile(
@@ -207,7 +222,7 @@ def worker_profile(
             )
             prof.__enter__()
             state["prof"] = prof
-            state["step"] = {"tokens": tokens, "reqs": reqs, "index": index}
+            state["step"] = {"tokens": tokens, "reqs": reqs_now, "index": index, "kind": kind}
             state["t0"] = time.perf_counter()
             out = original_execute(scheduler_output, *args, **kwargs)
             if out is not None:
