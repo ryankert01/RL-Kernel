@@ -657,14 +657,18 @@ DRIVERS = ("alone", "prefill_minus_last", "chunked", "decode", "padded_right", "
 # --------------------------------------------------------------------------------------------
 # Per-layer drift (where in the network do the bits start to differ, and how fast it grows)
 # --------------------------------------------------------------------------------------------
-# Sub-modules of one decoder layer whose OUTPUT is tapped, in the order HF 5.17 runs them
-# (the attention core itself is a function, so ``self_attn.o_proj`` is the first point after it).
+# Points inside one decoder layer, in the order HF 5.17 runs them: ``<module>`` taps that
+# module's OUTPUT, ``<module>.input`` its first INPUT (a pre-hook).  The attention core (QK^T,
+# softmax, PV, after RoPE) is a function, not a module: ``self_attn.o_proj.input`` is its gated
+# output ``attn * sigmoid(gate_proj(x))``, so a first difference there and not in q/k/v/gate
+# proj is the attention core (or RoPE); one at ``self_attn.o_proj`` only is the o_proj GEMM.
 SUBLAYER_POINTS = (
     "input_layernorm",
     "self_attn.q_proj",
     "self_attn.k_proj",
     "self_attn.v_proj",
     "self_attn.gate_proj",
+    "self_attn.o_proj.input",
     "self_attn.o_proj",
     "post_attention_layernorm",
     "pre_feedforward_layernorm",
@@ -673,14 +677,20 @@ SUBLAYER_POINTS = (
     "mlp.down_proj",
     "post_feedforward_layernorm",
 )
+RESIDUAL_POINT_PREFIXES = ("embedding", "final_norm")
+
+
+def is_residual_point(name: str) -> bool:
+    """``embedding``, ``layer_<i>`` (decoder layer output) and ``final_norm``."""
+    return name in RESIDUAL_POINT_PREFIXES or (name.startswith("layer_") and "." not in name)
 
 
 class LayerTap:
     """Forward hooks copying ONE batch row to CPU after the embedding, after every decoder
-    layer and after the final norm.  Options: ``rope=True`` also taps the bf16 RoPE ``cos``
-    table (``rotary_emb`` output 0, point ``rope_cos``); ``sublayers=(i, ...)`` also taps the
-    outputs of :data:`SUBLAYER_POINTS` inside those layers (points ``layer_i.<module>``, placed
-    before ``layer_i`` in execution order).  Repeated calls (chunked prefill, decode steps) are
+    layer and after the final norm.  Options: ``rope=True`` also taps the bf16 RoPE tables
+    (``rotary_emb`` outputs, points ``rope_cos`` / ``rope_sin``); ``sublayers=(i, ...)`` also
+    taps :data:`SUBLAYER_POINTS` inside those layers (points ``layer_i.<point>``, placed before
+    ``layer_i`` in execution order).  Repeated calls (chunked prefill, decode steps) are
     concatenated along the token axis."""
 
     def __init__(self, model: nn.Module, batch_row: int = 0, *, rope: bool = False,
@@ -690,22 +700,39 @@ class LayerTap:
         subs = set(int(i) for i in sublayers)
         if any(i < 0 or i >= n for i in subs):
             raise ValueError(f"sublayers {sorted(subs)} outside 0..{n - 1}")
-        named: list[tuple[str, nn.Module]] = [("embedding", model.embed_tokens)]
+        # (name, module, what): what = output index, or "input" for the first forward input
+        named: list[tuple[str, nn.Module, Any]] = [("embedding", model.embed_tokens, 0)]
         if rope:
-            named.append(("rope_cos", model.rotary_emb))
+            named += [("rope_cos", model.rotary_emb, 0), ("rope_sin", model.rotary_emb, 1)]
         for i, layer in enumerate(model.layers):
             if i in subs:
-                named.extend((f"layer_{i}.{p}", layer.get_submodule(p)) for p in SUBLAYER_POINTS)
-            named.append((f"layer_{i}", layer))
-        named.append(("final_norm", model.norm))
-        self.names = [k for k, _ in named]
+                for p in SUBLAYER_POINTS:
+                    if p.endswith(".input"):
+                        named.append((f"layer_{i}.{p}", layer.get_submodule(p[:-6]), "input"))
+                    else:
+                        named.append((f"layer_{i}.{p}", layer.get_submodule(p), 0))
+            named.append((f"layer_{i}", layer, 0))
+        named.append(("final_norm", model.norm, 0))
+        self.names = [k for k, _, _ in named]
         self.parts: dict[str, list[torch.Tensor]] = {k: [] for k in self.names}
-        self.handles = [m.register_forward_hook(self._hook(k)) for k, m in named]
+        self.handles = [
+            m.register_forward_pre_hook(self._pre_hook(k)) if what == "input"
+            else m.register_forward_hook(self._hook(k, what))
+            for k, m, what in named
+        ]
 
-    def _hook(self, name: str):
+    def _keep(self, name: str, t: torch.Tensor) -> None:
+        self.parts[name].append(t[self.row].detach().to("cpu", copy=True))
+
+    def _hook(self, name: str, index: int = 0):
         def fn(_m: Any, _i: Any, out: Any) -> None:
-            t = out[0] if isinstance(out, tuple) else out
-            self.parts[name].append(t[self.row].detach().to("cpu", copy=True))
+            self._keep(name, out[index] if isinstance(out, tuple) else out)
+
+        return fn
+
+    def _pre_hook(self, name: str):
+        def fn(_m: Any, args: Any) -> None:
+            self._keep(name, args[0])
 
         return fn
 
@@ -1205,6 +1232,7 @@ __all__ = [
     "env_info",
     "fp32_hex",
     "head_logits",
+    "is_residual_point",
     "hex_to_fp32",
     "hf_rope_inv_freq",
     "hidden_alone",

@@ -249,12 +249,18 @@ def cmd_hf_layers(args: argparse.Namespace) -> int:
             with A.enter_contexts(model, ctx):
                 var = A.layer_trace(model, seqs, target, driver, chunk, **kw)
             torch.cuda.synchronize(device)
-            layers = A.layer_diff(base, var, seqs[target].completion_start)
-            first = next((r["point"] for r in layers if r["frac_elems_differ"] > 0), None)
+            points = A.layer_diff(base, var, seqs[target].completion_start)
+            first = next((r["point"] for r in points if r["frac_elems_differ"] > 0), None)
+            layers = [r for r in points if A.is_residual_point(r["point"])]
             part["layer_records"].append({
                 "engine": "hf", "setting": name, "factor": factor, "factor_id": fid,
                 "sequence": sid, "first_point_with_diff": first,
-                "wall_ms": (time.perf_counter() - t1) * 1e3, "layers": layers,
+                "first_residual_point_with_diff": next(
+                    (r["point"] for r in layers if r["frac_elems_differ"] > 0), None),
+                "wall_ms": (time.perf_counter() - t1) * 1e3,
+                "layers": layers,  # embedding, layer_0..layer_51, final_norm
+                "detail_points": [r for r in points if not A.is_residual_point(r["point"])],
+                "execution_order": [r["point"] for r in points],
             })
             fin = layers[-1]
             _log(f"{sid} {name}: first diff at {first}; final_norm frac "
@@ -458,6 +464,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
         p["_path"] = str(path)
     payload = merge_parts(parts, args.tokens, commands=_commands(args, parts),
                           tokenizer=args.tokenizer)
+    payload["previous_runs"] = [compare_previous(payload, json.loads(pathlib.Path(p).read_text()),
+                                                 str(p)) for p in (args.previous or [])]
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=1))
@@ -642,6 +650,32 @@ def merge_parts(parts: list[dict[str, Any]], tokens: str, *, commands: list[str]
         payload["unregistered_hf_settings"] = unknown
     payload["headline"] = headline(payload)
     return payload
+
+
+def compare_previous(payload: dict[str, Any], prev: dict[str, Any], path: str) -> dict[str, Any]:
+    """Cross-run repeat: tokens whose baseline logp bits differ between this merge and an
+    earlier run (a merged ``ablation.json`` or a single part file)."""
+    if "baselines" in prev:
+        old = {k: prev["baselines"].get(k) for k in ("hf", "strict")}
+        commit = prev.get("commit")
+        commits = prev.get("commits_all_parts") or prev.get("commits")
+    else:
+        kind = "strict" if prev.get("part") == "strict" else "hf"
+        old = {kind: prev.get("baseline")}
+        commit, commits = prev.get("commit"), None
+    out: dict[str, Any] = {"path": path, "commit": commit, "commits_all_parts": commits}
+    for k, b in old.items():
+        new = payload["baselines"].get(k)
+        if not b or not new:
+            out[k] = None
+            continue
+        ob = {p["sequence"]: p["logp_hex"] for p in b["per_sequence"]}
+        per = {p["sequence"]: sum(x != y for x, y in zip(p["logp_hex"], ob.get(p["sequence"], [])))
+               for p in new["per_sequence"]}
+        out[k] = {"tokens_differ": sum(per.values()),
+                  "n_tokens": sum(len(p["logp_hex"]) for p in new["per_sequence"]),
+                  "per_sequence": per}
+    return out
 
 
 PROB_BUCKETS = ((0.9, "p>0.9"), (0.5, "0.5<p<=0.9"), (0.1, "0.1<p<=0.5"), (-1.0, "p<=0.1"))
@@ -837,6 +871,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     m.add_argument("--tokenizer", default=f"{DEFAULT_CKPT}/tokenizer.json",
                    help="tokenizer.json (read as data) for the low-probability token view; "
                         "'' to skip")
+    m.add_argument("--previous", nargs="*", default=None,
+                   help="earlier ablation.json / part files: record how many baseline tokens "
+                        "differ from them (cross-run repeat)")
     m.add_argument("--command", action="append", default=None,
                    help="exact command line that produced a part (repeatable)")
     m.add_argument("--commands-file", default=None,

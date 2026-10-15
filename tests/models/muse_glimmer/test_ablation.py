@@ -328,19 +328,26 @@ def test_layer_trace_sublayer_and_rope_points(tiny_hf):
     kw = {"rope": True, "sublayers": (0,)}
     base = A.layer_trace(model, seqs, 1, "alone", **kw)
     names = list(base)
-    want = ["embedding", "rope_cos"] + [f"layer_0.{p}" for p in A.SUBLAYER_POINTS] + ["layer_0"]
+    want = (["embedding", "rope_cos", "rope_sin"] + [f"layer_0.{p}" for p in A.SUBLAYER_POINTS]
+            + ["layer_0"])
     assert names[: len(want)] == want and names[-1] == "final_norm"
     assert "layer_1.self_attn.q_proj" not in base
+    assert [x for x in names if A.is_residual_point(x)] == \
+        ["embedding"] + [f"layer_{i}" for i in range(4)] + ["final_norm"]
     n = seqs[1].length - 1
-    assert base["rope_cos"].shape == (n, model.config.head_dim)
     cfg = model.config
-    assert base["layer_0.self_attn.q_proj"].shape == (n, cfg.num_attention_heads * cfg.head_dim)
+    assert base["rope_cos"].shape == base["rope_sin"].shape == (n, cfg.head_dim)
+    assert not torch.equal(base["rope_cos"], base["rope_sin"])
+    width = cfg.num_attention_heads * cfg.head_dim
+    assert base["layer_0.self_attn.q_proj"].shape == (n, width)
+    assert base["layer_0.self_attn.o_proj.input"].shape == (n, width)  # gated attention output
     assert base["layer_0.mlp.gate_proj"].shape == (n, cfg.intermediate_size)
     for driver, chunk in (("padded_right", None), ("chunked", 8), ("decode", None)):
         var = A.layer_trace(model, seqs, 1, driver, chunk, **kw)
         assert list(var) == names, driver
         rows = A.layer_diff(base, var, seqs[1].completion_start)
-        assert rows[1]["point"] == "rope_cos" and rows[1]["max_abs"] == 0.0, driver
+        assert [r["point"] for r in rows[1:3]] == ["rope_cos", "rope_sin"], driver
+        assert rows[1]["max_abs"] == 0.0 and rows[2]["max_abs"] == 0.0, driver
         assert all(r["max_abs"] < 1e-3 for r in rows), driver
     with pytest.raises(ValueError):
         A.LayerTap(model, sublayers=(99,))
@@ -467,6 +474,12 @@ def test_merge_synthetic_parts(tmp_path):
     assert pay["headline"]
     md = R.markdown_table(pay["settings"])
     assert "chunked_prefill_64__vs__prefill_L_minus_1" in md
+    # cross-run repeat against an earlier merged file and an earlier part file
+    prev = R.compare_previous(pay, pay, "self")
+    assert prev["hf"]["tokens_differ"] == 0 and prev["strict"]["tokens_differ"] == 0
+    prev = R.compare_previous(pay, drifted, "p/hf_extra.json")
+    assert prev["hf"]["tokens_differ"] == prev["hf"]["per_sequence"]["gsm8k_test_1"] > 0
+    assert "strict" not in prev
 
 
 # --------------------------------------------------------------------------------------------
