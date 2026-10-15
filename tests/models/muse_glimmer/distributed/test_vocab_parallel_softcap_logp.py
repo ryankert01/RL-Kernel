@@ -156,8 +156,13 @@ class TestSingleDevice:
     def test_softcap_follows_hf_order_in_fp32(self):
         z = torch.linspace(-400.0, 400.0, 1001, device="cuda")
         capped = vp.softcap_fp32(z, multiplier=vp.OUTPUT_MULTIPLIER, softcap=vp.FINAL_LOGIT_SOFTCAP)
-        hf = ((z * vp.OUTPUT_MULTIPLIER) / vp.FINAL_LOGIT_SOFTCAP).tanh() * vp.FINAL_LOGIT_SOFTCAP
+        mult = torch.tensor(vp.OUTPUT_MULTIPLIER, device="cuda")
+        cap = torch.tensor(vp.FINAL_LOGIT_SOFTCAP, device="cuda")
+        hf = cap * ((z * mult) / cap).tanh()  # mul m -> div T -> tanh -> mul T, IEEE division
         assert torch.equal(capped, hf) and bool((capped.abs() <= vp.FINAL_LOGIT_SOFTCAP).all())
+        assert torch.allclose(
+            capped, ((z * vp.OUTPUT_MULTIPLIER) / vp.FINAL_LOGIT_SOFTCAP).tanh() * 20.0, atol=1e-5
+        )
 
     def test_wrong_local_tile_count_fails_closed(self, inputs):
         h, w_pad, targets = inputs

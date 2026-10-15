@@ -102,11 +102,17 @@ def tile_logits_fp32(h: Tensor, w_tile: Tensor) -> Tensor:
 
 
 def softcap_fp32(z: Tensor, *, multiplier: float, softcap: float) -> Tensor:
-    """``T * tanh((z * m) / T)`` in fp32, in the HF operation order (mul m, div T, tanh, mul T)."""
+    """``T * tanh((z * m) / T)`` in fp32, in the HF operation order (mul m, div T, tanh, mul T).
+
+    ``m`` and ``T`` are fp32 tensors (not Python scalars) so torch performs a true IEEE
+    division, matching the sibling op's ``softcap_golden`` / ``tl.div_rn`` chain bit for bit.
+    """
 
     if z.dtype != torch.float32:
         raise TypeError("soft cap operates on fp32 logits")
-    return torch.tanh((z * float(multiplier)) / float(softcap)) * float(softcap)
+    mult = torch.tensor(float(multiplier), dtype=z.dtype, device=z.device)
+    cap = torch.tensor(float(softcap), dtype=z.dtype, device=z.device)
+    return cap * torch.tanh((z * mult) / cap)
 
 
 def _fixed_tree_rowsum(x: Tensor, lane: int = VOCAB_LANE) -> Tensor:

@@ -28,7 +28,11 @@ bits are independent of the number of heads in the launch and of the batch.
 Backward half (NOT implemented here; stated for provenance): dK/dV and the ``k_proj`` /
 ``v_proj`` weight gradients of KV head ``g`` are produced per canonical 4-head group (one per
 canonical TP8 rank) and summed in the 4-leaf sub-tree ``(c0+c1)+(c2+c3)`` of the canonical tree
-(canonical ranks 0-3 -> KV 0, 4-7 -> KV 1) at every physical TP including TP1.
+(canonical ranks 0-3 -> KV 0, 4-7 -> KV 1) at every physical TP including TP1. The sibling
+kernel ``triton.gated_attention_bwd.strict_gated_attention_bwd_partials`` (same package)
+already emits the fp32 ``(8, Tk, 2, 128)`` group partials this rule consumes; under TP t a rank
+holds the ``8/t`` partials of its own groups and the same all-gather + tree as ``o_proj`` gives
+TP1 bits (follow-up row).
 """
 
 from __future__ import annotations
@@ -46,15 +50,23 @@ BLOCK_N = 64
 BLOCK_M = 64
 SLIDING_WINDOW = int(OFFICIAL_FINGERPRINT["sliding_window"])
 
-try:  # fixed interface owned by the gated_attention agent
-    from rl_engine.models.muse_glimmer.ops.gated_attention import (  # type: ignore
-        strict_gated_attention_fwd_varlen as _sibling_attention,
-    )
+_sibling_attention = None
+ATTENTION_BACKEND = "fallback:pure_torch_fp32_blockwise_online_softmax"
+for _module_name in (
+    # Strict Triton forward (the gated_attention agent's kernel; also what
+    # ops.gated_attention_autograd.strict_forward binds when importable).
+    "rl_engine.models.muse_glimmer.triton.gated_attention_fwd",
+    # Name used in the WS2 brief for the same fixed interface.
+    "rl_engine.models.muse_glimmer.ops.gated_attention",
+):
+    try:
+        import importlib
 
-    ATTENTION_BACKEND = "muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen"
-except ImportError:  # pragma: no cover - depends on sibling branch
-    _sibling_attention = None
-    ATTENTION_BACKEND = "fallback:pure_torch_fp32_blockwise_online_softmax"
+        _sibling_attention = importlib.import_module(_module_name).strict_gated_attention_fwd_varlen
+        ATTENTION_BACKEND = f"{_module_name}.strict_gated_attention_fwd_varlen"
+        break
+    except (ImportError, AttributeError):  # pragma: no cover - depends on sibling branch
+        continue
 
 
 # --------------------------------------------------------------------------- #
@@ -296,7 +308,8 @@ def trace(layout: TPLayout) -> dict[str, Any]:
         "kv_ownership": layout.kv_ownership_map(),
         "backward_rule": (
             "dK/dV and k_proj/v_proj weight grads per canonical 4-head group, summed in the "
-            "4-leaf sub-tree (c0+c1)+(c2+c3) per KV head at every physical TP (not implemented)"
+            "4-leaf sub-tree (c0+c1)+(c2+c3) per KV head at every physical TP (not implemented "
+            "here; partials from triton.gated_attention_bwd.strict_gated_attention_bwd_partials)"
         ),
     }
 

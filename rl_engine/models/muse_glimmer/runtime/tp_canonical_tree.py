@@ -164,7 +164,7 @@ def subtree_partial_fp32(a_local: Tensor, w_local: Tensor, chunk_ids: Sequence[i
             f"K_local {a_local.size(1)} / {w_local.size(1)} does not split into {count} chunks"
         )
     if _sibling_partial is not None:
-        return _sibling_partial(a_local, w_local, ids)
+        return _sibling_partial(a_local.contiguous(), w_local.contiguous(), ids)
     width = a_local.size(1) // count
     partials = [
         _fallback_chunk_partial_fp32(
