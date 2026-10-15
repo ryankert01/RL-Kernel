@@ -80,7 +80,7 @@ from rl_engine.models.muse_glimmer.runtime.megatron_strict import (
     pack_sequences,
 )
 
-DEFAULT_MICRO_BATCH_TOKENS = 8192
+DEFAULT_MICRO_BATCH_TOKENS = 4096  # TP1 strict training OOMs at 8192 tokens on A100-80GB
 
 
 def _free_port() -> int:

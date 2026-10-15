@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--grad-b-std", type=float, default=1e-3, help="LoRA B init for grad checks")
-    ap.add_argument("--micro-batch-tokens", type=int, default=8192)
+    ap.add_argument("--micro-batch-tokens", type=int, default=4096)
     ap.add_argument("--bench-tokens", default="512,1024,2048,4096")
     ap.add_argument("--no-checkpoint", action="store_true", help="disable per-layer recompute")
     args = ap.parse_args(argv)
@@ -397,16 +397,23 @@ def main(argv: list[str] | None = None) -> int:
                 trainer.score([seq], [1])
                 row["strict_forward_ms"] = (_sync_time() - ta) * 1e3
                 row["strict_forward_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
-                ta = _sync_time()
-                lp = trainer.token_logprobs([seq], [1])
-                tb = _sync_time()
-                info = trainer.step(-lp[0].mean())
-                tc = _sync_time()
-                row["strict_train_logprobs_ms"] = (tb - ta) * 1e3
-                row["strict_recompute_fwd_bwd_ms"] = info["fwd_bwd_s"] * 1e3
-                row["strict_optimizer_ms"] = info["optimizer_s"] * 1e3
-                row["strict_step_total_ms"] = (tc - ta) * 1e3
-                row["strict_recompute_mismatches"] = info["recompute_logp_mismatches"]
+                try:
+                    ta = _sync_time()
+                    lp = trainer.token_logprobs([seq], [1])
+                    tb = _sync_time()
+                    info = trainer.step(-lp[0].mean())
+                    tc = _sync_time()
+                    row["strict_train_logprobs_ms"] = (tb - ta) * 1e3
+                    row["strict_recompute_fwd_bwd_ms"] = info["fwd_bwd_s"] * 1e3
+                    row["strict_optimizer_ms"] = info["optimizer_s"] * 1e3
+                    row["strict_step_total_ms"] = (tc - ta) * 1e3
+                    row["strict_recompute_mismatches"] = info["recompute_logp_mismatches"]
+                except torch.OutOfMemoryError as exc:  # TP1 only; recorded, run continues
+                    if tp > 1:
+                        raise
+                    row["strict_train_error"] = repr(exc)[:300]
+                    trainer.zero_grad()
+                    torch.cuda.empty_cache()
                 row["strict_train_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
                 trainer.native_logprobs([seq], [1])
                 trainer.memory(reset=True)
