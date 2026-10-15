@@ -85,6 +85,7 @@ _GROUP_OF = {
     "other": "other",
 }
 _ROOT = "forward"
+ANNOT_PREFIX = "mgrg"
 
 
 def group_of(cls: str, kind: str) -> str:
@@ -102,6 +103,9 @@ class RegionTimer:
     def __init__(self) -> None:
         self._recs: list[dict[str, Any]] = []
         self._stack: list[int] = []
+        # annotate=True also opens a torch.profiler record_function range per region (named
+        # ANNOT_PREFIX|cls|kind|layer) so kernels can be attributed to regions afterwards.
+        self.annotate = False
 
     def reset(self) -> None:
         if self._stack:
@@ -118,8 +122,15 @@ class RegionTimer:
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         idx = len(self._recs)
-        self._recs.append({"cls": cls, "kind": kind or "model", "layer": layer,
-                           "parent": parent, "start": start, "end": end})
+        rec = {"cls": cls, "kind": kind or "model", "layer": layer,
+               "parent": parent, "start": start, "end": end, "annot": None}
+        if self.annotate:
+            rf = torch.autograd.profiler.record_function(
+                f"{ANNOT_PREFIX}|{cls}|{rec['kind']}|{-1 if layer is None else layer}"
+            )
+            rf.__enter__()
+            rec["annot"] = rf
+        self._recs.append(rec)
         self._stack.append(idx)
         start.record()
         return idx
@@ -127,7 +138,11 @@ class RegionTimer:
     def end(self, idx: int) -> None:
         if not self._stack or self._stack[-1] != idx:
             raise RuntimeError(f"region {idx} closed out of order (stack {self._stack[-3:]})")
-        self._recs[idx]["end"].record()
+        rec = self._recs[idx]
+        rec["end"].record()
+        if rec["annot"] is not None:
+            rec["annot"].__exit__(None, None, None)
+            rec["annot"] = None
         self._stack.pop()
 
     @contextmanager
@@ -254,35 +269,108 @@ def per_layer_type_means(by_kind: dict[str, dict[str, float]], n_global: int,
 
 
 # --------------------------------------------------------------------------------------------
-# torch.profiler cross-check: total GPU kernel time of one call
+# torch.profiler view: GPU kernel time per region (no CPU gaps)
 # --------------------------------------------------------------------------------------------
-def kernel_time_profile(fn: Callable[[], Any], top: int = 12) -> dict[str, Any]:
-    """Run ``fn`` once under torch.profiler; return summed CUDA kernel time and the top kernels.
+_LAUNCH_PREFIXES = ("cudaLaunch", "cuLaunch", "cudaMemcpy", "cudaMemset", "cuMemcpy",
+                    "cuMemset", "cudaGraphLaunch")
 
-    ``gpu_busy_ms`` vs the CUDA-event wall time of the same call shows how launch-bound it is.
-    """
+
+def attributed_kernel_profile(
+    fn: Callable[[], Any],
+    timer: RegionTimer,
+    install: Callable[[RegionTimer | None], None],
+    *,
+    num_layers: int,
+    root_cls: str = _ROOT,
+    top: int = 12,
+) -> dict[str, Any]:
+    """One extra call under torch.profiler with every region also opened as a record_function
+    range. Each GPU kernel (and memcpy/memset) is charged, with its device duration, to the
+    innermost region that was open on the CPU when its launch API call was made (CUPTI
+    correlation id kernel <-> launch). Gives the per-class GPU kernel time without the CPU
+    launch gaps that the CUDA-event view includes; ``gpu_busy_ms`` vs the wall time shows how
+    launch-bound a configuration is."""
     from torch.profiler import ProfilerActivity, profile
 
     torch.cuda.synchronize()
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
-        fn()
-        torch.cuda.synchronize()
-    kernels: dict[str, list[float]] = {}
-    for evt in prof.events():
-        dev = getattr(evt, "device_type", None)
-        if dev is None or "CUDA" not in str(dev):
+    install(timer)
+    timer.reset()
+    timer.annotate = True
+    try:
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+            idx = timer.begin(root_cls, "model", None)
+            fn()
+            timer.end(idx)
+            torch.cuda.synchronize()
+    finally:
+        timer.annotate = False
+        install(None)
+    timer.reset()
+    ranges: list[tuple[float, float, str, str, int]] = []
+    launches: dict[int, float] = {}
+    kernels: list[tuple[int, float, str]] = []
+    for e in prof.events():
+        dt = str(getattr(e, "device_type", ""))
+        if dt.endswith("CPU"):
+            if e.name.startswith(ANNOT_PREFIX + "|"):
+                _, cls, kind, layer = e.name.split("|")
+                ranges.append((e.time_range.start, e.time_range.end, cls, kind, int(layer)))
+            elif e.name.startswith(_LAUNCH_PREFIXES):
+                launches[int(e.id)] = e.time_range.start
+        elif dt.endswith("CUDA"):
+            if getattr(e, "is_user_annotation", False):
+                continue
+            kernels.append((int(e.id), float(e.time_range.elapsed_us()), e.name))
+    by_kind = {k: {c: 0.0 for c in CLASSES} for k in KINDS}
+    per_layer = {c: [0.0] * num_layers for c in CLASSES}
+    names: dict[str, list[float]] = {}
+    unattributed = 0.0
+    timed = []
+    for corr, dur, name in kernels:
+        names.setdefault(name, []).append(dur)
+        t = launches.get(corr)
+        if t is None:
+            unattributed += dur
+        else:
+            timed.append((t, dur))
+    timed.sort()
+    ranges.sort(key=lambda r: (r[0], -r[1]))
+    stack: list[tuple[float, float, str, str, int]] = []
+    ri = 0
+    for t, dur in timed:
+        while ri < len(ranges) and ranges[ri][0] <= t:
+            while stack and stack[-1][1] < ranges[ri][0]:
+                stack.pop()
+            stack.append(ranges[ri])
+            ri += 1
+        while stack and stack[-1][1] < t:
+            stack.pop()
+        if not stack:
+            unattributed += dur
             continue
-        us = float(getattr(evt, "device_time", 0.0) or 0.0)
-        if us <= 0:
-            us = float(getattr(evt, "self_device_time_total", 0.0) or 0.0)
-        name = evt.name
-        kernels.setdefault(name, []).append(us)
-    total_us = sum(sum(v) for v in kernels.values())
-    ranked = sorted(kernels.items(), key=lambda kv: -sum(kv[1]))[:top]
+        _, _, cls, kind, layer = stack[-1]
+        cls = cls if cls in by_kind["model"] else "other"
+        kind = kind if kind in KINDS else "model"
+        by_kind[kind][cls] += dur / 1e3
+        if kind != "model" and 0 <= layer < num_layers:
+            per_layer[cls][layer] += dur / 1e3
+    busy = sum(sum(v) for v in names.values()) / 1e3
+    by_group = {g: 0.0 for g in GROUPS}
+    for k in KINDS:
+        for c in CLASSES:
+            by_group[group_of(c, k)] += by_kind[k][c]
+    ranked = sorted(names.items(), key=lambda kv: -sum(kv[1]))[:top]
     return {
-        "method": "torch.profiler (CUDA activity), one clean call",
-        "gpu_busy_ms": total_us / 1e3,
-        "kernel_launches": sum(len(v) for v in kernels.values()),
+        "method": "torch.profiler CUDA activity, one call, kernels charged to the innermost "
+                  "region open at launch (correlation id)",
+        "gpu_busy_ms": busy,
+        "unattributed_ms": unattributed / 1e3,
+        "kernel_launches": len(kernels),
+        "launch_events_matched": len(timed),
+        "by_kind_class_gpu_ms": by_kind,
+        "by_class_gpu_ms": {c: sum(by_kind[k][c] for k in KINDS) for c in CLASSES},
+        "by_group_gpu_ms": by_group,
+        "per_layer_gpu_ms": per_layer,
         "top_kernels": [
             {"name": k[:160], "calls": len(v), "ms": sum(v) / 1e3} for k, v in ranked
         ],
@@ -353,8 +441,14 @@ def measure(
     out["activation_peak_gib"] = _gib(peak - mem_before)
     if profiler_check:
         try:
-            out["kernel_profile"] = kernel_time_profile(fn)
+            out["kernel_profile"] = attributed_kernel_profile(
+                fn, timer, install, num_layers=num_layers, root_cls=root_cls
+            )
         except Exception as exc:  # the cross-check must never sink the measurement
+            timer.annotate = False
+            install(None)
+            timer._stack.clear()
+            timer._recs = []
             out["kernel_profile"] = {"error": f"{type(exc).__name__}: {exc}"}
     return out
 
@@ -410,14 +504,16 @@ def profile_strict(
             f" peak {res['peak_allocated_gib']:.2f} GiB")
         if paged_prefill:
             # fresh sessions are allocated up front so the cache zero-fill is not timed
-            sessions = [model.new_session(t) for _ in range(warmup + 2 * repeats)]
+            sessions = [model.new_session(t)
+                        for _ in range(warmup + 2 * repeats + int(profiler_check))]
 
             def paged_call(ids=ids, targets=targets, sessions=sessions):
                 return model.prefill(sessions.pop(), ids, targets=targets)
 
             log(f"[strict] paged prefill T={t}")
             res = measure(paged_call, timer, model.set_timer, num_layers=nl, warmup=warmup,
-                          repeats=repeats)
+                          repeats=repeats, profiler_check=profiler_check)
+            del sessions
             runs.append({"phase": "prefill_paged", "T": t, "batch": 1, "context": 0,
                          "tokens": t, **res})
             log(f"  total {res['total_ms_median']:.1f} ms "
@@ -729,7 +825,7 @@ __all__ = [
     "combine_repeats",
     "decode_batch_invariance",
     "group_of",
-    "kernel_time_profile",
+    "attributed_kernel_profile",
     "measure",
     "profile_hf",
     "profile_strict",

@@ -337,6 +337,32 @@ def test_region_timer_classes_sum_to_root_and_keep_bits(tiny_model):
     assert all(len(v) == nl for v in summary["per_layer_ms"].values())
 
 
+def test_kernel_attribution_charges_gpu_time_to_regions(tiny_model):
+    from rl_engine.models.muse_glimmer.reference.profiling import (
+        RegionTimer,
+        attributed_kernel_profile,
+    )
+
+    ids = _tokens(150, tiny_model.cfg.vocab_size, seed=32).to(DEVICE)
+    targets = torch.cat([ids[1:], torch.full((1,), -1, device=DEVICE)])
+
+    def call():
+        with torch.no_grad():
+            return tiny_model.forward_train(ids, targets)["logp"]
+
+    call()
+    prof = attributed_kernel_profile(call, RegionTimer(), tiny_model.set_timer,
+                                     num_layers=tiny_model.cfg.num_hidden_layers)
+    assert tiny_model._timer is None
+    assert prof["gpu_busy_ms"] > 0 and prof["kernel_launches"] > 0
+    assert prof["launch_events_matched"] >= 0.9 * prof["kernel_launches"], prof
+    attributed = sum(prof["by_class_gpu_ms"].values())
+    assert abs(attributed + prof["unattributed_ms"] - prof["gpu_busy_ms"]) < 1e-3 + 1e-6 * 1e3
+    gpu = prof["by_kind_class_gpu_ms"]
+    assert gpu["local"]["attention"] > 0 and gpu["global"]["qkvg_gemm"] > 0
+    assert gpu["model"]["lm_head_gemm"] > 0
+
+
 def test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree(tiny_model, tmp_path):
     import json
 
