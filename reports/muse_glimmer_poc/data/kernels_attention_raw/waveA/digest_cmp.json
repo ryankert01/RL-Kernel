@@ -1,0 +1,416 @@
+{
+ "forward": {
+  "global/chunked_varlen/T=4096/[2048,4088]": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/packed/[5, 130, 64, 2100, 1, 333]": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/paged_decode/B=1/ctx=1": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/paged_decode/B=4/ctx=300": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/paged_decode/B=8/ctx=2049": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/paged_decode/B=8/ctx=4096": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/paged_prefill/T=300": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=1/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=1/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=1/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=17/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=17/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=17/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2047/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2047/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2047/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2048/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2048/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2048/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2049/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2049/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2049/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2100/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2100/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=2100/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=300/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=300/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=300/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=4096/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=64/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=64/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=64/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "global/varlen/T=8192/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/chunked_varlen/T=4096/[2048,4088]": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/packed/[5, 130, 64, 2100, 1, 333]": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/paged_decode/B=1/ctx=1": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/paged_decode/B=4/ctx=300": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/paged_decode/B=8/ctx=2049": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/paged_decode/B=8/ctx=4096": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/paged_prefill/T=300": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=1/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=1/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=1/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=17/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=17/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=17/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2047/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2047/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2047/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2048/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2048/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2048/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2049/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2049/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2049/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2100/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2100/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=2100/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=300/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=300/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=300/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=4096/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=64/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=64/head": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=64/token": {
+   "y": true,
+   "o": true,
+   "lse": true
+  },
+  "local/varlen/T=8192/auto": {
+   "y": true,
+   "o": true,
+   "lse": true
+  }
+ },
+ "backward": {
+  "global/T=1": {
+   "old": "ERROR CompilationError: , allow_tf32=False)\n\n    acc_dk = acc_dk * scale\n    group_base = g.to(tl.int64) * (Tk.to(tl.int64) * HKV * D)\n                                   ^\nAttributeError(\"'int' object has no attribute 'to'\")",
+   "new": "ok"
+  },
+  "global/T=2": {
+   "dq": true,
+   "dk": true,
+   "dv": true,
+   "dgate": true
+  },
+  "global/T=2048": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "global/T=2100": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "global/T=300": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "global/T=4096": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "global/T=64": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "local/T=1": {
+   "old": "ERROR CompilationError: , allow_tf32=False)\n\n    acc_dk = acc_dk * scale\n    group_base = g.to(tl.int64) * (Tk.to(tl.int64) * HKV * D)\n                                   ^\nAttributeError(\"'int' object has no attribute 'to'\")",
+   "new": "ok"
+  },
+  "local/T=2": {
+   "dq": true,
+   "dk": true,
+   "dv": true,
+   "dgate": true
+  },
+  "local/T=2048": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "local/T=2100": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "local/T=300": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "local/T=4096": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  },
+  "local/T=64": {
+   "dq": false,
+   "dk": false,
+   "dv": false,
+   "dgate": false
+  }
+ }
+}

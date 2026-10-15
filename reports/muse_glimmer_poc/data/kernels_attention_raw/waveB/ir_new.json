@@ -1,0 +1,109 @@
+{
+ "attention": [
+  {
+   "enable_fp_fusion": true,
+   "dots": [
+    "%scores_169 = tt.dot %q_168, %scores_166, %cst_9 : tensor<64x128xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<128x64xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -",
+    "%acc_193 = tt.dot %acc_191, %v_192, %acc_188 : tensor<64x64xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<64x128xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -> ten"
+   ],
+   "f32_ops": {
+    "add.f32": 124,
+    "cvt.f32.bf16": 128,
+    "cvt.rn.bf16.f32": 32,
+    "cvt.rn.bf16x2.f32": 64,
+    "cvt.rn.f32.s32": 8,
+    "div.rn.ftz.f32": 128,
+    "ex2.approx.f32": 104,
+    "fma.rn.f32": 8,
+    "fma.rn.ftz.f32": 96,
+    "max.f32": 52,
+    "mul.f32": 280,
+    "sub.f32": 104
+   },
+   "mma_sync": 128,
+   "ftz_div": 128
+  },
+  {
+   "enable_fp_fusion": true,
+   "dots": [
+    "%scores_151 = tt.dot %q_150, %scores_148, %cst_9 : tensor<16x128xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<128x64xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -",
+    "%acc_175 = tt.dot %acc_173, %v_174, %acc_170 : tensor<16x64xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<64x128xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -> ten"
+   ],
+   "f32_ops": {
+    "add.f32": 32,
+    "cvt.f32.bf16": 32,
+    "cvt.rn.bf16.f32": 24,
+    "cvt.rn.bf16x2.f32": 8,
+    "cvt.rn.f32.s32": 2,
+    "div.rn.ftz.f32": 32,
+    "ex2.approx.f32": 26,
+    "fma.rn.f32": 2,
+    "fma.rn.ftz.f32": 24,
+    "max.f32": 14,
+    "mul.f32": 70,
+    "sub.f32": 26
+   },
+   "mma_sync": 32,
+   "ftz_div": 32
+  },
+  {
+   "enable_fp_fusion": true,
+   "dots": [
+    "%scores_186 = tt.dot %q_185, %scores_183, %cst_10 : tensor<64x128xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<128x64xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> ",
+    "%acc_212 = tt.dot %acc_210, %v_211, %acc_207 : tensor<64x64xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<64x128xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -> ten"
+   ],
+   "f32_ops": {
+    "add.f32": 124,
+    "cvt.f32.bf16": 128,
+    "cvt.rn.bf16.f32": 32,
+    "cvt.rn.bf16x2.f32": 64,
+    "cvt.rn.f32.s32": 8,
+    "div.rn.ftz.f32": 128,
+    "ex2.approx.f32": 104,
+    "fma.rn.f32": 8,
+    "fma.rn.ftz.f32": 96,
+    "max.f32": 52,
+    "mul.f32": 280,
+    "sub.f32": 104
+   },
+   "mma_sync": 128,
+   "ftz_div": 128
+  },
+  {
+   "enable_fp_fusion": true,
+   "dots": [
+    "%scores_163 = tt.dot %q_162, %scores_160, %cst_9 : tensor<16x128xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<128x64xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -",
+    "%acc_190 = tt.dot %acc_188, %v_189, %acc_185 : tensor<16x64xbf16, #ttg.dot_op<{opIdx = 0, parent = #mma, kWidth = 2}>> * tensor<64x128xbf16, #ttg.dot_op<{opIdx = 1, parent = #mma, kWidth = 2}>> -> ten"
+   ],
+   "f32_ops": {
+    "add.f32": 32,
+    "cvt.f32.bf16": 32,
+    "cvt.rn.bf16.f32": 24,
+    "cvt.rn.bf16x2.f32": 8,
+    "cvt.rn.f32.s32": 2,
+    "div.rn.ftz.f32": 32,
+    "ex2.approx.f32": 26,
+    "fma.rn.f32": 2,
+    "fma.rn.ftz.f32": 24,
+    "max.f32": 14,
+    "mul.f32": 70,
+    "sub.f32": 26
+   },
+   "mma_sync": 32,
+   "ftz_div": 32
+  }
+ ],
+ "norms": [
+  {
+   "enable_fp_fusion": false,
+   "f32_ops": {
+    "add.rn.f32": 72,
+    "cvt.f32.bf16": 64,
+    "cvt.rn.bf16x2.f32": 16,
+    "div.rn.f32": 2,
+    "mul.rn.f32": 96,
+    "sqrt.rn.f32": 1
+   }
+  }
+ ]
+}

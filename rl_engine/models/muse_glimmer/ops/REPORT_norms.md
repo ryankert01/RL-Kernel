@@ -1,5 +1,27 @@
 # REPORT — RFC #501 rows `normalized_embedding` + `fused_add_rmsnorm` (Muse-Glimmer-30B strict POC)
 
+## Wave B update (review wave A2: norms:R1, norms:R2) — supersedes the text below where it disagrees
+
+- **Golden division is now IEEE (norms:R1).** The golden computed `ms = ss / float(H)`. In torch
+  CUDA a division by a CPU scalar is `ss * (1/H)` (two roundings), on the CPU it is a true
+  division, so the golden was not the kernels' `div_rn(ss, H)` and differed between devices.
+  `inv_rms_fp32` now uses `div_ieee(ss, H)` = `torch.div` by a 0-dim tensor on `ss`'s device (a
+  true IEEE-RN division on both devices). New test `test_golden_mean_square_is_ieee_division`
+  (cpu, cuda): the golden's `inv` equals `1/sqrt(rn32(ss/H) + eps)` computed from the golden's
+  own `ss` with a correctly rounded division, bit for bit, at 4096 x 6656; the CUDA case fails on
+  f91e8b6 and passes now. The strict kernels are unchanged (they already used `div_rn`); only the
+  tolerance reference moved. The remaining kernel-vs-golden differences come from the `ss`
+  reduction tree only.
+- **Fail closed, pinned by tests (norms:R2).** `test_embedding_out_of_range_ids_fail_closed`
+  (subprocess: the device-side assert poisons the context) checks that ids `[3, 100]` on a
+  100-row table raise with `token_ids must be in [0, 100)` while `[3, 99]` pass.
+  `fused_post_norm_residual_pre_norm` now requires `branch`, `resid`, `w_post`, `w_pre` on one
+  device (it used to check each tensor only against its own weight):
+  `test_fused_rejects_mixed_devices` (meta vs cpu tensors, runs anywhere) and
+  `test_fused_rejects_two_gpus` (cuda:0 vs cuda:1; SKIPPED here: one GPU per lease, NOT RUN).
+- Tests: `tests/models/muse_glimmer/test_norms.py` 47 passed, 1 skipped (the two-GPU case) on one
+  leased A100 of pool 3,7 (see the Test commands section for the command).
+
 Branch `worktree-agent-ae93c2f69853aebf8` (merged from `feat/museglimmer-arch-fingerprint`).
 
 Files:
@@ -36,9 +58,12 @@ Shared row arithmetic (forward and backward, every kernel; one logical row per p
    standalone norm produce the same `ss` bits.
 3. `ms = div_rn(ss, H)`; `inv = div_rn(1.0, sqrt_rn(ms + eps))` — **the chosen "rsqrt form"**:
    IEEE round-to-nearest sqrt and division. The result is uniquely determined by IEEE-754 given
-   `ss`, so any future implementation (torch CPU/CUDA, Triton, CUDA C) reproduces it bitwise;
-   the libdevice `rsqrt`/`pow(-0.5)` approximations are not reproducible across toolchains. The
-   golden does `1.0 / torch.sqrt(ms + eps)` (same two IEEE-RN ops).
+   `ss`, so any implementation that really performs these IEEE operations reproduces it bitwise;
+   the libdevice `rsqrt`/`pow(-0.5)` approximations are not reproducible across toolchains.
+   Pitfall (review norms:R1): in torch CUDA, `t / python_float` is `t * (1 / python_float)`
+   (ATen's CPU-scalar fast path, two roundings), so a torch implementation must divide by a
+   tensor. The golden does `ms = div_ieee(ss, H)` (0-dim tensor divisor) and
+   `1.0 / torch.sqrt(ms + eps)` (`reciprocal`, one IEEE-RN division) — the same two IEEE-RN ops.
 4. `xhat = x * inv`; gain in fp32: `(1 + w)` (centered), `w` (weighted), none (embedding);
    `w` bf16 → fp32, `1 + w` formed in fp32.
 5. One cast to bf16 at the store (R5). Launches use `enable_fp_fusion=False`, so no FMA
@@ -46,9 +71,16 @@ Shared row arithmetic (forward and backward, every kernel; one logical row per p
 
 Golden reduction order: `ss` = sum of 32-wide chunk partials then sum over the H/32 partials
 (torch fp32, fixed inner shapes). Golden and kernel differ only in the `ss` tree; everything
-after `ss` is identical IEEE-RN arithmetic. Measured consequence at T=4096: strict output equals
-`golden.to(bf16)` for all but ~5e-6 of elements (rounding-boundary flips), max abs error 1.56e-2
-(½ bf16 ulp at |y|∈[4,8)); golden-vs-fp64 max 1e-6.
+after `ss` is identical IEEE-RN arithmetic (true since wave B: before, the golden's `ss / H`
+was a reciprocal multiply on CUDA, see the Wave B update). Measured consequence at T=4096 (with
+the pre-wave-B golden): strict output equals `golden.to(bf16)` for all but ~5e-6 of elements
+(rounding-boundary flips), max abs error 1.56e-2 (½ bf16 ulp at |y|∈[4,8)); golden-vs-fp64
+max 1e-6. Wave B re-measurement, same script on both trees (T=4096, H=6656,
+`kernels_attention_raw/waveB/norm_golden_mismatch_{base,new}.json`), strict vs
+`golden.to(bf16)` mismatch fraction, f91e8b6 golden -> IEEE golden: centered eps 1e-5
+4.95e-6 -> 2.31e-6, centered eps 1e-8 4.84e-6 -> 2.24e-6, weighted 5.03e-6 -> 2.20e-6, fused pre
+7.23e-6 -> 3.41e-6, fused resid_new 1.83e-6 -> 0.84e-6, embedding (table scale 0.02) 1.10e-6 ->
+3.41e-6. All remaining flips come from the `ss` tree.
 
 Fused kernel `[F1]` (one row per program): `post = bf16((b*inv_post)*(1+w_post))`
 (declared cast), `r' = bf16(r→fp32 + post→fp32)` (declared cast, stored), then the pre-norm of
@@ -121,7 +153,7 @@ repo); `reduction.float32` for golden-vs-fp64. Observed forward error is ½ bf16
   batch-4096 bits.
 - Repeat: two backward runs bit-identical for all ops (dx, dw, embedding dweight at V=202048).
 - Fusion: `fused_post_norm_residual_pre_norm` ≡ unfused composition, `torch.equal`, T∈{1,16,4096}.
-- Strict vs `golden.to(bf16)` mismatch fraction at T=4096: 4.8e-6 / 5.0e-6 / 4.6e-6 / 3.9e-6 /
+- Strict vs `golden.to(bf16)` mismatch fraction at T=4096 (pre-wave-B golden, see above): 4.8e-6 / 5.0e-6 / 4.6e-6 / 3.9e-6 /
   7.7e-6 (centered 1e-5, centered 1e-8, weighted, embedding, fused pre); fused `resid_new`
   differs from the golden's bf16 residual in 2.3e-6 of elements (one ulp, from `post` flips).
 
@@ -163,8 +195,10 @@ Optional, for the integrator:
   fp32. The reference-model agent should use the fused op in the layer (as the contract's model
   assembly says) so training uses one gradient path; the unfused ops are for the final norm and
   for the composition test.
-- `normalized_embedding` validates ids with `torch._assert_async` (no host sync); out-of-range
-  ids yield a zero row in the forward and are dropped by the sorted-segment backward.
+- `normalized_embedding` validates ids with `torch._assert_async` (no host sync); the kernel
+  itself maps an out-of-range id to a zero row, so rejection rests on that assert (pinned by
+  `test_embedding_out_of_range_ids_fail_closed` since wave B). The assert poisons the CUDA
+  context: the process cannot continue after it (fail closed, no recovery).
 - Triton compiles one variant per `(H, eps, form)`; first-call latency ~1–2 s each (shared
   `~/.triton` cache).
 
@@ -187,6 +221,10 @@ Optional, for the integrator:
 - Both rows should name the rsqrt form (`1/sqrt` IEEE-RN) and that the dw reduction is a
   fixed-order column fold, so O4's qk-norm (same statistic per 128-wide head) can share the
   helper and the TP agents know dw is already order-fixed before any cross-rank tree.
+- Correction (wave B, review norms:R1): an earlier version of this section said any torch
+  CPU/CUDA implementation of this form reproduces it bitwise. That holds only when torch really
+  divides: `t / python_float` on CUDA is a multiply by the reciprocal. The contract text should
+  say "IEEE-RN division (`div_rn`; in torch, `torch.div` by a tensor)".
 
 ## Time spent
 
