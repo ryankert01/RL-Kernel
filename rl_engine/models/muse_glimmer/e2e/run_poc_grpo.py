@@ -8,22 +8,25 @@ Mock (CPU, no GPUs, no downloads unless ``--task gsm8k``):
         --mock --mode strict/strict --steps 3 --prompts-per-step 4 --samples-per-prompt 4 \\
         --max-tokens 32 --run-dir /tmp/poc_mock
 
-Real run (lease the whole GPU set for this orchestrator; it runs in the vLLM env and starts the
-trainer server with ``--trainer-python``; layout A = rollout TP1 on GPU 0 + train TP2 on 2,3):
+Real run (lease exactly the GPUs of one run for this orchestrator; it runs in the vLLM env and
+starts the trainer server with ``--trainer-python``). Rollout TP2 + train TP2 on GPUs 0-3:
 
-    ~/bin/gpu-lease -n 8 --pool 0-7 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python \\
+    ~/bin/gpu-lease -n 4 --pool 0-3 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python \\
         -m rl_engine.models.muse_glimmer.e2e.run_poc_grpo \\
-        --rollout-tp 1 --rollout-gpus 0 --train-tp 2 --train-gpus 2,3 \\
+        --rollout-tp 2 --train-tp 2 \\
         --trainer-python ~/envs/megatron/bin/python --trainer-launcher process \\
         --steps 8 --prompts-per-step 8 --samples-per-prompt 4 --max-tokens 256 \\
         --lora-rank 16 --lr 1e-5 --mode strict/strict --run-dir runs/poc/strict_strict
 
 ``--mode`` is ``<train>/<rollout>``: native/native, strict/native, native/strict, strict/strict.
 
-GPU placement is explicit: ``--rollout-gpus`` / ``--train-gpus`` are PHYSICAL ids inside the
-lease. The orchestrator sets ``CUDA_VISIBLE_DEVICES`` for the processes it starts, from these
-flags and nowhere else: the trainer server gets ``--train-gpus``; this process (whose children
-are vLLM's engine-core / worker processes) gets ``--rollout-gpus`` before vLLM starts.
+GPU placement: ``--rollout-gpus`` / ``--train-gpus`` are PHYSICAL ids inside the lease. Omitted,
+they default to the lease in order (rollout = the first ``--rollout-tp`` leased ids, trainer =
+the next ``--train-tp``), so ``gpu-lease -n 3`` works without knowing which ids it will pick.
+The orchestrator sets ``CUDA_VISIBLE_DEVICES`` for the processes it starts, from these ids and
+nowhere else: the trainer server gets the train ids; this process (whose children are vLLM's
+engine-core / worker processes) gets the rollout ids before vLLM starts. The trainer server is
+launched first and builds while vLLM starts (``bridge.RemoteTrainer(wait=False)``).
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from rl_engine.models.muse_glimmer.e2e.bridge import (
     LAUNCHERS,
     MOCK_TRAINER_FACTORY,
     RemoteTrainer,
+    default_gpu_ids,
     plan_gpu_placement,
 )
 from rl_engine.models.muse_glimmer.e2e.data import (
@@ -77,9 +81,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-path", default=str(DEFAULT_MODEL_PATH))
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--rollout-tp", type=int, default=1)
-    parser.add_argument("--rollout-gpus", type=_int_list, default=[0], help="physical GPU ids")
+    parser.add_argument(
+        "--rollout-gpus",
+        type=_int_list,
+        default=None,
+        help="physical GPU ids (default: the first --rollout-tp ids of the lease)",
+    )
     parser.add_argument("--train-tp", type=int, default=2)
-    parser.add_argument("--train-gpus", type=_int_list, default=[2, 3], help="physical GPU ids")
+    parser.add_argument(
+        "--train-gpus",
+        type=_int_list,
+        default=None,
+        help="physical GPU ids (default: the next --train-tp ids of the lease)",
+    )
     parser.add_argument(
         "--trainer-bridge",
         choices=("auto", "on", "off"),
@@ -148,7 +162,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _placement(args: argparse.Namespace) -> tuple[list[int], list[int]]:
+    """Physical GPU ids of the rollout and the trainer (omitted flags come from the lease)."""
+
+    gpu_trainer = args.mock and str(args.mock_trainer_device).startswith("cuda")
+    if args.mock and not gpu_trainer:
+        # CPU mocks: no GPU is used; record the flags (or nothing) for the config only.
+        return list(args.rollout_gpus or []), list(args.train_gpus or [])
+    if args.mock:
+        _, train = default_gpu_ids(
+            rollout_tp=0,
+            train_tp=args.train_tp,
+            parent_visible=os.environ.get("CUDA_VISIBLE_DEVICES"),
+            rollout_gpus=[],
+            train_gpus=args.train_gpus,
+        )
+        return list(args.rollout_gpus or []), train
+    return default_gpu_ids(
+        rollout_tp=args.rollout_tp,
+        train_tp=args.train_tp,
+        parent_visible=os.environ.get("CUDA_VISIBLE_DEVICES"),
+        rollout_gpus=args.rollout_gpus,
+        train_gpus=args.train_gpus,
+    )
+
+
 def config_from_args(args: argparse.Namespace) -> LoopConfig:
+    rollout_gpus, train_gpus = _placement(args)
     if args.run_dir is None:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         suffix = "_mock" if args.mock else ""
@@ -177,9 +217,9 @@ def config_from_args(args: argparse.Namespace) -> LoopConfig:
         model_path=args.model_path,
         max_model_len=args.max_model_len,
         rollout_tp=args.rollout_tp,
-        rollout_gpus=list(args.rollout_gpus),
+        rollout_gpus=rollout_gpus,
         train_tp=args.train_tp,
-        train_gpus=list(args.train_gpus),
+        train_gpus=train_gpus,
         sync_via_file=args.sync_via_file,
         recheck_rollout_logprobs=not args.no_recheck_rollout_logprobs,
         mock=args.mock,
@@ -231,9 +271,11 @@ def build_engines(cfg: LoopConfig) -> tuple[Any, Any, Any]:
     """Return ``(rollout, trainer, tokenizer)``; mock on CPU or the real strict engines.
 
     Real engines: the GPU placement is validated against this process's lease, the trainer
-    server is launched first (``CUDA_VISIBLE_DEVICES`` = ``--train-gpus``) and loads while vLLM
-    starts in this process (``CUDA_VISIBLE_DEVICES`` = ``--rollout-gpus``, inherited by vLLM's
-    engine-core and worker processes); then the loop waits for the trainer to be ready.
+    server is launched first (``CUDA_VISIBLE_DEVICES`` = train ids) and builds the trainer right
+    away, while vLLM starts in this process (``CUDA_VISIBLE_DEVICES`` = rollout ids, inherited
+    by vLLM's engine-core and worker processes); then ``wait_ready`` connects and waits for the
+    rest of the trainer build (``provenance["trainer_start"]["bridge"]["hello"]["startup"]``
+    records the overlap).
     """
 
     train_strict, rollout_strict = cfg.train_strict, cfg.rollout_strict

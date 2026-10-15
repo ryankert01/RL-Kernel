@@ -23,7 +23,11 @@
 
 Transport: in-memory (same process) or a ``torch.save`` package under the run directory
 (separate processes). The hash is recomputed on load; the rollout reports the hash it holds in
-``provenance()["lora_sha256"]`` and the loop checks it equals the exported one.
+``provenance()["lora_sha256"]`` and the loop checks it equals the exported one. That top-level
+key is the ONLY accepted source: the rollout engine must derive it from what every TP rank
+actually holds (``StrictRolloutEngine`` recomputes it on each worker and reports ``None`` when
+the ranks disagree). Per-worker entries elsewhere in the provenance are never used as a
+fallback, so a rollout that cannot vouch for its ranks fails ``weight_sync_identity``.
 """
 
 from __future__ import annotations
@@ -190,9 +194,20 @@ def transfer_lora(
     rollout: Any,
     *,
     via_file: Path | None = None,
+    trainer_transport: str = "in_process",
 ) -> dict[str, Any]:
-    """Load ``package`` into ``rollout`` (in memory or through a file) and verify identity."""
+    """Load ``package`` into ``rollout`` (in memory or through a file) and verify identity.
 
+    ``trainer_transport`` names the hop the package already took from the trainer to this
+    process (``"in_process"`` or ``"bridge"``: the trainer-bridge socket); ``transport`` in the
+    returned record joins both hops (``"bridge+memory"``) and is just the rollout hop
+    (``"memory"`` / ``"file"``) for an in-process trainer.
+    """
+
+    if trainer_transport not in ("in_process", "bridge"):
+        raise ValueError(
+            f"trainer_transport must be 'in_process' or 'bridge', got {trainer_transport!r}"
+        )
     if via_file is not None:
         save_lora_package(package, via_file)
         loaded = load_lora_package(via_file)
@@ -209,7 +224,9 @@ def transfer_lora(
             f"{reported!r} ({source})"
         )
     return {
-        "transport": transport,
+        "transport": transport if trainer_transport == "in_process" else f"bridge+{transport}",
+        "trainer_to_orchestrator": trainer_transport,
+        "orchestrator_to_rollout": transport,
         "exported_sha256": package.sha256,
         "rollout_sha256": reported,
         "rollout_sha256_source": source,
@@ -222,18 +239,15 @@ def transfer_lora(
 def rollout_lora_sha256(provenance: Mapping[str, Any]) -> tuple[str | None, str]:
     """The LoRA hash a rollout engine reports holding, and where it was found.
 
-    ``provenance["lora_sha256"]`` (the engine-level contract) wins. ``StrictRolloutEngine``
-    (vLLM) reports it per TP worker instead (``provenance["workers"][i]["lora_sha256"]``); that
-    is accepted only when every worker reports the same string.
+    Only the engine-level ``provenance["lora_sha256"]`` is accepted. The engine is responsible
+    for making it true of every TP rank (``StrictRolloutEngine`` recomputes the hash on each
+    worker from the tensors it installed and reports ``None`` when they disagree); per-worker
+    declared values (``provenance["workers"][i]["lora_sha256"]``) are never a fallback.
     """
 
     top = provenance.get("lora_sha256")
-    if top is not None:
-        return (top if isinstance(top, str) else None), "provenance.lora_sha256"
-    workers = provenance.get("workers")
-    if isinstance(workers, list) and workers:
-        values = [w.get("lora_sha256") if isinstance(w, Mapping) else None for w in workers]
-        if all(isinstance(v, str) for v in values) and len(set(values)) == 1:
-            return values[0], f"provenance.workers[*].lora_sha256 ({len(values)} ranks agree)"
-        return None, f"provenance.workers[*].lora_sha256 missing or disagreeing: {values}"
-    return None, "no lora_sha256 in rollout provenance"
+    if isinstance(top, str) and top:
+        return top, "provenance.lora_sha256"
+    if top is None:
+        return None, "provenance.lora_sha256 missing or None (per-worker values are not accepted)"
+    return None, f"provenance.lora_sha256 is not a hash string: {top!r}"

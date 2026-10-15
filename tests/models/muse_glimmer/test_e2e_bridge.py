@@ -415,9 +415,9 @@ def test_trainer_builds_while_the_caller_starts_the_rollout(tmp_path: Path) -> N
         remote.close()
     assert hello["build_s"] >= build_s
     assert blocked < 2.0, f"wait_ready blocked {blocked:.2f}s: the build did not overlap"
-    startup = hello["startup"]
-    assert startup["server_build_end_after_launch_s"] < startup["wait_ready_called_after_launch_s"]
-    assert startup["client_connected_after_launch_s"] >= startup["server_build_start_after_launch_s"]
+    st = hello["startup"]
+    assert st["server_build_end_after_launch_s"] < st["wait_ready_called_after_launch_s"]
+    assert st["client_connected_after_launch_s"] >= st["server_build_start_after_launch_s"]
 
 
 @requires_megatron_env
