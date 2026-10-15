@@ -647,6 +647,7 @@ def test_strict_trainer_protocol_real_checkpoint():
     from rl_engine.models.muse_glimmer.runtime.strict_trainer import StrictTrainer
 
     tp = int(os.environ.get("MUSEGLIMMER_TRAIN_TP", "1"))
+    strict = os.environ.get("MUSEGLIMMER_TRAIN_STRICT", "1") != "0"
     ckpt = os.path.expanduser(os.environ.get("MUSEGLIMMER_CHECKPOINT", "~/models/Muse-Glimmer-30B"))
     xrt = Path(__file__).resolve().parents[3] / "reports" / "muse_glimmer_poc" / "data" / "xrt_tokens.json"
     data = json.loads(xrt.read_text())["sequences"][:3]
@@ -655,7 +656,7 @@ def test_strict_trainer_protocol_real_checkpoint():
     for name in ("token_logprobs", "step", "export_lora", "provenance", "close"):
         assert callable(getattr(StrictTrainer, name)) and hasattr(TrainerLike, name)
     trainer = StrictTrainer(ckpt, tensor_parallel_size=tp, gpu_ids=list(range(tp)), lora_rank=16,
-                            lr=1e-4, strict=True, seed=1234)
+                            lr=1e-4, strict=strict, seed=1234)
     try:
         pkg0 = sync.export_lora_verified(trainer, step=0)  # hash + key schema
         assert trainer.provenance()["lora_sha256"] == pkg0.sha256
@@ -668,7 +669,9 @@ def test_strict_trainer_protocol_real_checkpoint():
         g = [torch.randn(lp.shape[0], generator=gen) for lp in lps]
         loss = sum((lp * gi.to(lp.device)).sum() for lp, gi in zip(lps, g, strict=True))
         info = trainer.step(loss)  # the E2E bridge's surrogate loss sum_i (lp_i * g_i).sum()
-        assert info["recompute_logp_mismatches"] == 0
+        print("step", info)
+        if strict:  # the native path makes no bitwise promise (recorded, not asserted)
+            assert info["recompute_logp_mismatches"] == 0
         assert info["recompute_logp_checked"] == sum(lp.numel() for lp in lps)
         assert info["grad_norm"] > 0 and info["step"] == 1
         pkg1 = sync.export_lora_verified(trainer, step=1)
@@ -677,6 +680,7 @@ def test_strict_trainer_protocol_real_checkpoint():
         # any scalar loss: only the first sequence, non-linear in logp
         lps2 = trainer.token_logprobs(seqs, starts)
         info2 = trainer.step(-(lps2[0].exp().mean()))
-        assert info2["recompute_logp_mismatches"] == 0 and info2["step"] == 2
+        print("step2", info2)
+        assert info2["step"] == 2 and (not strict or info2["recompute_logp_mismatches"] == 0)
     finally:
         trainer.close()

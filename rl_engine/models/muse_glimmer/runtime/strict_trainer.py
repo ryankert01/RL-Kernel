@@ -34,8 +34,10 @@ gradients in micro-batch order; then AdamW (``foreach=False``, elementwise per p
 the fp32 LoRA masters. The gradient norm is computed from the TP-gathered full gradients in
 canonical key order, so it is identical at every TP size.
 
-``strict=False`` serves Bridge's native forward (TE/cuBLAS kernels) for reference log-probs and
-benchmarks only: no LoRA, ``step`` raises.
+``strict=False`` is the NATIVE trainer: Bridge's own forward (TE/cuBLAS kernels, bf16 logits)
+with the same LoRA parameterisation added by forward hooks in plain bf16 matmuls
+(``megatron_native_lora``), one sequence per forward, MCore full per-layer recompute for the
+backward. Same protocol, same export schema/hash; TP 1/2 only.
 """
 
 from __future__ import annotations
@@ -54,15 +56,23 @@ import torch.multiprocessing as mp
 from rl_engine.models.muse_glimmer.runtime import strict_kernels as sk
 from rl_engine.models.muse_glimmer.runtime.megatron_lora import (
     DEFAULT_LORA_RANK,
+    LayerLoRA,
+    export_lora,
     gather_lora,
+    lora_parameters,
     lora_sha256,
+    muse_glimmer_projection_shapes,
     replicated_lora_grads_agree,
+)
+from rl_engine.models.muse_glimmer.runtime.megatron_native_lora import (
+    NATIVE_LORA_FORM,
+    NativeLoRAHooks,
+    native_logprobs_with_grad,
 )
 from rl_engine.models.muse_glimmer.runtime.megatron_strict import (
     SUPPORTED_TP,
     StrictBindingError,
-    binding_lora_parameters,
-    export_binding_lora,
+    _dims_from_manifest,
     install_museglimmer_megatron_strict,
     load_bridge_model,
     native_token_logprobs,
@@ -167,6 +177,8 @@ class _RankState:
         )
         self.binding = None
         self.optimizer = None
+        self.native_lora: list[LayerLoRA] | None = None
+        self.native_hooks: NativeLoRAHooks | None = None
         self._pending: dict[str, Any] | None = None
         self.last_step_info: dict[str, Any] = {}
         if strict:
@@ -174,12 +186,7 @@ class _RankState:
                 self.model, hf_path=model_path, lora_rank=lora_rank, seed=seed,
                 checkpoint_layers=checkpoint_layers, lora_b_init_std=lora_b_init_std,
             )
-            params = binding_lora_parameters(self.binding)
-            if params:
-                self.optimizer = torch.optim.AdamW(
-                    params, lr=lr, betas=(0.9, 0.999), eps=1e-8, weight_decay=weight_decay,
-                    foreach=False, fused=False,
-                )
+            self.comm = self.binding.comm
         else:
             for name in ("vision_tower", "vision_adapter", "vision_projection"):
                 if hasattr(self.model, name):
@@ -187,7 +194,33 @@ class _RankState:
             for p in self.model.parameters():
                 p.requires_grad_(False)
             torch.cuda.empty_cache()
-        self.comm = self.binding.comm if self.binding is not None else sk.TPComm(_tp_group())
+            self.comm = sk.TPComm(_tp_group())
+            if lora_rank > 0:
+                d = _dims_from_manifest()
+                shapes = muse_glimmer_projection_shapes(
+                    hidden=d.hidden, q_width=d.q_width, kv_width=d.kv_width, ffn=d.ffn
+                )
+                self.native_lora = [
+                    LayerLoRA(i, rank=lora_rank, shapes=shapes, tp_rank=self.comm.rank,
+                              tp_world=world, seed=seed, device=self.device,
+                              b_init_std=lora_b_init_std)
+                    for i in range(d.layers)
+                ]
+                self.native_hooks = NativeLoRAHooks(
+                    self.model, self.native_lora, tp_world=world, heads=d.heads,
+                    kv_heads=d.kv_heads, head_dim=d.head_dim,
+                )
+        params = lora_parameters(self._loras())
+        if params:
+            self.optimizer = torch.optim.AdamW(
+                params, lr=lr, betas=(0.9, 0.999), eps=1e-8, weight_decay=weight_decay,
+                foreach=False, fused=False,
+            )
+
+    def _loras(self) -> list[LayerLoRA]:
+        if self.binding is not None:
+            return list(self.binding.lora or [])
+        return list(self.native_lora or [])
 
     # -------------------------------------------------------------- strict forward
     def _strict_values(
@@ -212,17 +245,27 @@ class _RankState:
                 outs.append(self.binding.forward_packed(tokens, cu, positions, select, tgt))
         return outs
 
+    def _values(
+        self, token_ids: list[list[int]], starts: list[int], groups: list[list[int]], *, grad: bool
+    ) -> list[torch.Tensor]:
+        if self.strict:
+            return self._strict_values(token_ids, starts, groups, grad=grad)
+        outs = []
+        for group in groups:  # native: one sequence per group (B=1, no padding semantics)
+            (i,) = group
+            outs.append(native_logprobs_with_grad(
+                self.model, token_ids[i], int(starts[i]), self.device, grad=grad
+            ))
+        return outs
+
     def cmd_logprobs(self, token_ids: list[list[int]], starts: list[int], keep: bool) -> torch.Tensor:
         """Packed fp32 logp (no graph). ``keep`` registers the request for the next ``step``."""
         _validate_request(token_ids, starts)
-        if not self.strict:
-            outs = []
-            for seq, start in zip(token_ids, starts, strict=True):
-                lp = native_token_logprobs(self.model, torch.tensor([seq], dtype=torch.int64))
-                outs.append(lp[0, int(start) - 1 :].float())
-            return torch.cat(outs).detach()
-        groups = micro_batches([len(s) for s in token_ids], self.micro_batch_tokens)
-        values = [v.detach() for v in self._strict_values(token_ids, starts, groups, grad=False)]
+        if self.strict:
+            groups = micro_batches([len(s) for s in token_ids], self.micro_batch_tokens)
+        else:
+            groups = [[i] for i in range(len(token_ids))]
+        values = [v.detach() for v in self._values(token_ids, starts, groups, grad=False)]
         packed = torch.cat(values) if len(values) > 1 else values[0]
         if keep:
             self._pending = {
@@ -242,7 +285,7 @@ class _RankState:
         torch.cuda.synchronize()
         t0 = time.perf_counter()
         for group, stored in zip(pend["groups"], pend["values"], strict=True):
-            (logp,) = self._strict_values(pend["token_ids"], pend["starts"], [group], grad=True)
+            (logp,) = self._values(pend["token_ids"], pend["starts"], [group], grad=True)
             mismatches += int((logp.detach().view(torch.int32) != stored.view(torch.int32)).sum())
             checked += stored.numel()
             g = grad[offset : offset + stored.numel()]
@@ -260,8 +303,8 @@ class _RankState:
         }
 
     def _grad_norm(self) -> float:
-        grads = gather_lora(self.binding.lora or [], self.comm, source="grad",
-                            dtype=torch.float32, to_cpu=False)
+        grads = gather_lora(self._loras(), self.comm, source="grad", dtype=torch.float32,
+                            to_cpu=False)
         total = torch.zeros((), dtype=torch.float32, device=self.device)
         for key in sorted(grads):
             g = grads[key]
@@ -270,7 +313,7 @@ class _RankState:
 
     def cmd_optimizer_step(self) -> dict[str, Any]:
         if self.optimizer is None:
-            raise RuntimeError("step requires strict=True and lora_rank > 0")
+            raise RuntimeError("step requires lora_rank > 0")
         torch.cuda.synchronize()
         t0 = time.perf_counter()
         grad_norm = self._grad_norm()
@@ -278,7 +321,7 @@ class _RankState:
         self.optimizer.zero_grad(set_to_none=True)
         torch.cuda.synchronize()
         self.step_count += 1
-        params = binding_lora_parameters(self.binding)
+        params = lora_parameters(self._loras())
         return {
             "grad_norm": grad_norm,
             "lr": self.lr,
@@ -289,28 +332,27 @@ class _RankState:
         }
 
     def cmd_zero_grad(self) -> None:
-        if self.binding is not None:
-            for p in binding_lora_parameters(self.binding):
-                p.grad = None
+        for p in lora_parameters(self._loras()):
+            p.grad = None
 
     def cmd_lora_grads(self) -> dict[str, Any]:
         """TP-gathered fp32 LoRA gradients (CPU) + replicated-gradient agreement counts."""
-        grads = gather_lora(self.binding.lora or [], self.comm, source="grad", dtype=torch.float32)
-        checked, differing = replicated_lora_grads_agree(self.binding.lora or [], self.comm)
+        grads = gather_lora(self._loras(), self.comm, source="grad", dtype=torch.float32)
+        checked, differing = replicated_lora_grads_agree(self._loras(), self.comm)
         return {"grads": grads, "replicated_checked": checked, "replicated_differing": differing}
 
     def cmd_export(self) -> tuple[dict[str, torch.Tensor], str]:
-        if self.binding is None:
-            return {}, lora_sha256({})
-        return export_binding_lora(self.binding)
+        return export_lora(self._loras(), self.comm)
 
     def cmd_reset_lora_b(self, std: float, seed: int) -> None:
-        for lora in (self.binding.lora or []) if self.binding is not None else []:
+        for lora in self._loras():
             lora.reset_b(std, seed)
 
     def cmd_set_lora_enabled(self, flag: bool) -> None:
         if self.binding is not None:
             self.binding.lora_enabled = bool(flag) and self.binding.lora is not None
+        if self.native_hooks is not None:
+            self.native_hooks.enabled = bool(flag)
 
     def cmd_native(self, token_ids: list[list[int]], starts: list[int]) -> list[torch.Tensor]:
         outs = []
@@ -396,6 +438,11 @@ class _RankState:
         }
         if self.binding is not None:
             out.update(self.binding.provenance())
+        else:
+            out["lora"] = {"rank": len(self._loras()) and self._loras()[0].rank,
+                           "form": NATIVE_LORA_FORM, "enabled": bool(self.native_hooks
+                           and self.native_hooks.enabled)}
+            out["forward"] = "megatron.bridge MuseGlimmerModel.forward (TE kernels), bf16 logits"
         return out
 
 
@@ -452,7 +499,7 @@ class StrictTrainer:
             raise ValueError("gpu_ids must list one GPU per TP rank")
         self.tp = int(tensor_parallel_size)
         self.gpu_ids = [int(g) for g in gpu_ids]
-        self.lora_rank = int(lora_rank) if strict else 0
+        self.lora_rank = int(lora_rank)
         self._closed = False
         self._workers: list[Any] = []
         self._leaf: torch.Tensor | None = None
@@ -509,8 +556,8 @@ class StrictTrainer:
 
     def backward(self, loss: torch.Tensor) -> dict[str, Any]:
         """Accumulate LoRA gradients of ``loss`` (built from the last ``token_logprobs``)."""
-        if not self._state.strict or self._state.optimizer is None:
-            raise RuntimeError("training requires strict=True and lora_rank > 0")
+        if self._state.optimizer is None:
+            raise RuntimeError("training requires lora_rank > 0")
         if self._leaf is None:
             raise RuntimeError("call token_logprobs before step/backward")
         leaf, self._leaf = self._leaf, None
@@ -532,7 +579,7 @@ class StrictTrainer:
 
     def provenance(self) -> dict[str, Any]:
         out = self._state.provenance()
-        if self._state.strict and self._export_sha is None and not self._closed:
+        if self._state._loras() and self._export_sha is None and not self._closed:
             self.export_lora()
         out["lora_sha256"] = self._export_sha
         out["lora_hash_schema"] = "muse_glimmer_lora_sha256_v1"
