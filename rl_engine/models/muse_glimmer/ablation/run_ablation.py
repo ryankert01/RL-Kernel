@@ -431,9 +431,10 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "row": "museglimmer_ablation",
         "schema": "muse_glimmer_ablation_v1",
         "status": status,
-        "commit": commits[0] if len(commits) == 1 else commits,
+        "commit": hf["commit"],
+        "commits_all_parts": commits,
         "env": {f"{p['part']}@gpu{p['env'].get('gpu_lease')}": p["env"] for p in parts},
-        "commands": args.command or [" ".join(p["argv"]) for p in parts],
+        "commands": _commands(args, parts),
         "tokens": hf["tokens"],
         "metric_definitions": {
             "d": "logp_variant - logp_baseline of the gold token (fp32 values, fp64 difference)",
@@ -524,6 +525,15 @@ def analysis(records: list[dict[str, Any]], baseline: dict[str, Any]) -> dict[st
     }
 
 
+def _commands(args: argparse.Namespace, parts: list[dict[str, Any]]) -> list[str]:
+    """Exact command lines: from ``--commands-file`` / ``--command``, else each part's argv."""
+    cmds = list(args.command or [])
+    if args.commands_file:
+        cmds += [ln.strip() for ln in pathlib.Path(args.commands_file).read_text().splitlines()
+                 if ln.strip()]
+    return cmds or [" ".join(p["argv"]) for p in parts]
+
+
 def markdown_table(settings: list[dict[str, Any]]) -> str:
     head = ("| engine | factor | setting | tokens differ | max abs dlogp | mean abs dlogp | "
             "mean k3 | argmax flips | wall ms |\n|---|---|---|---|---|---|---|---|---|")
@@ -579,6 +589,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     m.add_argument("--out", default=str(REPO_ROOT / "reports/muse_glimmer_poc/data/ablation.json"))
     m.add_argument("--command", action="append", default=None,
                    help="exact command line that produced a part (repeatable)")
+    m.add_argument("--commands-file", default=None,
+                   help="text file, one exact command line per non-empty line")
     return p.parse_args(argv)
 
 
