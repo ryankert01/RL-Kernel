@@ -380,6 +380,19 @@ def cmd_merge(args: argparse.Namespace) -> int:
         same = [p["logp_hex"] for p in other["baseline"]["per_sequence"]] == base_hex
         extra_hf.append({"path": other["_path"], "gpu_lease": other["env"].get("gpu_lease"),
                          "baseline_bitwise_equal_to_main": same})
+        gpu_a, gpu_b = hf["env"].get("gpu_lease"), other["env"].get("gpu_lease")
+        name = (f"new_process_same_gpu_{gpu_b}" if gpu_a == gpu_b
+                else f"new_process_gpu_{gpu_b}_vs_{gpu_a}")
+        factor, fid = ("repeat_null", 9) if gpu_a == gpu_b else ("second_gpu_null", 8)
+        recs = A.make_records("hf", name, factor, fid, "hf_baseline", seqs, hf_base,
+                              _scores_from_baseline(other["baseline"]),
+                              extra={"gpu_lease_variant": gpu_b, "gpu_lease_baseline": gpu_a})
+        records.extend(recs)
+        settings.append(_setting_summary(
+            "hf", name, factor, fid,
+            f"baseline re-measured by a later process ({other['started']}) on GPU {gpu_b}",
+            recs, {"wall_ms": other["baseline"]["wall_ms"],
+                   "peak_mem_gib": other["baseline"]["peak_mem_gib"]}))
         if not same:
             continue
         have = {s["setting"] for s in settings}
