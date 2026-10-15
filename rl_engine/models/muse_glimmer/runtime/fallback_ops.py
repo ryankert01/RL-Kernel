@@ -406,6 +406,7 @@ def gated_attention_fwd_paged(
     cu_seqlens_q: torch.Tensor,
     *,
     window: int | None,
+    max_seqlen_q: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Paged rollout attention: ``q (T, nh, D)``, caches ``(P, page, nkv, D)`` (any strides),
     ``block_table (B, maxP)``, ``seq_lens (B,)``, ``cu_seqlens_q (B+1,)``.  Query ``i`` of request

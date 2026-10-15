@@ -349,15 +349,52 @@ class TestLoRA:
         b_row_zero = torch.zeros(128, 8, dtype=torch.bfloat16, device=DEVICE)
         base_row = vs.row_parallel_project(state, x, w_row)
         assert torch.equal(vs.row_parallel_project(state, x, w_row, (a_row, b_row_zero)), base_row)
-        # Explicit formula check for the non-zero case (column parallel).
-        z = fb.det_gemm(x, a)
-        delta = fb.det_gemm(z, b_one, k_chunks=1)
-        expected = (base.float() + delta.float()).to(torch.bfloat16)
+        # Explicit formula check for the non-zero case (column parallel): the declared unmerged
+        # rule y = bf16(acc32(W x) + sum_k B[:, k] z[k]) with z = bf16(acc32(A x)), one rounding.
+        acc = fb.det_gemm(x, w_col, out_dtype=torch.float32)
+        z = fb.det_gemm(x, a, out_dtype=torch.float32).to(torch.bfloat16)
+        loop = torch.zeros_like(acc)
+        for k in range(z.shape[1]):
+            loop = loop + z[:, k : k + 1].float() * b_one[:, k].float().unsqueeze(0)
+        expected = (acc + loop).to(torch.bfloat16)
         assert torch.equal(vs.column_parallel_project(state, x, w_col, (a, b_one)), expected)
+
+    def test_lora_rule_matches_megatron_binding(self):
+        """The rollout's strict LoRA forward equals the trainer's (megatron_lora) bit for bit."""
+
+        from rl_engine.models.muse_glimmer.runtime import megatron_lora as ml
+        from rl_engine.models.muse_glimmer.runtime.strict_kernels import TPComm
+
+        state = vs.StrictBindingState(ops=probe_ops(resolve_ops(), DEVICE))
+        comm = TPComm(None)
+        for tokens in (1, 5, 37):
+            x = _bf(tokens, 1024)
+            w_col, a, b = _bf(512, 1024), _bf(16, 1024) * 0.03, _bf(512, 16) * 0.05
+            y = vs.column_parallel_project(state, x, w_col, (a, b))
+            y_meg = ml.StrictColumnLinear.apply(x, a.float(), b.float(), comm, 512, w_col)
+            assert torch.equal(y, y_meg)
+            w_row, a_row, b_row = _bf(256, 1024), _bf(16, 1024) * 0.03, _bf(256, 16) * 0.05
+            y = vs.row_parallel_project(state, x, w_row, (a_row, b_row))
+            y_meg = ml.StrictRowLinear.apply(x, w_row, a_row.float(), b_row.float(), comm, 1024)
+            assert torch.equal(y, y_meg)
 
 
 @gpu
 class TestStrictSiblings:
+    def test_probe_keeps_strict_ops_under_cuda_default_device(self):
+        """vLLM builds the model under a CUDA default device and bf16 default dtype; the probe must
+        not demote any strict op there."""
+
+        previous = torch.get_default_dtype()
+        torch.set_default_dtype(torch.bfloat16)
+        try:
+            with torch.device(DEVICE):
+                ops = probe_ops(resolve_ops(), DEVICE)
+        finally:
+            torch.set_default_dtype(previous)
+        assert ops.demotions == [], ops.demotions
+        assert ops.all_strict, ops.fallback_names
+
     def test_probe_and_strict_vs_fallback_agree(self):
         ops = probe_ops(resolve_ops(), DEVICE)
         strict_names = [n for n in OP_NAMES if ops.is_strict(n)]
@@ -410,9 +447,118 @@ class TestStrictSiblings:
                 assert torch.equal(s_strict[3].bool(), s_fb[3].bool())
 
 
+@gpu
+class TestTPSimulation:
+    def test_tp2_tp4_tp8_layer_and_logp_equal_tp1(self):
+        """Binding arithmetic at simulated TP 2/4/8 (threads + in-process all-gather, real shapes,
+        KV replicated at TP4/8, LoRA sharded) equals TP1 bit for bit."""
+
+        from rl_engine.models.muse_glimmer.runtime.vllm_tp_sim import simulate
+
+        report = simulate((2, 4, 8), tokens=19, device=DEVICE)
+        bad = [
+            (e["tp"], e["lora"], e.get("errors"), e.get("equal_to_tp1"))
+            for e in report["results"]
+            if not e["all_equal"]
+        ]
+        assert report["all_equal"], bad
+
+
 # ------------------------------------------------------------------------------------------
 # E2E (opt-in)
 # ------------------------------------------------------------------------------------------
+
+
+E2E = pytest.mark.skipif(
+    os.getenv("RL_KERNEL_MUSEGLIMMER_E2E", "") != "1" or not CUDA,
+    reason="set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease",
+)
+_XRT = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "reports", "muse_glimmer_poc", "data",
+    "xrt_tokens.json",
+)
+
+
+def _bits(values):
+    import struct
+
+    return [struct.pack(">f", float(v)).hex() for v in values]
+
+
+@E2E
+def test_strict_engine_protocol_with_real_lora(tmp_path):
+    """Drive StrictRolloutEngine through e2e.engines.RolloutEngineLike with a real rank-16 LoRA."""
+
+    import inspect
+
+    from rl_engine.models.muse_glimmer.e2e.engines import RolloutEngineLike, coerce_samples
+    from rl_engine.models.muse_glimmer.e2e.sync import (
+        LoRAPackage,
+        WeightSyncError,
+        lora_sha256,
+        transfer_lora,
+        validate_lora_state_dict,
+    )
+    from rl_engine.models.muse_glimmer.runtime.run_vllm_strict import random_lora_state_dict
+    from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import StrictRolloutEngine
+
+    # Structural conformance: same method names, parameter names and kinds as the protocol.
+    for name in ("generate", "logprobs", "load_lora", "provenance", "close"):
+        want = inspect.signature(getattr(RolloutEngineLike, name))
+        have = inspect.signature(getattr(StrictRolloutEngine, name))
+        assert [(p.name, p.kind) for p in want.parameters.values()] == [
+            (p.name, p.kind) for p in have.parameters.values()
+        ], name
+
+    with open(_XRT, encoding="utf-8") as fh:
+        xrt = json.load(fh)
+    prompts = [
+        s["token_ids"][: s["completion_start"]] for s in xrt["sequences"][:2]
+    ]
+    model = os.path.expanduser(
+        os.getenv("RL_KERNEL_MUSEGLIMMER_MODEL", "~/models/Muse-Glimmer-30B")
+    )
+    engine = StrictRolloutEngine(
+        model, tensor_parallel_size=1, gpu_ids=[0], strict=True, max_model_len=1024, seed=3
+    )
+    try:
+        assert engine.provenance()["lora_sha256"] is None
+        state = random_lora_state_dict(seed=11, rank=16, b_std=0.01)
+        summary = validate_lora_state_dict(state)
+        assert summary["num_modules"] == 52 * 8 and summary["ranks"] == [16]
+        package = LoRAPackage(state, lora_sha256(state), step=0)
+        info = transfer_lora(package, engine, via_file=tmp_path / "lora.pt")
+        assert info["identity"] and engine.provenance()["lora_sha256"] == package.sha256
+        with pytest.raises(WeightSyncError):
+            engine.load_lora(state, "0" * 64)
+        assert engine.provenance()["lora_sha256"] == package.sha256
+
+        groups = engine.generate(prompts, n=2, max_tokens=12, temperature=1.0)
+        samples = coerce_samples(groups)
+        assert len(samples) == len(prompts) and all(len(g) == 2 for g in samples)
+        sequences, starts, decoded = [], [], []
+        for prompt, group in zip(prompts, samples):
+            for sample in group:
+                assert len(sample.token_ids) == len(sample.logprobs) > 0
+                for v in sample.logprobs:
+                    # <= a few ulp above 0: the strict O7 tile kernel can return +1..2 ulp for a
+                    # near-certain argmax (its pass-2 exp(zhat - m) of the max element is not
+                    # exactly 1; reported to the lm_head row).
+                    assert v <= 1e-5 and float(torch.tensor(v, dtype=torch.float32)) == v
+                sequences.append(prompt + sample.token_ids)
+                starts.append(len(prompt))
+                decoded.append(sample.logprobs)
+        rescored = engine.logprobs(sequences, starts)
+        assert [_bits(r) for r in rescored] == [_bits(d) for d in decoded]
+
+        # A second sync (new adapter) replaces the first one on every rank.
+        state2 = random_lora_state_dict(seed=12, rank=16, b_std=0.01)
+        transfer_lora(LoRAPackage(state2, lora_sha256(state2), step=1), engine)
+        assert engine.provenance()["lora_sha256"] == lora_sha256(state2)
+        again = engine.logprobs(sequences, starts)
+        assert [_bits(r) for r in again] != [_bits(r) for r in rescored]
+    finally:
+        engine.close()
 
 
 @pytest.mark.skipif(

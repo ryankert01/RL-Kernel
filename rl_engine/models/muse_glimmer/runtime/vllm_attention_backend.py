@@ -62,19 +62,33 @@ def _ops() -> Any:
 
 
 def strict_kv_views(kv_cache: torch.Tensor, head_size: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """Reinterpret a layer's contiguous ``(B, H, N, 2D)`` buffer as contiguous K/V ``(B, N, H, D)``."""
+    """Reinterpret a layer's KV region as contiguous strict K/V caches ``(B, N, H, D)`` each.
+
+    vLLM 0.31 hands every layer a LOGICAL ``(B, H, N, 2D)`` view whose strides follow the
+    resolved ``KVCacheLayout`` (default ``LBNHC``: physical ``[B, N, H, 2D]`` per layer, i.e. the
+    logical view is a permutation, not contiguous).  When the layer's region is dense (the
+    physical-order view is contiguous; true for the layer-outermost layouts ``LBNHC``/``LBHNC``),
+    its ``B * N * H * 2D`` elements are re-viewed as ``(2, B, N, H, D)``: K of every page in the
+    first half, V in the second.  Only the strict backend reads or writes the cache in strict mode
+    (prefix caching, KV connectors and cascade attention are off), and page ``b`` keeps the same
+    byte range in both views' coordinates, so sharing a tensor between layers of different KV
+    groups (disjoint block ids) stays safe.
+    """
 
     if kv_cache.dim() != 4:
         raise RuntimeError(f"unexpected KV cache rank {kv_cache.dim()} (expected (B, H, N, 2D))")
     blocks, heads, block_size, channels = kv_cache.shape
     if channels != 2 * head_size:
         raise RuntimeError(f"KV cache last dim {channels} != 2 * head_size {2 * head_size}")
-    if not kv_cache.is_contiguous():
-        raise RuntimeError(
-            "strict Muse Glimmer attention requires a layer-contiguous KV cache (an L-outermost "
-            "KVCacheLayout); got a strided per-layer buffer"
-        )
-    kv = kv_cache.view(2, blocks, block_size, heads, head_size)
+    physical = kv_cache.transpose(1, 2)  # LBNHC per-layer physical order (B, N, H, 2D)
+    if not physical.is_contiguous():
+        physical = kv_cache  # LBHNC: the logical view itself is dense
+        if not physical.is_contiguous():
+            raise RuntimeError(
+                "strict Muse Glimmer attention requires a dense per-layer KV region (layer-"
+                f"outermost KVCacheLayout such as LBNHC); got strides {tuple(kv_cache.stride())}"
+            )
+    kv = physical.reshape(-1).view(2, blocks, block_size, heads, head_size)
     return kv[0], kv[1]
 
 
