@@ -1,0 +1,94 @@
+{
+ "schema": "muse_glimmer_rfc_findings_v1",
+ "note": "RFC changes that only surfaced while implementing (the line-by-line audit is in rfc_audit.json). en fields are paste-ready for the issue.",
+ "items": [
+  {
+   "id": "F1", "area": "Numerical requirements / O5 (attention backward)",
+   "title_zh": "O5 反向规则不是 CP 不变的",
+   "body_zh": "契约写的“dK/dV 按 query block 升序累加”在 CP 下做不到：每个 rank 只有自己的 query 块。CP 路径改用“整条序列 8 个规范 query 块、块间按 O3 树合并”，CP1/2/4 彼此相等，但和单卡一次性内核差在最后几位（相对 1.6e-5）。改契约：单卡内核也用同一个分块规则。",
+   "title_en": "The O5 backward accumulation rule is not CP-invariant",
+   "body_en": "Replace \"dK/dV accumulated over query blocks in ascending order\" with: \"dK/dV are accumulated per canonical query chunk (the full sequence split into 8 fixed chunks, independent of CP degree); the 8 chunk partials are combined in the O3 tree in fp32 and rounded once.\" The single-GPU kernel and every CP layout then produce identical bits; the old rule cannot be implemented when a rank only owns some query blocks.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md (CP1/2/4 equal; TP1 one-shot kernel rel 1.6e-5 apart)"
+  },
+  {
+   "id": "F2", "area": "WS1 attention rows / WS2 TP",
+   "title_zh": "注意力内核要接受头数参数",
+   "body_zh": "两个严格注意力包装都把头数钉死在 32 个 Q / 2 个 KV，TP 分片后的 rank（TP2：16/1；TP4/8 复制 KV：8/1、4/1）不能直接调用，只能复制 KV 或 all-gather 头来绕。RFC 的注意力行要把 H_Q / H_KV 列为参数，并把“每个 rank 的头切片 == 全头计算的对应切片（逐 bit）”列为 TP 门。",
+   "title_en": "Attention rows must take head counts as parameters",
+   "body_en": "State that the strict attention forward/backward take H_Q and H_KV (GQA group 16) and add a TP gate: for TP in {2,4,8} the per-rank call on its head shard (16/1, 8/1 with KV replication, 4/1) equals the matching slice of the full-geometry call bit for bit. Kernels that hard-code 32 Q / 2 KV heads force runtimes to replicate KV or all-gather heads.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_ws2_tp.md (open finding); vLLM and Megatron bindings worked around it"
+  },
+  {
+   "id": "F3", "area": "weight_sync_identity",
+   "title_zh": "Bridge 把 final norm 存成 w−1",
+   "body_zh": "Megatron Bridge 把 model.language_model.norm.weight 存成 bf16 的 (w−1)，bf16(w_meg+1) 有 1120/6656 个元素和 HF 不同。weight_sync_identity 要写明：这个张量从 HF checkpoint 重载，预期 626/627 个张量逐字节相同。",
+   "title_en": "Megatron Bridge stores the final norm as w-1",
+   "body_en": "weight_sync_identity must allow one documented exception: Bridge keeps model.language_model.norm.weight as bf16(w - 1) (zero-centred gamma), and bf16(w_meg + 1) differs from the HF tensor at 1120/6656 elements. The strict path reloads that tensor from the HF checkpoint; expect 626/627 tensors byte-identical plus this one reloaded.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md"
+  },
+  {
+   "id": "F4", "area": "Projection grouping (to-freeze)",
+   "title_zh": "Bridge 的 fused linear_qkv 布局",
+   "body_zh": "每个 KV 组 g（4352 行）= [q 头 16g..16g+15（2048）| gate 头（2048）| k 头 g（128）| v 头 g（128）]；linear_fc1 = [gate; up]。已在真权重上 torch.equal 验证。严格路径要按这个布局拆开成四个独立 GEMM。",
+   "title_en": "Megatron Bridge fused linear_qkv layout",
+   "body_en": "Document the Bridge layout the strict path un-fuses: per KV group g (4352 rows) = [q heads 16g..16g+15 (2048 rows) | output-gate rows for those heads (2048) | k head g (128) | v head g (128)]; linear_fc1 = [gate; up]. Verified with torch.equal against the HF tensors of the pinned checkpoint.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md"
+  },
+  {
+   "id": "F5", "area": "Validation table",
+   "title_zh": "梯度容差要和尺度无关",
+   "body_zh": "反向的比较用归一化误差（相对于参考梯度的范数），固定 atol 在 30B 的梯度尺度上没有意义。",
+   "title_en": "Gradient tolerances must be scale-free",
+   "body_en": "Compare backward outputs with a normalised error (max |g - g_ref| / max |g_ref|, or a norm ratio); a fixed atol is meaningless across the gradient scales of a 30B model.",
+   "evidence": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_bwd.md"
+  },
+  {
+   "id": "F6", "area": "Numerical requirements / O5",
+   "title_zh": "O5 要写明 m = −inf 保护",
+   "body_zh": "整行都被 mask 掉时（局部窗口的边界、padding）：α = 1，p = 0，不产生 NaN。",
+   "title_en": "O5 must state the m = -inf guard",
+   "body_en": "When every key of a row is masked (window edges, padding) the running max stays -inf: define alpha = 1 and p = 0 so no NaN is produced, and make it part of the contract rather than an implementation detail.",
+   "evidence": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md"
+  },
+  {
+   "id": "F7", "area": "Open question 3 (LoRA)",
+   "title_zh": "LoRA 不合并",
+   "body_zh": "两边都用 y = bf16(acc32(W·x) + Σ B·z)；把 LoRA 合并进 W 会改变 bit。",
+   "title_en": "LoRA stays unmerged on both sides",
+   "body_en": "Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_i B_i z_i) with z = A x; merging the adapter into W changes the bits and is not allowed in strict mode.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md, REPORT_vllm_runtime_adapter.md"
+  },
+  {
+   "id": "F8", "area": "WS1 table",
+   "title_zh": "几行要改名或合并",
+   "body_zh": "fused_add_rmsnorm → post_norm_residual_pre_norm（四范数夹心，(1+w) 增益，两个 eps 1e-5 / 1e-8）；注意力的 train / rollout 两行合成一行、两种执行模式；vocab_parallel_softcap_logp 并入 WS1 的 lm_head 行 + 一个传输行。",
+   "title_en": "Rename / merge rows",
+   "body_en": "fused_add_rmsnorm -> post_norm_residual_pre_norm (four-norm sandwich, (1+w) gain, eps 1e-5 and 1e-8); merge the attention train and rollout rows into one kernel row with two execution modes; fold vocab_parallel_softcap_logp into the WS1 lm_head row plus a transport row.",
+   "evidence": "rl_engine/models/muse_glimmer/ops/REPORT_norms.md; REPORT_ws2_tp.md"
+  },
+  {
+   "id": "F9", "area": "Foundation / environment",
+   "title_zh": "版本钉在 transformers 5.17.0",
+   "body_zh": "vLLM 0.31 要 transformers<5.18，Megatron Bridge main 要 ≥5.15,<5.18：语义源从 5.19 改钉 5.17（commit 856157a2）。5.17 和 5.19 的区别：RoPE 表的构造（5.17 是受 TF32 影响的 matmul）。",
+   "title_en": "Pin the semantics source to transformers 5.17.0",
+   "body_en": "Only transformers 5.17.0 satisfies both vLLM 0.31 (<5.18) and Megatron Bridge main (>=5.15,<5.18). Pin the semantics source to 5.17.0 (856157a2f3e9594954310df18fdccc31ffddebe9) instead of 5.19.0; note that 5.17 builds the RoPE table with a TF32-sensitive matmul while 5.19 uses an fp32 elementwise product, so the strict RoPE table is built by our own fixed fp32 function on both runtimes.",
+   "evidence": "rl_engine/models/muse_glimmer/museglimmer_manifest.json; ~/envs/megatron/SETUP_REPORT.md"
+  },
+  {
+   "id": "F10", "area": "Hardware assumptions",
+   "title_zh": "不要假设 Hopper",
+   "body_zh": "仓库现有的严格内核（FA4 CuTe、SM90 线性 logp）在 A100 上不可用，原有 Triton 确定性 GEMM 只有 5 TFLOP/s。RFC 应把“一个与架构无关的 Triton 参考实现”列为基础行，Hopper 专用内核作为优化行。",
+   "title_en": "Do not assume Hopper",
+   "body_en": "The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on A100, and the existing Triton deterministic GEMM reaches about 5 TFLOP/s. Make an architecture-neutral Triton implementation of every row the foundation (this POC reaches 105-135 TFLOP/s with an 8-leaf K tree on A100) and treat Hopper-specific kernels as optimisation rows.",
+   "evidence": "reports/muse_glimmer_poc/bench_ws1.log"
+  },
+  {
+   "id": "F11", "area": "final_e2e_lora / runtime layout",
+   "title_zh": "两个运行时不能在一个进程里",
+   "body_zh": "vLLM 0.31（torch cu130）和 Megatron Bridge + TransformerEngine（torch cu129）装不进同一个环境；E2E 需要跨进程的 trainer 桥，只传 token id、fp32 的 dL/dlogp 和带哈希的 LoRA。另外 Megatron 的 KV 头复制让 TP>2 暂时关闭，训练侧 TP 上限是 2。",
+   "title_en": "The two runtimes cannot share a process",
+   "body_en": "vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot be installed into one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, fp32 dL/dlogprob and hash-verified LoRA tensors. Also state the training-side TP limit: with 2 KV heads Megatron replicates KV above TP2, which the strict binding currently fails closed on.",
+   "evidence": "rl_engine/models/muse_glimmer/e2e/REPORT_e2e_loop.md"
+  }
+ ]
+}

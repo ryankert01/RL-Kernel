@@ -426,21 +426,10 @@ def sec_timeline() -> str:
 
 KIND_ZH = {"correction": "更正", "clarification": "澄清", "frozen_answer": "冻结答案", "new_item": "新增条目", "answered_open_question": "回答开放问题"}
 
-HARD_FINDINGS = [
-    ("O5 反向规则不是 CP 不变的", "把 dK/dV 的累加规则改成“整条序列 8 个规范 query 块，块间按 O3 树合并”，单卡内核和 CP 路径共用。"),
-    ("注意力内核钉死 32Q/2KV 头", "契约和内核签名都要接受 H_Q/H_KV，TP 分片 rank 直接算自己的头。"),
-    ("final norm 权重在 Bridge 里存成 w−1", "bf16(w_meg+1) 与 HF 有 1120/6656 个元素不同；weight_sync_identity 要允许“从 HF 重载这一个张量”，预期 626/627 完全相同。"),
-    ("Bridge 的 fused linear_qkv 布局", "每个 KV 组 g（4352 行）= [q 头 16g..（2048）| gate 头（2048）| k 头 g（128）| v 头 g（128）]；linear_fc1 = [gate; up]。严格路径要拆开。"),
-    ("梯度容差要与尺度无关", "反向的比较用归一化误差，固定 atol 在 30B 的梯度尺度上没有意义。"),
-    ("m = −inf 保护要写进 O5", "全被 mask 的行：α=1，p=0。"),
-    ("LoRA 不合并", "y = bf16(acc32(W·x) + Σ B·z)；合并 LoRA 会改变 bit。"),
-    ("行要改名/合并", "fused_add_rmsnorm → post_norm_residual_pre_norm（四范数夹心）；注意力 train/rollout 两行合成一行两种执行模式；vocab_parallel_softcap_logp 并入 WS1 行 + 传输。"),
-]
 
 
 def sec_rfc() -> str:
     a = load("rfc_audit.json")
-    extra = load("rfc_extra.json") or []
     if not a:
         return pending("RFC 审计数据缺失")
     items = a["items"]
@@ -464,14 +453,15 @@ def sec_rfc() -> str:
                 f'<div class="rfc-new">{esc(prop)}</div></li>'
             )
         blocks.append(details(f"{sec}（{len(its)} 条）", f'<ol class="rfc-list">{"".join(lis)}</ol>'))
-    hard = "".join(f'<div class="fact"><span class="fk">{esc(t)}</span><span class="fn">{esc(d)}</span></div>' for t, d in HARD_FINDINGS + [tuple(x) for x in extra])
+    fnd = (load("rfc_findings.json") or {}).get("items", [])
+    hard = "".join(f'<div class="fact"><span class="fk">{esc(f["id"])} · {esc(f["area"])}</span><b>{esc(f["title_zh"])}</b><span class="fn">{esc(f["body_zh"])}</span></div>' for f in fnd)
     return f"""
 <section id="rfc">
   <p class="eyebrow">结论</p>
   <h2>RFC 需要怎么改</h2>
   <h3>实现过程中才暴露的问题</h3>
   <div class="facts">{hard}</div>
-  {fig(chart, "逐行审计 RFC 原文：每条都给出原文、问题、建议文本和证据（文件:行号），再由另一个 agent 独立复核。下面按 RFC 章节展开，建议文本是英文，可以直接贴到 issue 里。")}
+  {fig(chart, "逐行审计 RFC 原文：每条都给出原文、问题、建议文本和证据（文件:行号），再由另一个 agent 独立复核。下面按 RFC 章节展开，建议文本是英文，可以直接贴到 issue 里；完整的英文清单在 <code>reports/muse_glimmer_poc/RFC_CHANGES.md</code>。")}
   {''.join(blocks)}
 </section>"""
 
