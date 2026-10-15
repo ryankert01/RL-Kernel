@@ -829,12 +829,15 @@ def main(argv: list[str] | None = None) -> int:
             digest = lora_sha256(state)
             engine.load_lora(state, digest)
             with_lora = engine.logprobs(seqs, starts)
-            prov_hash = engine.provenance()["lora_sha256"]
+            zero_prov = engine.provenance()
+            prov_hash = zero_prov["lora_sha256"]
             result["lora_zero"] = {
                 "rank": args.lora_rank,
                 "slots": len(state) // 2,
                 "sha256": digest,
                 "provenance_lora_sha256": prov_hash,
+                "lora_sha256_per_worker": zero_prov.get("lora_sha256_per_worker"),
+                "lora_sha256_source": zero_prov.get("lora_sha256_source"),
                 "hash_identity": prov_hash == digest,
                 "vs_no_lora": compare_rows(base_scores, with_lora),
             }
@@ -863,6 +866,9 @@ def main(argv: list[str] | None = None) -> int:
                 "provenance_lora_sha256": prov["lora_sha256"],
                 "hash_identity": prov["lora_sha256"] == digest,
                 "worker_hashes": [w.get("lora_sha256") for w in prov["workers"]],
+                "lora_sha256_per_worker": prov.get("lora_sha256_per_worker"),
+                "lora_sha256_source": prov.get("lora_sha256_source"),
+                "native_lora_reports": prov.get("native_lora_reports"),
                 "load_ms": load_ms,
                 "lora_replies": prov["lora_replies"],
             }
