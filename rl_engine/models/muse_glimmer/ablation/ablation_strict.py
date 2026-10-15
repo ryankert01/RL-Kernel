@@ -3,17 +3,21 @@
 """The same batch / decode / chunking factors on the strict reference path (RFC #501 row
 ``museglimmer_ablation``): it must stay at 0 differing tokens.
 
-Single-sequence modes use the reference API unchanged
-(``MuseGlimmerStrictModel.logprobs(mode=train|prefill|chunked|decode)``).  Batch composition
-needs several sequences in one pass, which the reference entry points do not expose, so
-:func:`packed_pass` runs the reference's own operator set (``model.ops``) in the exact order of
-``strict_model.MuseGlimmerStrictModel._run`` over several packed segments:
+Only PUBLIC reference names are used (``MuseGlimmerStrictModel`` methods without a leading
+underscore, ``Session``, ``golden_ops.row_parallel_gemm``); a test parses this module and fails
+on any private import or private attribute access.
 
-* varlen form (training / one-shot prefill): ``cu_seqlens`` over the segments, absolute
-  positions restart at 0 in every segment, attention over the segment's own K/V;
-* paged form (rollout): each segment is appended to its slot of a multi-sequence
-  :class:`PagedKVCache` and attention reads the cache with the slots' block-table rows
-  (continuous batching: a decode step packs one token of every still-active sequence).
+* Single-sequence modes: ``MuseGlimmerStrictModel.logprobs(mode=train|prefill|chunked|decode)``.
+* Continuous batching (:func:`score_continuous_batching`, ``mixed=False``): prompts through
+  ``model.prefill(Session(cache, slot), ...)`` and every engine step through ONE
+  ``model.decode_batch(cache, running_slots, ...)`` call -- public API only.
+* Several sequences with several tokens each in ONE call (packed varlen training pass, one paged
+  prefill of all sequences, a vLLM-style mixed prefill+decode step) have no public entry point,
+  so :func:`packed_pass` runs the reference's operator set (``model.ops``) over packed
+  segments.  It is a re-composition, so :func:`selfcheck_packed_pass` proves it byte-equal to
+  the reference's own public paths (``forward_train``, ``prefill``, ``decode_batch``) on the
+  model being measured before any packed setting runs, and raises if not (fail closed: a fork
+  of the reference never gets measured as "the reference").
 
 Every op is row-local or segment-local by contract (O1-O7), so the selected-token logp of a
 sequence must be byte-equal however it is batched.  A strict "padded" batch has no key-padding
@@ -35,7 +39,10 @@ from rl_engine.models.muse_glimmer.ablation.ablation_hf import (
     DEFAULT_PAD_ID,
     SeqScore,
     SeqSpec,
+    chunk_plan,
 )
+from rl_engine.models.muse_glimmer.reference.golden_ops import row_parallel_gemm
+from rl_engine.models.muse_glimmer.reference.strict_model import Session
 
 
 @dataclass
@@ -75,11 +82,11 @@ def _ops_call_lm_head(model: Any, hidden: torch.Tensor, targets: torch.Tensor) -
 def packed_pass(model: Any, segments: Sequence[Segment], cache: Any = None) -> list[torch.Tensor]:
     """One forward over packed ``segments``; returns each segment's fp32 logp (NaN = no target).
 
-    Mirrors ``MuseGlimmerStrictModel._run`` op for op (same callables, same order, same cast
-    points); only ``cu_seqlens`` / positions / block tables describe several sequences.
+    The contract's "Model assembly" over the reference's ``model.ops`` (same callables, same
+    order, same cast points as the reference composition); only ``cu_seqlens`` / positions /
+    block tables describe several sequences.  :func:`selfcheck_packed_pass` verifies it against
+    the reference's public entry points.
     """
-    from rl_engine.models.muse_glimmer.reference.strict_model import _row_parallel
-
     cfg, ops, w = model.cfg, model.ops, model.weights
     dev = model.device
     segs = list(segments)
@@ -145,7 +152,7 @@ def packed_pass(model: Any, segments: Sequence[Segment], cache: Any = None) -> l
             bt = block_table.index_select(0, slot_idx).contiguous()
             y, _o, _lse = ops.attention_paged(q_hat, g, k_cache, v_cache, bt, seq_lens, cu,
                                               window=layer_window)
-        attn_out = _row_parallel(ops, y, layer.o_proj)
+        attn_out = row_parallel_gemm(ops.gemm, y, ops.weight_arg(layer.o_proj))
         r, x_f = ops.fused_post_norm_residual_pre_norm(
             attn_out, r, layer.post_attention_layernorm, cfg.post_norm_eps,
             layer.pre_feedforward_layernorm, cfg.rms_norm_eps, pre_form="centered",
@@ -182,6 +189,13 @@ def _train_targets(s: SeqSpec, n_rows: int | None = None) -> torch.Tensor:
     return t
 
 
+def _prompt_targets(s: SeqSpec) -> torch.Tensor:
+    """Prompt rows: only the last one is scored (it predicts the first completion token)."""
+    t = torch.full((s.completion_start,), -1, dtype=torch.long)
+    t[-1] = s.token_ids[s.completion_start]
+    return t
+
+
 def _sync(dev: torch.device) -> None:
     if dev.type == "cuda":
         torch.cuda.synchronize(dev)
@@ -192,16 +206,85 @@ def _timed(dev: torch.device):
     return time.perf_counter()
 
 
+def _bits(t: torch.Tensor) -> torch.Tensor:
+    return t.detach().to("cpu", torch.float32).contiguous().view(torch.int32)
+
+
+# --------------------------------------------------------------------------------------------
+# Self-check: packed_pass == the reference's public entry points, byte for byte
+# --------------------------------------------------------------------------------------------
+@torch.no_grad()
+def selfcheck_packed_pass(model: Any, seqs: Sequence[SeqSpec], *,
+                          raise_on_mismatch: bool = True) -> dict[str, Any]:
+    """Compare :func:`packed_pass` with the reference's public paths on ``seqs[:2]``:
+
+    * ``varlen_vs_forward_train``: one segment, cache-less, vs ``model.forward_train``;
+    * ``paged_vs_prefill``: one L-1 segment into a batch cache vs ``model.prefill`` on a fresh
+      session;
+    * ``paged_multi_vs_decode_batch``: the prompts prefilled through ``model.prefill`` into two
+      identical batch caches, then one decode token per sequence through ``model.decode_batch``
+      (cache A) and through ``packed_pass`` (cache B).
+
+    Returns ``{check: {"equal", "n_rows", "n_rows_differ"}, "all_equal"}``; raises
+    ``RuntimeError`` on any difference unless ``raise_on_mismatch=False``.
+    """
+    if len(seqs) < 2:
+        raise ValueError("selfcheck needs two sequences")
+    s1, s2 = seqs[0], seqs[1]
+    dev = model.device
+    res: dict[str, Any] = {"sequences": [s1.id, s2.id]}
+
+    def cmp(name: str, a: torch.Tensor, b: torch.Tensor, valid: torch.Tensor) -> None:
+        va, vb = _bits(a[valid.to(a.device)]), _bits(b[valid.to(b.device)])
+        if va.shape != vb.shape:
+            raise RuntimeError(f"selfcheck {name}: shapes {tuple(va.shape)} vs {tuple(vb.shape)}")
+        nd = int((va != vb).sum())
+        res[name] = {"equal": nd == 0, "n_rows": int(va.numel()), "n_rows_differ": nd}
+
+    ids, tgt = _ids(s1), _train_targets(s1)
+    a = packed_pass(model, [Segment(ids, 0, tgt)])[0]
+    b = model.forward_train(ids, tgt)["logp"]
+    cmp("varlen_vs_forward_train", a, b, tgt >= 0)
+
+    n = s1.length - 1
+    tgt1 = _train_targets(s1, n)
+    cache = model.new_batch_cache(s1.length, 2)
+    a = packed_pass(model, [Segment(ids[:n], 0, tgt1, slot=1)], cache)[0]
+    b = model.prefill(model.new_session(s1.length), ids[:n], targets=tgt1)
+    cmp("paged_vs_prefill", a, b, tgt1 >= 0)
+
+    caches = [model.new_batch_cache(max(s1.length, s2.length), 2) for _ in range(2)]
+    for c in caches:
+        for slot, s in enumerate((s1, s2)):
+            model.prefill(Session(cache=c, seq=slot), _ids(s)[: s.completion_start],
+                          targets=_prompt_targets(s))
+    toks = [s.token_ids[s.completion_start] for s in (s1, s2)]
+    tgts = [s.token_ids[s.completion_start + 1] for s in (s1, s2)]
+    a = model.decode_batch(caches[0], [0, 1], toks, tgts)
+    b = torch.cat(packed_pass(model, [
+        Segment(torch.tensor([toks[j]]), s.completion_start, torch.tensor([tgts[j]]), slot=j)
+        for j, s in enumerate((s1, s2))], caches[1]))
+    cmp("paged_multi_vs_decode_batch", a, b, torch.ones(2, dtype=torch.bool))
+    del cache, caches
+    res["all_equal"] = all(v["equal"] for k, v in res.items() if isinstance(v, dict))
+    if raise_on_mismatch and not res["all_equal"]:
+        raise RuntimeError(f"packed_pass is not byte-equal to the reference's public paths: {res}")
+    return res
+
+
+# --------------------------------------------------------------------------------------------
+# Runners
+# --------------------------------------------------------------------------------------------
 STRICT_ALONE_MODES = ("train", "prefill", "decode", "chunked")
 
 
 def score_alone(model: Any, seqs: Sequence[SeqSpec], mode: str,
                 chunk: int | None = None) -> list[SeqScore]:
     """Reference API per sequence: ``model.logprobs(prompt, completion, mode, chunk_sizes)``."""
-    from rl_engine.models.muse_glimmer.reference.chain_harness import _cycle_chunks
-
     if mode not in STRICT_ALONE_MODES:
         raise ValueError(f"mode must be one of {STRICT_ALONE_MODES}")
+    if mode == "chunked" and not chunk:
+        raise ValueError("mode 'chunked' needs a positive chunk")
     dev = model.device
     out = []
     for s in seqs:
@@ -209,7 +292,7 @@ def score_alone(model: Any, seqs: Sequence[SeqSpec], mode: str,
         prompt, completion = ids[: s.completion_start], ids[s.completion_start :]
         sizes = None
         if mode == "chunked":
-            sizes = _cycle_chunks(s.length - 1, (int(chunk),))
+            sizes = [b - a for a, b in chunk_plan(s.length - 1, int(chunk))]
         t0 = _timed(dev)
         lp = model.logprobs(prompt, completion, mode=mode, chunk_sizes=sizes)
         _sync(dev)
@@ -256,19 +339,10 @@ def score_packed_batch(model: Any, seqs: Sequence[SeqSpec], layout: str,
     return [res[b] for b in range(len(seqs))]
 
 
-def _new_cache(model: Any, max_len: int, n: int):
-    from rl_engine.models.muse_glimmer.reference.paged_kv import PagedKVCache
-
-    cfg = model.cfg
-    return PagedKVCache(num_layers=cfg.num_hidden_layers, n_kv_heads=cfg.num_key_value_heads,
-                        head_dim=cfg.head_dim, max_seq_len=max_len, device=model.device,
-                        dtype=torch.bfloat16, max_seqs=n)
-
-
 def score_paged_batch_prefill(model: Any, seqs: Sequence[SeqSpec]) -> list[SeqScore]:
-    """Rollout form: one paged prefill call holding ``L-1`` tokens of all 9 sequences."""
+    """Rollout form: one paged prefill call holding ``L-1`` tokens of all sequences."""
     dev = model.device
-    cache = _new_cache(model, max(s.length for s in seqs), len(seqs))
+    cache = model.new_batch_cache(max(s.length for s in seqs), len(seqs))
     segments = [Segment(_ids(s)[:-1], 0, _train_targets(s, s.length - 1), slot=b)
                 for b, s in enumerate(seqs)]
     t0 = _timed(dev)
@@ -279,49 +353,128 @@ def score_paged_batch_prefill(model: Any, seqs: Sequence[SeqSpec]) -> list[SeqSc
             for s, lp in zip(seqs, outs)]
 
 
-def score_batched_decode(model: Any, seqs: Sequence[SeqSpec]) -> tuple[list[SeqScore], int]:
-    """Continuous batching: one paged prefill of all 9 prompts, then decode steps that pack
-    one teacher-forced token of every still-active sequence (sequences drop out as their
-    completion ends).  Returns scores and the number of decode steps."""
-    dev = model.device
-    cache = _new_cache(model, max(s.length for s in seqs), len(seqs))
-    rows: list[list[torch.Tensor]] = [[] for _ in seqs]
-    t0 = _timed(dev)
-    prompt_segments = []
-    for b, s in enumerate(seqs):
-        ids = _ids(s)
-        tgt = torch.full((s.completion_start,), -1, dtype=torch.long)
-        tgt[-1] = ids[s.completion_start]
-        prompt_segments.append(Segment(ids[: s.completion_start], 0, tgt, slot=b))
-    for b, lp in enumerate(packed_pass(model, prompt_segments, cache)):
-        rows[b].append(lp[-1:])
-    steps = 0
-    pos = {b: s.completion_start for b, s in enumerate(seqs)}  # next position to feed
+@dataclass
+class ContinuousRun:
+    """Result of :func:`score_continuous_batching`: ``per_copy[c][b]`` is copy ``c`` of
+    ``seqs[b]``; ``steps`` engine steps; per step the number of decode rows and of prompts."""
+
+    per_copy: list[list[SeqScore]]
+    steps: int
+    decode_rows_per_step: list[int]
+    prefill_seqs_per_step: list[int]
+
+    @property
+    def first_copy(self) -> list[SeqScore]:
+        return self.per_copy[0]
+
+    @property
+    def max_decode_rows(self) -> int:
+        return max(self.decode_rows_per_step, default=0)
+
+
+@torch.no_grad()
+def score_continuous_batching(model: Any, seqs: Sequence[SeqSpec], *, copies: int = 1,
+                              stagger: int = 0, mixed: bool = False) -> ContinuousRun:
+    """Continuous batching with teacher forcing over ``copies`` copies of every sequence.
+
+    Slot ``c * len(seqs) + b`` holds copy ``c`` of ``seqs[b]`` and is admitted at engine step
+    ``c * stagger`` (copies join while earlier ones run and finish: the decode batch grows,
+    shrinks and the rows change position).  At its admission step a slot's prompt is prefilled
+    (its last row scores the first completion token); from the next step on, every step feeds
+    one teacher-forced token of every running slot.  Running slots are ordered by slot id,
+    reversed on odd steps.
+
+    ``mixed=False``: public reference API only -- each admitted prompt through
+    ``model.prefill(Session(cache, slot))``, each step's decode rows through ONE
+    ``model.decode_batch`` call.  ``mixed=True``: each step is ONE :func:`packed_pass` call
+    holding the admitted prompts AND the decode rows (a vLLM-style mixed prefill/decode batch).
+    """
+    if copies < 1 or stagger < 0:
+        raise ValueError("copies >= 1 and stagger >= 0")
+    nb = len(seqs)
+    n_slots = copies * nb
+    cache = model.new_batch_cache(max(s.length for s in seqs), n_slots)
+    seq_of = [seqs[slot % nb] for slot in range(n_slots)]
+    admit = [(slot // nb) * stagger for slot in range(n_slots)]
+    pos = [0] * n_slots  # next position to feed once running
+    started = [False] * n_slots
+    rows: list[list[torch.Tensor]] = [[] for _ in range(n_slots)]
+    decode_rows: list[int] = []
+    prefills: list[int] = []
+    step = 0
     while True:
-        active = [b for b, s in enumerate(seqs) if pos[b] < s.length - 1]
-        if not active:
+        new = [x for x in range(n_slots) if admit[x] == step]
+        running = [x for x in range(n_slots)
+                   if started[x] and pos[x] < seq_of[x].length - 1]
+        if step % 2 == 1:
+            running = running[::-1]
+        if not new and not running and all(started):
             break
-        segs = []
-        for b in active:
-            s, p = seqs[b], pos[b]
-            segs.append(Segment(torch.tensor([s.token_ids[p]]), p,
-                                torch.tensor([s.token_ids[p + 1]]), slot=b))
-        for b, lp in zip(active, packed_pass(model, segs, cache)):
-            rows[b].append(lp)
-            pos[b] += 1
-        steps += 1
-    _sync(dev)
-    ms = (time.perf_counter() - t0) * 1e3 / len(seqs)
-    return [SeqScore(torch.cat(r).float().cpu(), None, ms) for r in rows], steps
+        dec_tok = [seq_of[x].token_ids[pos[x]] for x in running]
+        dec_tgt = [seq_of[x].token_ids[pos[x] + 1] for x in running]
+        if mixed:
+            segs = [Segment(_ids(seq_of[x])[: seq_of[x].completion_start], 0,
+                            _prompt_targets(seq_of[x]), slot=x) for x in new]
+            segs += [Segment(torch.tensor([t]), pos[x], torch.tensor([g]), slot=x)
+                     for x, t, g in zip(running, dec_tok, dec_tgt)]
+            outs = packed_pass(model, segs, cache) if segs else []
+            for x, lp in zip(new, outs[: len(new)]):
+                rows[x].append(lp[-1:].float().cpu())
+            for x, lp in zip(running, outs[len(new):]):
+                rows[x].append(lp.float().cpu())
+        else:
+            for x in new:
+                s = seq_of[x]
+                lp = model.prefill(Session(cache=cache, seq=x), _ids(s)[: s.completion_start],
+                                   targets=_prompt_targets(s))
+                rows[x].append(lp[-1:].float().cpu())
+            if running:
+                lp = model.decode_batch(cache, running, dec_tok, dec_tgt)
+                for j, x in enumerate(running):
+                    rows[x].append(lp[j : j + 1].float().cpu())
+        for x in new:
+            started[x] = True
+            pos[x] = seq_of[x].completion_start
+        for x in running:
+            pos[x] += 1
+        decode_rows.append(len(running))
+        prefills.append(len(new))
+        step += 1
+    per_copy = []
+    for c in range(copies):
+        per_copy.append([SeqScore(torch.cat(rows[c * nb + b]), None, 0.0) for b in range(nb)])
+    for b, s in enumerate(seqs):
+        for c in range(copies):
+            if per_copy[c][b].logp.numel() != s.n_completion:
+                raise RuntimeError(f"slot {c * nb + b}: {per_copy[c][b].logp.numel()} rows, "
+                                   f"expected {s.n_completion}")
+    return ContinuousRun(per_copy, step, decode_rows, prefills)
+
+
+def score_batched_decode(model: Any, seqs: Sequence[SeqSpec]) -> tuple[list[SeqScore], int]:
+    """One copy of every sequence, all admitted at step 0, public API only (see
+    :func:`score_continuous_batching`).  Returns scores and the number of decode steps."""
+    run = score_continuous_batching(model, seqs)
+    return run.first_copy, sum(1 for r in run.decode_rows_per_step if r)
+
+
+def copies_bits_differ(base: Sequence[SeqScore], run: ContinuousRun) -> list[list[int]]:
+    """``[b][c]``: tokens of copy ``c`` of sequence ``b`` whose fp32 bits differ from ``base``."""
+    return [[int((_bits(run.per_copy[c][b].logp) != _bits(base[b].logp)).sum())
+             for c in range(len(run.per_copy))] for b in range(len(base))]
 
 
 __all__ = [
     "STRICT_ALONE_MODES",
     "STRICT_BATCH_LAYOUTS",
+    "ContinuousRun",
     "Segment",
+    "copies_bits_differ",
     "packed_pass",
     "score_alone",
     "score_batched_decode",
+    "score_continuous_batching",
     "score_packed_batch",
     "score_paged_batch_prefill",
+    "selfcheck_packed_pass",
 ]
