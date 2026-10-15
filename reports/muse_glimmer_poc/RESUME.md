@@ -54,3 +54,24 @@ re-run by the integrator after these merges — do that first when resuming (ste
 - full_model_chain hand-back merged at its final HEAD 09eef9d — COMPLETE: real weights, 52 layers, train == prefill == 4 chunkings (incl. 2047/2048/2049 at prompt 2100) == decode, byte-equal on BOTH golden and full-Triton backends; HF-bf16 anchor max|Δlogp| 0.066 / argmax 98.9 %; strict paths closer to HF-fp32 than HF-bf16 is. Report committed at rl_engine/models/muse_glimmer/reference/REPORT_full_model_chain.md; run artifacts in the session scratchpad chain_agent/runs/.
 - Megatron Bridge binding merged at its final HEAD e33d4c1 (code complete; 8/9 unit tests — `test_lm_head_tiles_tp2_equals_tp1_and_reference` fails at toy vocab, cause unknown; the 30B runs (a)–(f) NOT run; pytest is missing in ~/envs/megatron). FINDINGS: fused linear_qkv layout per KV group g = [q heads (2048) | gate heads (2048) | k (128) | v (128)], verified torch.equal on real weights; weight identity: everything equal EXCEPT `model.language_model.norm.weight` — Bridge stores w−1 in bf16 and bf16(w_meg+1) differs at 1120/6656 elements → strict path reloads the HF tensor; TP>2 fails closed (MCore replicates KV heads). Resume: REPORT_megatron_strict.md "Resume" section (TP1 `--checks identity,repeat,lora_noop,native,grad_repeat,step,bench`, then TP2).
 - GRPO orchestrator merged at its final HEAD c60316d (37 CPU tests; mock strict/strict drift 0/13951, native modes ~100% mismatched, weight-sync identity 9/9; GSM8K jsonl at ~/data/gsm8k). lora_sha256 schema `muse_glimmer_lora_sha256_v1` — the vLLM/Megatron engines must match it (check their export/import). Real run command in REPORT_e2e_loop.md item 7.
+
+## Update 2026-10-15 ~16:30 UTC: second session, Phase 0 done, Wave A running
+- Post-merge regression (HEAD 78d7090): single-GPU 400 passed / 1 failed (`test_lm_head_tiles_tp2_equals_tp1_and_reference`,
+  same in the megatron env: 120 passed / 1 failed); distributed 4 GPUs 85 passed / 4 skipped; TP8 (`MUSEGLIMMER_TP8=1`, 8 GPUs) 9 passed.
+  pytest is now installed in ~/envs/megatron. The editable rl_engine install in both envs already points at this worktree
+  (new subpackages need PYTHONPATH=<worktree>).
+- Shared cross-runtime input: `reports/muse_glimmer_poc/data/xrt_tokens.json` (8 GSM8K + 1 window-crossing sequence, 933 scored
+  tokens). Every runtime writes `xrt_<runtime>_<mode>_tp<k>.json` (muse_glimmer_xrt_logprobs_v1) for the byte-diff.
+- NEW WORK ITEM found: the E2E orchestrator is single-process but vLLM (cu130 env) and Megatron (cu129 env) cannot share a
+  process -> cross-env trainer bridge (RemoteTrainer + torchrun server, surrogate loss sum(lp*g)). Megatron TP>2 fails closed,
+  so the E2E layout is rollout TP1/TP2 + train TP2, not train TP4.
+- Decisions taken (user reviewed the plan): CP backward -> adopt the 8-query-chunk rule inside triton/gated_attention_bwd.py;
+  attention wrappers get H_Q/H_KV parameters now; det_gemm findings verified before fixing; E2E 8 steps x 8 prompts x 4 samples
+  x 256 tokens, all four modes; push to the fork after each phase; no upstream PR without asking. Final report = illustrated
+  HTML blog (figures over prose).
+- Wave A workflow `wf_7b064961-36f` (resume: Workflow scriptPath ...museglimmer-wave-a-wf_7b064961-36f.js, resumeFromRunId):
+  owners vllm_runtime (GPU 0-1), megatron_runtime (2-3), e2e_bridge (6-7), kernels_gemm / kernels_attention / kernels_rope
+  (4-5), ablation (6-7), reference_profile (6-7), review_fwd_norms (read-only); adversarial reviewer per code row.
+  Findings inputs: scratchpad waveA/findings_{gemm,attention,rope}.json (35 findings from the dead wf_69e440c2-c46 review).
+  Next: merge each owner branch, apply reviewer fixes, Wave B (switch bindings to per-rank heads, re-run chain + TP/CP suites,
+  3-way xrt byte-diff), Wave C (E2E four modes on the whole node), Wave D (HTML blog report).
