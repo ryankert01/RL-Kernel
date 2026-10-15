@@ -166,8 +166,15 @@ def native_logprobs_with_grad(model: Any, seq: list[int], start: int, device: to
     t = ids.shape[1]
     pos = torch.arange(t, device=device).unsqueeze(0)
     mask = torch.triu(torch.ones(t, t, dtype=torch.bool, device=device), 1)[None, None]
+    handle = None
     try:
         if grad:
+            # MCore's full recompute is reentrant: parameter grads inside a checkpointed layer
+            # only flow if the layer INPUT requires grad. The embedding is frozen, so mark its
+            # output as a grad-requiring leaf (no gradient is ever taken w.r.t. it).
+            handle = inner.embedding.register_forward_hook(
+                lambda _m, _i, out: out.detach().requires_grad_(True)
+            )
             inner.train()
             if recompute:
                 cfg.recompute_granularity, cfg.recompute_method, cfg.recompute_num_layers = (
@@ -180,6 +187,8 @@ def native_logprobs_with_grad(model: Any, seq: list[int], start: int, device: to
                            runtime_gather_output=True)
             out = chunked_token_logprobs(logits[0, start - 1 : -1], ids[0, start:])
     finally:
+        if handle is not None:
+            handle.remove()
         inner.train(was_training)
         cfg.recompute_granularity, cfg.recompute_method, cfg.recompute_num_layers = saved
     return out
