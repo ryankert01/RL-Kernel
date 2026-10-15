@@ -1,6 +1,6 @@
 {
  "row": "qknorm_scaled_rope (review follow-ups, findings qknorm_rope:1..5)",
- "status": "complete",
+ "status": "complete (wave B review fixes; see wave_b)",
  "commit": "9b2317b1dde4df1cc0ee54a0b9c35cf3af6a8d8c",
  "commit_before": "6a61f6e",
  "branch": "worktree-wf_7b064961-36f-6",
@@ -37,25 +37,25 @@
   "~/bin/gpu-lease -n 1 --pool 4-5 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python benchmarks/models/muse_glimmer/bench_qknorm_rope.py"
  ],
  "scripts": {
-  "probes": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/probe_findings.py",
-  "bench_series": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/bench_series.py",
-  "bench_ab": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/bench_ab.py",
-  "run_wrappers": [
-   "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/run_probes.sh",
-   "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/run_bench.sh",
-   "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/run_pytest.sh",
-   "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/run_script.sh",
-   "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/run_final.sh"
+  "dir": "reports/muse_glimmer_poc/scripts/rope",
+  "probes_wave_a": "reports/muse_glimmer_poc/scripts/rope/probe_findings.py",
+  "probes_wave_b": "reports/muse_glimmer_poc/scripts/rope/probe_wave_b.py",
+  "bench_series": "reports/muse_glimmer_poc/scripts/rope/bench_series.py",
+  "bench_ab": "reports/muse_glimmer_poc/scripts/rope/bench_ab.py",
+  "bench_graph": "reports/muse_glimmer_poc/scripts/rope/bench_graph.py",
+  "overhead": "reports/muse_glimmer_poc/scripts/rope/overhead_probe.py",
+  "runner": "reports/muse_glimmer_poc/scripts/rope/run_rope_measurements.sh",
+  "json_builder": [
+   "reports/muse_glimmer_poc/scripts/rope/build_json.py",
+   "reports/muse_glimmer_poc/scripts/rope/update_json_wave_b.py"
   ],
-  "json_builder": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/build_json.py",
-  "overhead": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/rope_fu/overhead_probe.py",
-  "note": "scratchpad scripts (not committed; integrator request to add bench_series.py as benchmarks/models/muse_glimmer/bench_qknorm_rope_series.py)"
+  "note": "committed; the wave A numbers were produced by the same scripts from the session scratchpad (identical code, hard-coded paths removed)"
  },
  "findings": [
   {
    "id": "qknorm_rope:1",
    "title": "O4 RoPE-table build/cache identity across runtimes",
-   "verdict": "confirmed_fixed",
+   "verdict": "fixed_in_module_builder; wave B: every strict builder path reads the canonical table; fallback builders and runtime digest logging = integration requests",
    "reproduced": true,
    "plain_language": "The op accepted cos/sin tables built anywhere. A table built on the CPU has different last bits than one built on the GPU (about 1 element in 5), which flips ~0.1% of the bf16 outputs. All current callers happen to build on CUDA and all 4 table builders in the repo agree bit-for-bit on CUDA, and the vLLM (CUDA 13.0) and Megatron (CUDA 12.9) envs produce the same table, but nothing enforced it.",
    "evidence_before": {
@@ -203,7 +203,7 @@
   {
    "id": "qknorm_rope:3",
    "title": "no TP-parity test for head shards (BLOCK_HQ 16/8/4 vs 32)",
-   "verdict": "confirmed_fixed",
+   "verdict": "coverage_gap_test_added",
    "reproduced": true,
    "plain_language": "The coverage gap was real; the kernel itself was already correct. Every TP2/4/8 rank shard (16/8/4 query heads + 1 KV head) gives exactly the bits of the matching slice of the full 32/2-head call, forward and backward, local and global layers: 0 mismatching elements in 84 shard runs (T = 1, 7, 4096). Test added.",
    "evidence_before": {
@@ -235,7 +235,7 @@
   {
    "id": "qknorm_rope:4",
    "title": "implicit local/global selection",
-   "verdict": "confirmed_fixed",
+   "verdict": "partially_fixed: explicit API (wave A); wave B adds counting, a one-time warning and the opt-in fail-closed switch; open until the call sites pass local= (integration patch 2)",
    "reproduced": true,
    "plain_language": "Passing cos=None on a sliding-window layer silently ran the NoPE path (95% of the outputs differ, no error). Callers can now say local=True/False (checked against cos/sin) or use qknorm_scaled_rope_at(q, k, pos, local=|layer_idx=) where the layer kind is mandatory. local=None keeps the old behaviour so existing callers work.",
    "evidence_before": {
@@ -264,7 +264,7 @@
     "TestF4ExplicitLayerSelection::test_trace_records_layer_selection"
    ],
    "bits_changed": "none",
-   "residual": "local=None (legacy implicit) is still accepted for backward compatibility; the call sites must pass local= (integrator patches) before it can be removed."
+   "residual": "local=None is still accepted by default (backward compatible with the vLLM/Megatron bindings being edited by other owners); MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 rejects it."
   },
   {
    "id": "qknorm_rope:5",
@@ -389,248 +389,356 @@
     "test": "TestF1RopeTableIdentity::test_canonical_table_fingerprint_is_pinned",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'CANONICAL_ROPE_TABLE_SHA256'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_canonical_table_is_cached_identical_object",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'canonical_rope_table'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'canonical_rope_table'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_rope_rows_gathers_the_canonical_table",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'rope_rows'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_rope_rows_rejects_out_of_range_positions",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'rope_rows'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_rope_table_rejects_non_cuda_device",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "Failed: DID NOT RAISE RuntimeError",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF1RopeTableIdentity::test_trace_records_table_provenance",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "KeyError: 'rope_table'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF2DtypeFailClosed::test_backward_launcher_rejects_non_bf16_grads",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "Failed: DID NOT RAISE TypeError",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF2DtypeFailClosed::test_bf16_outputs_and_grads",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt0]",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "Failed: DID NOT RAISE TypeError",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt1]",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "Failed: DID NOT RAISE TypeError",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_explicit_flag_gives_legacy_bits",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "TypeError: qknorm_scaled_rope() got an unexpected keyword argument 'local'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_explicit_local_flag_fails_closed",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "TypeError: qknorm_scaled_rope() got an unexpected keyword argument 'local'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_layer_schedule_matches_manifest",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'layer_is_local'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_positions_api_backward_matches",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'qknorm_scaled_rope_at'. Did you mean: 'qknorm_scaled_rope'?",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_positions_api_contract_signature",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'qknorm_scaled_rope_at'. Did you mean: 'qknorm_scaled_rope'?",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF4ExplicitLayerSelection::test_trace_records_layer_selection",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "KeyError: 'layer_selection'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF5LargeTokenCounts::test_rows_beyond_int32_offsets_match_small_calls",
     "before_6a61f6e": "FAILED (torch.AcceleratorError: CUDA error: an illegal memory access was encountered)",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "illegal memory access",
+    "before_failure_kind": "behaviour: crash (illegal memory access)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestF5LargeTokenCounts::test_trace_records_int64_offsets",
     "before_6a61f6e": "FAILED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure": "KeyError: 'offsets'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env_wave_b": "PASSED",
+    "after_megatron_env_wave_b": "PASSED"
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-1]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-256]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-4096]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-7]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-1]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-256]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-4096]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-7]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_non_contiguous_shard_views",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_shard_tile_config_in_trace[1-32]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_shard_tile_config_in_trace[2-16]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_shard_tile_config_in_trace[4-8]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestG2TensorParallelShards::test_shard_tile_config_in_trace[8-4]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[17]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[1]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[2049]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[8192]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_decode_batches_1_to_256[False]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_decode_batches_1_to_256[True]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_token_counts_bitwise_vs_golden[False]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    },
    {
     "test": "TestModelShapesStayBitwise::test_token_counts_bitwise_vs_golden[True]",
     "before_6a61f6e": "PASSED",
     "after_vllm_env": "PASSED",
-    "after_megatron_env": "PASSED"
+    "after_megatron_env": "PASSED",
+    "before_failure_kind": null
    }
-  ]
+  ],
+  "before_failed_by_kind": {
+   "behaviour": 5,
+   "api_missing": 13,
+   "unknown": 0
+  },
+  "note": "wave A: of the 18 tests that fail on 6a61f6e, only the 'behaviour' ones detect a bug; 'api_missing' ones fail because a new name or trace field did not exist yet. The string checks of trace() (offsets, layer selection, tile config) cannot detect a regression; the int64 guard is now test_compiled_kernels_use_int64_row_offsets (TTIR) plus the 20 GiB T=524352 test, which skips without the memory."
  },
  "tests_summary_lines": {
-  "test_qknorm_rope_vllm_env": "79 passed in 4.37s",
-  "test_qknorm_rope+megatron_binding_megatron_env": "79 passed, 1 warning in 5.23s",
-  "muse_glimmer_suite_vllm_env": "1 failed, 440 passed, 3 skipped in 149.88s (0:02:29)"
+  "wave_a": {
+   "test_qknorm_rope_vllm_env (9b2317b)": "79 passed in 4.37s",
+   "test_qknorm_rope_megatron_env (9b2317b; the log contains only test_qknorm_rope.py)": "79 passed, 1 warning in 5.23s",
+   "muse_glimmer_suite_vllm_env (9b2317b; the failure is the pre-existing lm_head TP2 test)": "1 failed, 440 passed, 3 skipped in 149.88s (0:02:29)"
+  },
+  "wave_b": {
+   "commit": "615ee61939edb568ce001c44d2cc7de811ae86e7",
+   "test_qknorm_rope+test_strict_model_tiny_vllm_env": "113 passed, 3 warnings in 42.99s",
+   "test_qknorm_rope+test_megatron_strict_binding+test_strict_model_tiny_megatron_env": "129 passed, 2 skipped, 4 warnings in 46.20s",
+   "muse_glimmer_suite_vllm_env (--ignore distributed; at 3404cf9)": "653 passed, 8 skipped, 4 warnings in 381.62s (0:06:21)"
+  }
  },
  "experiments": {
   "table_cpu_vs_cuda_per_bucket": {
@@ -5087,23 +5195,6 @@
      0.09967616081237793,
      0.18987007141113282
     ],
-    "before_local_fwd_kernel_ms": [
-     0.04409855842590332,
-     0.043724799156188966,
-     0.043924479484558104,
-     0.045086722373962405,
-     0.043243517875671385,
-     0.043622398376464845,
-     0.04348927974700928,
-     0.0445849609375,
-     0.04340735912322998,
-     0.04340735912322998,
-     0.04424704074859619,
-     0.04440063953399658,
-     0.05445631980895996,
-     0.09957375526428222,
-     0.18935808181762695
-    ],
     "after_local_bwd_kernel_ms": [
      0.05838848114013672,
      0.05998591899871826,
@@ -5120,23 +5211,6 @@
      0.07550975799560547,
      0.14061568260192872,
      0.27031551361083983
-    ],
-    "before_local_bwd_kernel_ms": [
-     0.04619264125823975,
-     0.04671999931335449,
-     0.046561279296875,
-     0.04848127841949463,
-     0.045900797843933104,
-     0.04624896049499512,
-     0.04604415893554688,
-     0.046039037704467774,
-     0.04530176162719726,
-     0.04682752132415771,
-     0.04681215763092041,
-     0.0487014389038086,
-     0.07587840080261231,
-     0.14120960235595703,
-     0.2716262435913086
     ],
     "after_local_native_hf_fwd_ms": [
      0.3152128028869629,
@@ -5172,24 +5246,25 @@
      0.08941568374633789,
      0.17111040115356446
     ],
-    "after_local_fwd_GBps": [
-     0.338727891726827,
-     0.6593406434875949,
-     1.3371714764329299,
-     2.698650614780225,
-     5.395278995693026,
-     10.70333573437984,
-     21.238938612430633,
-     42.73393336826116,
-     86.405402561565,
-     171.0943977915907,
-     427.5574115749721,
-     659.9355343389927,
-     1385.3438526213001,
+    "after_local_fwd_GBps_T_ge_8192": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
      1514.855134561415,
      1590.5081077580146
     ]
-   }
+   },
+   "plot_note": "eager launcher timings (CUDA events around back-to-back calls): launch-bound up to T~4096 (the GPU work is shorter than the host launch path), so they measure host overhead and depend on host load; the 'before' raw series ran at a different host load and is not plotted (not a code effect). Device time: experiments.bench_graph. GBps only for T >= 8192."
   },
   "bench_ab_old_vs_new_kernel": {
    "description": "interleaved A/B, median of 7 rounds, launcher incl. input checks",
@@ -6342,6 +6417,1011 @@
    "rope_rows_check_range_false_us": 46.311279996492274,
    "qknorm_scaled_rope_at_local_us": 258.08718333185726,
    "fwd_only_explicit_local_us": 77.13389000249056
+  },
+  "bench_graph": {
+   "description": "CUDA-graph replay: 20 launcher calls captured per graph, 10 replays timed with CUDA events, median of 5 interleaved rounds -> device time per launch without host launch overhead; *_eager_us = events around back-to-back eager launcher calls (includes the host launch floor)",
+   "gpu": "NVIDIA A100-SXM4-80GB",
+   "torch": "2.13.0+cu130",
+   "loadavg": [
+    218.447265625,
+    370.2236328125,
+    287.8544921875
+   ],
+   "old_kernel": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/runs2/old_triton_qknorm_rope_6a61f6e.py",
+   "T": [
+    1,
+    16,
+    64,
+    256,
+    1024,
+    2048,
+    4096,
+    8192,
+    16384,
+    32768
+   ],
+   "commit": "615ee61939edb568ce001c44d2cc7de811ae86e7",
+   "series": [
+    {
+     "T": 1,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.333120048046112,
+     "new_fwd_gpu_us_rounds": [
+      3.333120048046112,
+      3.328000009059906,
+      3.333120048046112,
+      3.343360126018524,
+      3.338240087032318
+     ],
+     "new_bwd_gpu_us": 4.403199851512909,
+     "new_bwd_gpu_us_rounds": [
+      4.403199851512909,
+      4.403199851512909,
+      4.418559968471527,
+      4.398080110549927,
+      4.398080110549927
+     ],
+     "old_fwd_gpu_us": 3.261440098285675,
+     "old_fwd_gpu_us_rounds": [
+      3.251200020313263,
+      3.261440098285675,
+      3.266560137271881,
+      3.251200020313263,
+      3.2716798782348633
+     ],
+     "old_bwd_gpu_us": 4.433920085430145,
+     "old_bwd_gpu_us_rounds": [
+      4.459519982337952,
+      4.439040124416351,
+      4.433920085430145,
+      4.433920085430145,
+      4.428800046443939
+     ],
+     "new_fwd_eager_us": 42.936320304870605,
+     "new_bwd_eager_us": 45.342721939086914,
+     "old_fwd_eager_us": 42.99263954162598,
+     "old_bwd_eager_us": 45.342721939086914,
+     "fwd_bytes": 18432,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 1,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.02592009305954,
+     "new_fwd_gpu_us_rounds": [
+      3.02592009305954,
+      3.1283199787139893,
+      3.02592009305954,
+      3.041279911994934,
+      3.0208000540733337
+     ],
+     "new_bwd_gpu_us": 3.978239893913269,
+     "new_bwd_gpu_us_rounds": [
+      3.9987200498580933,
+      3.978239893913269,
+      3.973119854927063,
+      3.983359932899475,
+      3.973119854927063
+     ],
+     "old_fwd_gpu_us": 2.959359884262085,
+     "old_fwd_gpu_us_rounds": [
+      2.974720001220703,
+      2.954240143299103,
+      2.964479923248291,
+      2.954240143299103,
+      2.959359884262085
+     ],
+     "old_bwd_gpu_us": 3.9475199580192566,
+     "old_bwd_gpu_us_rounds": [
+      3.9526399970054626,
+      3.9475199580192566,
+      3.9475199580192566,
+      3.9526399970054626,
+      3.9475199580192566
+     ],
+     "new_fwd_eager_us": 40.85247993469238,
+     "new_bwd_eager_us": 43.40223789215088,
+     "old_fwd_eager_us": 40.16128063201904,
+     "old_bwd_eager_us": 43.427839279174805,
+     "fwd_bytes": 17408,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 16,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.532800078392029,
+     "new_fwd_gpu_us_rounds": [
+      3.532800078392029,
+      3.532800078392029,
+      3.532800078392029,
+      3.537920117378235,
+      3.532800078392029
+     ],
+     "new_bwd_gpu_us": 4.62336003780365,
+     "new_bwd_gpu_us_rounds": [
+      4.618239998817444,
+      4.628480076789856,
+      4.62336003780365,
+      4.62336003780365,
+      4.62336003780365
+     ],
+     "old_fwd_gpu_us": 3.476479947566986,
+     "old_fwd_gpu_us_rounds": [
+      3.476479947566986,
+      3.47135990858078,
+      3.481599986553192,
+      3.481599986553192,
+      3.476479947566986
+     ],
+     "old_bwd_gpu_us": 4.648959934711456,
+     "old_bwd_gpu_us_rounds": [
+      4.648959934711456,
+      4.64383989572525,
+      4.648959934711456,
+      4.746240079402924,
+      4.64383989572525
+     ],
+     "new_fwd_eager_us": 42.66496181488037,
+     "new_bwd_eager_us": 45.13792037963867,
+     "old_fwd_eager_us": 42.245121002197266,
+     "old_bwd_eager_us": 45.72159767150879,
+     "fwd_bytes": 294912,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 16,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.2358399033546448,
+     "new_fwd_gpu_us_rounds": [
+      3.2358399033546448,
+      3.2358399033546448,
+      3.240959942340851,
+      3.2307198643684387,
+      3.2358399033546448
+     ],
+     "new_bwd_gpu_us": 4.177919924259186,
+     "new_bwd_gpu_us_rounds": [
+      4.177919924259186,
+      4.177919924259186,
+      4.177919924259186,
+      4.177919924259186,
+      4.17279988527298
+     ],
+     "old_fwd_gpu_us": 3.179520070552826,
+     "old_fwd_gpu_us_rounds": [
+      3.179520070552826,
+      3.179520070552826,
+      3.169279992580414,
+      3.179520070552826,
+      3.189760148525238
+     ],
+     "old_bwd_gpu_us": 4.136959910392761,
+     "old_bwd_gpu_us_rounds": [
+      4.131839871406555,
+      4.136959910392761,
+      4.136959910392761,
+      4.136959910392761,
+      4.142079949378967
+     ],
+     "new_fwd_eager_us": 41.08799934387207,
+     "new_bwd_eager_us": 43.66335868835449,
+     "old_fwd_eager_us": 40.68863868713379,
+     "old_bwd_eager_us": 43.26911926269531,
+     "fwd_bytes": 278528,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 64,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.6659198999404907,
+     "new_fwd_gpu_us_rounds": [
+      3.6607998609542847,
+      3.6607998609542847,
+      3.6710399389266968,
+      3.6659198999404907,
+      3.6659198999404907
+     ],
+     "new_bwd_gpu_us": 4.925439953804016,
+     "new_bwd_gpu_us_rounds": [
+      4.935680031776428,
+      4.930559992790222,
+      4.915199875831604,
+      4.92031991481781,
+      4.925439953804016
+     ],
+     "old_fwd_gpu_us": 3.630079925060272,
+     "old_fwd_gpu_us_rounds": [
+      3.630079925060272,
+      3.624959886074066,
+      3.6351999640464783,
+      3.630079925060272,
+      3.624959886074066
+     ],
+     "old_bwd_gpu_us": 4.961279928684235,
+     "old_bwd_gpu_us_rounds": [
+      4.961279928684235,
+      4.966399967670441,
+      4.956159889698029,
+      4.961279928684235,
+      4.951040148735046
+     ],
+     "new_fwd_eager_us": 42.11711883544922,
+     "new_bwd_eager_us": 44.96895790100098,
+     "old_fwd_eager_us": 42.0198392868042,
+     "old_bwd_eager_us": 44.76928234100342,
+     "fwd_bytes": 1179648,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 64,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 3.3484798669815063,
+     "new_fwd_gpu_us_rounds": [
+      3.3587199449539185,
+      3.3484798669815063,
+      3.3587199449539185,
+      3.3484798669815063,
+      3.3484798669815063
+     ],
+     "new_bwd_gpu_us": 4.352000057697296,
+     "new_bwd_gpu_us_rounds": [
+      4.352000057697296,
+      4.357120096683502,
+      4.352000057697296,
+      4.352000057697296,
+      4.357120096683502
+     ],
+     "old_fwd_gpu_us": 3.2972800731658936,
+     "old_fwd_gpu_us_rounds": [
+      3.2972800731658936,
+      3.2921600341796875,
+      3.2972800731658936,
+      3.3024001121520996,
+      3.2921600341796875
+     ],
+     "old_bwd_gpu_us": 4.336639940738678,
+     "old_bwd_gpu_us_rounds": [
+      4.336639940738678,
+      4.341759979724884,
+      4.336639940738678,
+      4.341759979724884,
+      4.336639940738678
+     ],
+     "new_fwd_eager_us": 40.58623790740967,
+     "new_bwd_eager_us": 43.386878967285156,
+     "old_fwd_eager_us": 40.463361740112305,
+     "old_bwd_eager_us": 43.0950403213501,
+     "fwd_bytes": 1114112,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 256,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 5.478399991989136,
+     "new_fwd_gpu_us_rounds": [
+      5.437440276145935,
+      5.478399991989136,
+      5.463039875030518,
+      5.478399991989136,
+      5.483520030975342
+     ],
+     "new_bwd_gpu_us": 7.941120266914368,
+     "new_bwd_gpu_us_rounds": [
+      7.941120266914368,
+      7.930880188941956,
+      7.941120266914368,
+      7.941120266914368,
+      7.9257601499557495
+     ],
+     "old_fwd_gpu_us": 5.437440276145935,
+     "old_fwd_gpu_us_rounds": [
+      5.432320237159729,
+      5.447679758071899,
+      5.437440276145935,
+      5.437440276145935,
+      5.442559719085693
+     ],
+     "old_bwd_gpu_us": 7.951359748840332,
+     "old_bwd_gpu_us_rounds": [
+      7.946239709854126,
+      7.96671986579895,
+      7.961599826812744,
+      7.941120266914368,
+      7.951359748840332
+     ],
+     "new_fwd_eager_us": 42.239999771118164,
+     "new_bwd_eager_us": 45.03551959991455,
+     "old_fwd_eager_us": 42.36288070678711,
+     "old_bwd_eager_us": 44.69247817993164,
+     "fwd_bytes": 4718592,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 256,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 4.787200093269348,
+     "new_fwd_gpu_us_rounds": [
+      4.802559912204742,
+      4.797439873218536,
+      4.787200093269348,
+      4.142079949378967,
+      4.136959910392761
+     ],
+     "new_bwd_gpu_us": 6.087679862976074,
+     "new_bwd_gpu_us_rounds": [
+      6.9171202182769775,
+      6.9171202182769775,
+      6.087679862976074,
+      5.985280275344849,
+      5.9750401973724365
+     ],
+     "old_fwd_gpu_us": 4.065279960632324,
+     "old_fwd_gpu_us_rounds": [
+      4.700160026550293,
+      4.710400104522705,
+      4.065279960632324,
+      4.055039882659912,
+      4.060159921646118
+     ],
+     "old_bwd_gpu_us": 6.036480069160461,
+     "old_bwd_gpu_us_rounds": [
+      6.978560090065002,
+      6.973440051078796,
+      6.036480069160461,
+      6.036480069160461,
+      6.026239991188049
+     ],
+     "new_fwd_eager_us": 40.83712100982666,
+     "new_bwd_eager_us": 43.34080219268799,
+     "old_fwd_eager_us": 40.862717628479004,
+     "old_bwd_eager_us": 43.089919090270996,
+     "fwd_bytes": 4456448,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 1024,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 10.97216010093689,
+     "new_fwd_gpu_us_rounds": [
+      10.977280139923096,
+      10.97216010093689,
+      10.977280139923096,
+      10.956799983978271,
+      10.967040061950684
+     ],
+     "new_bwd_gpu_us": 16.6758394241333,
+     "new_bwd_gpu_us_rounds": [
+      16.70143961906433,
+      16.696319580078125,
+      16.6758394241333,
+      16.665600538253784,
+      16.650240421295166
+     ],
+     "old_fwd_gpu_us": 10.864640474319458,
+     "old_fwd_gpu_us_rounds": [
+      10.880000591278076,
+      10.87488055229187,
+      10.864640474319458,
+      10.854400396347046,
+      10.475519895553589
+     ],
+     "old_bwd_gpu_us": 16.778240203857422,
+     "old_bwd_gpu_us_rounds": [
+      16.788480281829834,
+      16.773120164871216,
+      16.79360032081604,
+      16.778240203857422,
+      15.948799848556519
+     ],
+     "new_fwd_eager_us": 43.581438064575195,
+     "new_bwd_eager_us": 46.21312141418457,
+     "old_fwd_eager_us": 42.96703815460205,
+     "old_bwd_eager_us": 45.99808216094971,
+     "fwd_bytes": 18874368,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 1024,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 7.864320278167725,
+     "new_fwd_gpu_us_rounds": [
+      7.828480005264282,
+      7.879679799079895,
+      7.864320278167725,
+      7.864320278167725,
+      7.8540802001953125
+     ],
+     "new_bwd_gpu_us": 13.803520202636719,
+     "new_bwd_gpu_us_rounds": [
+      13.76255989074707,
+      13.849600553512573,
+      13.803520202636719,
+      13.808640241622925,
+      13.803520202636719
+     ],
+     "old_fwd_gpu_us": 7.736319899559021,
+     "old_fwd_gpu_us_rounds": [
+      7.69536018371582,
+      7.736319899559021,
+      7.741439938545227,
+      7.736319899559021,
+      7.731199860572815
+     ],
+     "old_bwd_gpu_us": 13.91103982925415,
+     "old_bwd_gpu_us_rounds": [
+      13.870079517364502,
+      13.931519985198975,
+      13.93664002418518,
+      13.895679712295532,
+      13.91103982925415
+     ],
+     "new_fwd_eager_us": 40.5299186706543,
+     "new_bwd_eager_us": 43.49952220916748,
+     "old_fwd_eager_us": 40.43776035308838,
+     "old_bwd_eager_us": 43.11552047729492,
+     "fwd_bytes": 17825792,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 2048,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 28.195838928222656,
+     "new_fwd_gpu_us_rounds": [
+      28.241920471191406,
+      28.17023992538452,
+      28.277759552001953,
+      28.190720081329346,
+      28.195838928222656
+     ],
+     "new_bwd_gpu_us": 40.40703773498535,
+     "new_bwd_gpu_us_rounds": [
+      40.519680976867676,
+      40.43776035308838,
+      40.33535957336426,
+      40.40703773498535,
+      40.360960960388184
+     ],
+     "old_fwd_gpu_us": 28.50816011428833,
+     "old_fwd_gpu_us_rounds": [
+      28.61567974090576,
+      28.421120643615723,
+      28.50816011428833,
+      28.55423927307129,
+      28.35968017578125
+     ],
+     "old_bwd_gpu_us": 40.58112144470215,
+     "old_bwd_gpu_us_rounds": [
+      40.58112144470215,
+      40.519680976867676,
+      40.611839294433594,
+      40.463361740112305,
+      40.59648036956787
+     ],
+     "new_fwd_eager_us": 42.47551918029785,
+     "new_bwd_eager_us": 45.67552089691162,
+     "old_fwd_eager_us": 42.61375904083252,
+     "old_bwd_eager_us": 45.61920166015625,
+     "fwd_bytes": 37748736,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 2048,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 22.963199615478516,
+     "new_fwd_gpu_us_rounds": [
+      22.963199615478516,
+      22.93760061264038,
+      23.014400005340576,
+      23.162879943847656,
+      22.952959537506104
+     ],
+     "new_bwd_gpu_us": 38.86591911315918,
+     "new_bwd_gpu_us_rounds": [
+      38.86591911315918,
+      38.937599658966064,
+      38.86591911315918,
+      38.9734411239624,
+      38.794240951538086
+     ],
+     "old_fwd_gpu_us": 22.871038913726807,
+     "old_fwd_gpu_us_rounds": [
+      22.855679988861084,
+      22.855679988861084,
+      22.906880378723145,
+      22.871038913726807,
+      22.973439693450928
+     ],
+     "old_bwd_gpu_us": 39.10144090652466,
+     "old_bwd_gpu_us_rounds": [
+      39.0502405166626,
+      39.06559944152832,
+      39.10144090652466,
+      39.14752006530762,
+      39.11168098449707
+     ],
+     "new_fwd_eager_us": 40.55552005767822,
+     "new_bwd_eager_us": 43.56095790863037,
+     "old_fwd_eager_us": 40.47872066497803,
+     "old_bwd_eager_us": 43.31520080566406,
+     "fwd_bytes": 35651584,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 4096,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 51.69151782989502,
+     "new_fwd_gpu_us_rounds": [
+      51.64031982421875,
+      51.563520431518555,
+      51.85535907745361,
+      51.69151782989502,
+      51.72736167907715
+     ],
+     "new_bwd_gpu_us": 73.07775974273682,
+     "new_bwd_gpu_us_rounds": [
+      73.14943790435791,
+      73.07775974273682,
+      73.05215835571289,
+      73.05215835571289,
+      73.09823989868164
+     ],
+     "old_fwd_gpu_us": 52.111358642578125,
+     "old_fwd_gpu_us_rounds": [
+      52.04991817474365,
+      52.15231895446777,
+      52.14208126068115,
+      52.111358642578125,
+      52.08576202392578
+     ],
+     "old_bwd_gpu_us": 73.33888053894043,
+     "old_bwd_gpu_us_rounds": [
+      73.36959838867188,
+      73.33888053894043,
+      73.33888053894043,
+      73.3184003829956,
+      73.28256130218506
+     ],
+     "new_fwd_eager_us": 54.29247856140137,
+     "new_bwd_eager_us": 75.5302381515503,
+     "old_fwd_eager_us": 54.53824043273926,
+     "old_bwd_eager_us": 75.89888095855713,
+     "fwd_bytes": 75497472,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 4096,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 46.30015850067139,
+     "new_fwd_gpu_us_rounds": [
+      46.30015850067139,
+      46.26431941986084,
+      46.341118812561035,
+      46.25919818878174,
+      46.32063865661621
+     ],
+     "new_bwd_gpu_us": 70.31295776367188,
+     "new_bwd_gpu_us_rounds": [
+      70.31295776367188,
+      70.22592067718506,
+      70.35903930664062,
+      70.38464069366455,
+      70.29759883880615
+     ],
+     "old_fwd_gpu_us": 46.17728233337402,
+     "old_fwd_gpu_us_rounds": [
+      46.17216110229492,
+      46.21312141418457,
+      46.17728233337402,
+      46.16191864013672,
+      46.22335910797119
+     ],
+     "old_bwd_gpu_us": 70.57407855987549,
+     "old_bwd_gpu_us_rounds": [
+      70.62016010284424,
+      70.57407855987549,
+      70.56896209716797,
+      70.70208072662354,
+      70.56384086608887
+     ],
+     "new_fwd_eager_us": 48.63999843597412,
+     "new_bwd_eager_us": 72.62207984924316,
+     "old_fwd_eager_us": 48.59903812408447,
+     "old_bwd_eager_us": 72.94976234436035,
+     "fwd_bytes": 71303168,
+     "new_fwd_GBps": null
+    },
+    {
+     "T": 8192,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 96.60415649414062,
+     "new_fwd_gpu_us_rounds": [
+      96.68095588684082,
+      96.75264358520508,
+      96.60415649414062,
+      96.56319618225098,
+      96.52223587036133
+     ],
+     "new_bwd_gpu_us": 137.97887802124023,
+     "new_bwd_gpu_us_rounds": [
+      137.97887802124023,
+      138.02495956420898,
+      137.93279647827148,
+      137.8867244720459,
+      137.97887802124023
+     ],
+     "old_fwd_gpu_us": 96.77824020385742,
+     "old_fwd_gpu_us_rounds": [
+      96.70656204223633,
+      96.77824020385742,
+      96.68607711791992,
+      96.80383682250977,
+      96.93696022033691
+     ],
+     "old_bwd_gpu_us": 138.56255531311035,
+     "old_bwd_gpu_us_rounds": [
+      138.6240005493164,
+      138.56255531311035,
+      138.48575592041016,
+      138.57279777526855,
+      138.5523223876953
+     ],
+     "new_fwd_eager_us": 99.59424018859863,
+     "new_bwd_eager_us": 140.20607948303223,
+     "old_fwd_eager_us": 99.20512199401855,
+     "old_bwd_eager_us": 140.6156826019287,
+     "fwd_bytes": 150994944,
+     "new_fwd_GBps": 1563.0274046144007
+    },
+    {
+     "T": 8192,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 86.75840377807617,
+     "new_fwd_gpu_us_rounds": [
+      86.75840377807617,
+      86.80959701538086,
+      86.75840377807617,
+      86.74304008483887,
+      86.95808410644531
+     ],
+     "new_bwd_gpu_us": 132.87424087524414,
+     "new_bwd_gpu_us_rounds": [
+      132.87424087524414,
+      132.94591903686523,
+      132.6848030090332,
+      132.85375595092773,
+      132.94079780578613
+     ],
+     "old_fwd_gpu_us": 86.69695854187012,
+     "old_fwd_gpu_us_rounds": [
+      86.69695854187012,
+      86.67136192321777,
+      86.67136192321777,
+      86.79936408996582,
+      86.79424285888672
+     ],
+     "old_bwd_gpu_us": 133.3299160003662,
+     "old_bwd_gpu_us_rounds": [
+      133.35040092468262,
+      133.35552215576172,
+      133.3299160003662,
+      133.2479953765869,
+      133.19168090820312
+     ],
+     "new_fwd_eager_us": 89.37472343444824,
+     "new_bwd_eager_us": 135.02464294433594,
+     "old_fwd_eager_us": 88.96512031555176,
+     "old_bwd_eager_us": 135.35231590270996,
+     "fwd_bytes": 142606336,
+     "new_fwd_GBps": 1643.717839309033
+    },
+    {
+     "T": 16384,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 187.2947120666504,
+     "new_fwd_gpu_us_rounds": [
+      187.4380874633789,
+      187.2947120666504,
+      187.23840713500977,
+      187.2435188293457,
+      187.3971176147461
+     ],
+     "new_bwd_gpu_us": 268.0627250671387,
+     "new_bwd_gpu_us_rounds": [
+      267.8886413574219,
+      268.2931137084961,
+      267.9705619812012,
+      268.0627250671387,
+      268.2624053955078
+     ],
+     "old_fwd_gpu_us": 186.9772720336914,
+     "old_fwd_gpu_us_rounds": [
+      186.90048217773438,
+      187.08480834960938,
+      187.0899200439453,
+      186.86975479125977,
+      186.9772720336914
+     ],
+     "old_bwd_gpu_us": 269.3836784362793,
+     "old_bwd_gpu_us_rounds": [
+      269.36832427978516,
+      269.3734359741211,
+      269.44000244140625,
+      269.47071075439453,
+      269.3836784362793
+     ],
+     "new_fwd_eager_us": 190.17728805541992,
+     "new_bwd_eager_us": 270.45888900756836,
+     "old_fwd_eager_us": 189.46048736572266,
+     "old_bwd_eager_us": 271.81055068969727,
+     "fwd_bytes": 301989888,
+     "new_fwd_GBps": 1612.3780787390003
+    },
+    {
+     "T": 16384,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 167.18847274780273,
+     "new_fwd_gpu_us_rounds": [
+      168.49920272827148,
+      167.1321678161621,
+      167.13727951049805,
+      167.18847274780273,
+      167.2140884399414
+     ],
+     "new_bwd_gpu_us": 257.64352798461914,
+     "new_bwd_gpu_us_rounds": [
+      257.6639938354492,
+      257.5359916687012,
+      257.6793670654297,
+      257.5872039794922,
+      257.64352798461914
+     ],
+     "old_fwd_gpu_us": 167.02463150024414,
+     "old_fwd_gpu_us_rounds": [
+      166.9375991821289,
+      166.9478416442871,
+      167.03487396240234,
+      167.08608627319336,
+      167.02463150024414
+     ],
+     "old_bwd_gpu_us": 258.3500862121582,
+     "old_bwd_gpu_us_rounds": [
+      258.32447052001953,
+      258.4063911437988,
+      258.42687606811523,
+      258.2271957397461,
+      258.3500862121582
+     ],
+     "new_fwd_eager_us": 170.47552108764648,
+     "new_bwd_eager_us": 260.23935317993164,
+     "old_fwd_eager_us": 170.3936004638672,
+     "old_bwd_eager_us": 260.7308769226074,
+     "fwd_bytes": 285212672,
+     "new_fwd_GBps": 1705.935028369044
+    },
+    {
+     "T": 32768,
+     "local": true,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 368.3225631713867,
+     "new_fwd_gpu_us_rounds": [
+      369.3619155883789,
+      368.3225631713867,
+      368.32767486572266,
+      368.3225631713867,
+      368.2406234741211
+     ],
+     "new_bwd_gpu_us": 524.4927978515625,
+     "new_bwd_gpu_us_rounds": [
+      524.4927978515625,
+      524.5491027832031,
+      524.477424621582,
+      524.2521667480469,
+      524.7590255737305
+     ],
+     "old_fwd_gpu_us": 367.8054428100586,
+     "old_fwd_gpu_us_rounds": [
+      367.7849578857422,
+      367.92320251464844,
+      367.8054428100586,
+      367.6979064941406,
+      367.8566360473633
+     ],
+     "old_bwd_gpu_us": 526.9350433349609,
+     "old_bwd_gpu_us_rounds": [
+      526.9350433349609,
+      526.9452667236328,
+      526.9862365722656,
+      526.9145584106445,
+      526.7916870117188
+     ],
+     "new_fwd_eager_us": 371.89632415771484,
+     "new_bwd_eager_us": 527.8105545043945,
+     "old_fwd_eager_us": 370.9132766723633,
+     "old_bwd_eager_us": 530.2681732177734,
+     "fwd_bytes": 603979776,
+     "new_fwd_GBps": 1639.8120462659735
+    },
+    {
+     "T": 32768,
+     "local": false,
+     "bitwise_equal_fwd": true,
+     "bitwise_equal_bwd": true,
+     "new_fwd_gpu_us": 330.51647186279297,
+     "new_fwd_gpu_us_rounds": [
+      330.4703903198242,
+      330.51647186279297,
+      330.68031311035156,
+      330.6342315673828,
+      330.4499053955078
+     ],
+     "new_bwd_gpu_us": 502.55359649658203,
+     "new_bwd_gpu_us_rounds": [
+      502.55359649658203,
+      502.3487854003906,
+      502.60990142822266,
+      502.55870819091797,
+      502.48191833496094
+     ],
+     "old_fwd_gpu_us": 330.32703399658203,
+     "old_fwd_gpu_us_rounds": [
+      330.4447937011719,
+      330.42945861816406,
+      330.2143859863281,
+      330.32703399658203,
+      330.18367767333984
+     ],
+     "old_bwd_gpu_us": 504.4224166870117,
+     "old_bwd_gpu_us_rounds": [
+      504.26368713378906,
+      504.3251037597656,
+      504.4224166870117,
+      504.4633483886719,
+      504.4633483886719
+     ],
+     "new_fwd_eager_us": 332.0217514038086,
+     "new_bwd_eager_us": 505.5487823486328,
+     "old_fwd_eager_us": 331.46881103515625,
+     "old_bwd_eager_us": 507.00286865234375,
+     "fwd_bytes": 570425344,
+     "new_fwd_GBps": 1725.8605623649528
+    }
+   ],
+   "plot": {
+    "T": [
+     1,
+     16,
+     64,
+     256,
+     1024,
+     2048,
+     4096,
+     8192,
+     16384,
+     32768
+    ],
+    "local_new_fwd_gpu_us": [
+     3.333120048046112,
+     3.532800078392029,
+     3.6659198999404907,
+     5.478399991989136,
+     10.97216010093689,
+     28.195838928222656,
+     51.69151782989502,
+     96.60415649414062,
+     187.2947120666504,
+     368.3225631713867
+    ],
+    "local_new_bwd_gpu_us": [
+     4.403199851512909,
+     4.62336003780365,
+     4.925439953804016,
+     7.941120266914368,
+     16.6758394241333,
+     40.40703773498535,
+     73.07775974273682,
+     137.97887802124023,
+     268.0627250671387,
+     524.4927978515625
+    ],
+    "local_new_fwd_eager_us": [
+     42.936320304870605,
+     42.66496181488037,
+     42.11711883544922,
+     42.239999771118164,
+     43.581438064575195,
+     42.47551918029785,
+     54.29247856140137,
+     99.59424018859863,
+     190.17728805541992,
+     371.89632415771484
+    ],
+    "global_new_fwd_gpu_us": [
+     3.02592009305954,
+     3.2358399033546448,
+     3.3484798669815063,
+     4.787200093269348,
+     7.864320278167725,
+     22.963199615478516,
+     46.30015850067139,
+     86.75840377807617,
+     167.18847274780273,
+     330.51647186279297
+    ],
+    "local_new_fwd_GBps_T_ge_8192": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     1563.0274046144007,
+     1612.3780787390003,
+     1639.8120462659735
+    ],
+    "local_old_fwd_gpu_us": [
+     3.261440098285675,
+     3.476479947566986,
+     3.630079925060272,
+     5.437440276145935,
+     10.864640474319458,
+     28.50816011428833,
+     52.111358642578125,
+     96.77824020385742,
+     186.9772720336914,
+     367.8054428100586
+    ],
+    "local_old_bwd_gpu_us": [
+     4.433920085430145,
+     4.648959934711456,
+     4.961279928684235,
+     7.951359748840332,
+     16.778240203857422,
+     40.58112144470215,
+     73.33888053894043,
+     138.56255531311035,
+     269.3836784362793,
+     526.9350433349609
+    ]
+   },
+   "all_bitwise_equal_old_vs_new": true
   }
  },
  "suggested_figures": [
@@ -6370,14 +7450,420 @@
    "caption": "Row 524288 is where T*32*128 crosses 2^31: old kernel crash or silent corruption, new kernel exact."
   },
   {
-   "id": "fig_latency",
-   "kind": "log-log line, ms vs T",
-   "data": "experiments.bench_ab_old_vs_new_kernel.plot (old vs new) + experiments.bench_series.plot (native HF)",
-   "caption": "Strict fwd/bwd kernel latency vs T, before/after int64 offsets (identical) and vs the torch-native HF composition; flat ~40 us floor = launch overhead for T <= 2048."
+   "id": "fig_latency_graph",
+   "kind": "log-log line, us vs T",
+   "data": "experiments.bench_graph.plot",
+   "caption": "Device time per launch (CUDA-graph replay) of the strict fwd/bwd kernels, old int32 vs new int64 offsets, and the eager launcher time (host launch floor) for comparison."
   }
  ],
  "not_run": [
-  "real-checkpoint full-model chain with the patched op (MUSEGLIMMER_CHECKPOINT run) - NOT RUN; covered indirectly by the bitwise-unchanged sha256 check",
-  "vLLM engine / Megatron Bridge 30B runs - NOT RUN (out of scope of this row)"
- ]
+  "vLLM engine / Megatron Bridge 30B runs with the wave B module: NOT RUN by this row (other owners); the call-site patches are requests_to_integrator"
+ ],
+ "wave_b": {
+  "commit": "615ee61939edb568ce001c44d2cc7de811ae86e7",
+  "commit_before": "f91e8b6",
+  "review": "adversarial review of wave A (issues kernels_rope:R1..R12)",
+  "findings": [
+   {
+    "id": "kernels_rope:R1",
+    "severity": "should_fix",
+    "verdict": "fixed (partially; call sites need integration patch 2)",
+    "what": "qknorm_rope:4 was reported 'fixed' while every production caller still used local=None. Now: the legacy form is counted (runtime_provenance), warns once per process, and raises when MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 or require_explicit_layer_kind(True); the reference model passes local= explicitly. The vLLM/Megatron call sites are other owners' files: patch in requests_to_integrator; the E2E harness should set the env var once they land. findings[3].verdict corrected.",
+    "evidence_before": {
+     "env_unset": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     },
+     "env_1": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     }
+    },
+    "evidence_after": {
+     "env_unset": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     },
+     "env_1": {
+      "raised": true,
+      "error": "ValueError: qknorm_scaled_rope: the layer kind must be explicit (local=True for a sliding-window RoPE layer, local=False for a global NoPE layer); local=None is rejected be",
+      "warnings": []
+     }
+    }
+   },
+   {
+    "id": "kernels_rope:R2",
+    "severity": "should_fix",
+    "verdict": "fixed for every strict builder path; fallback builders + runtime digest logging are integration requests",
+    "what": "rope_table (the builder the vLLM/Megatron bindings and the reference bind) now returns rows of the one canonical cached table per device; the reference golden builder delegates to it and raises on CPU. fallback_ops.rope_table and strict_kernels._fb_rope_table (bound only when the strict module is missing) and canonical_rope_table(verify=True) + digest logging in the runtimes are integration patches. The op still cannot tell where a table came from. findings[0].verdict corrected.",
+    "evidence_before": {
+     "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "reference.golden_ops.rope_table(cpu)": "accepted",
+     "rope_table_reads_the_canonical_cache": false
+    },
+    "evidence_after": {
+     "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "reference.golden_ops.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "rope_table_reads_the_canonical_cache": true
+    }
+   },
+   {
+    "id": "kernels_rope:R3",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "what": "version counters recorded at build; canonical_rope_table/rope_rows/rope_table/rope_table_sha256 raise after an in-place change; verify=True re-hashes (no memo) and the digest memo is invalidated by the version counters. Writes through .data bypass the counters (documented); verify=True catches them.",
+    "evidence_before": {
+     "in_place_change_detected": false,
+     "verify_after_data_write_raised": false,
+     "logged_digest_equals_pinned_after_write": true,
+     "actual_digest_equals_pinned_after_write": false,
+     "restored_digest_equals_pinned": true
+    },
+    "evidence_after": {
+     "in_place_change_detected": true,
+     "in_place_error": "RuntimeError: the canonical RoPE table on cuda:0 (theta=500000.0, dim=64) was modified in place after it was built (tensor version counter changed); its rows no longer follow",
+     "verify_after_data_write_raised": true,
+     "verify_error": "RuntimeError: canonical RoPE table sha256 e6d3f01684b882c195238895d87a72b4620803cedf32e29113cf09569986d492 != pinned 088",
+     "logged_digest_equals_pinned_after_write": false,
+     "actual_digest_equals_pinned_after_write": false,
+     "restored_digest_equals_pinned": true
+    }
+   },
+   {
+    "id": "kernels_rope:R4",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "what": "the first build of a canonical table inside CUDA-graph capture raises (nothing is cached); the table is also built as a normal tensor under inference_mode so its version counters exist.",
+    "evidence_before": {
+     "first_build_in_capture_raised": false,
+     "cached_table_correct_before_replay": false,
+     "eager_rows_after_capture_wrong_elements": 16384,
+     "cached_after": true,
+     "inference_mode": {
+      "table_is_inference_tensor": true
+     }
+    },
+    "evidence_after": {
+     "first_build_in_capture_raised": true,
+     "error": "RuntimeError: the canonical RoPE table must be built before CUDA-graph capture: call canonical_rope_table(device, verify=True) once at init (before warm-up/capture)",
+     "cached_after": false,
+     "inference_mode": {
+      "table_is_inference_tensor": false
+     }
+    }
+   },
+   {
+    "id": "kernels_rope:R5",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "what": "scripts committed under reports/muse_glimmer_poc/scripts/rope/ without hard-coded worktree paths (run_rope_measurements.sh <out> [<tree>]); 'scripts' and 'commands' point at them."
+   },
+   {
+    "id": "kernels_rope:R6",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "tests: verify=True with a wrong pinned digest raises; an in-place change raises; a .data write is caught by verify=True."
+   },
+   {
+    "id": "kernels_rope:R7",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "test_compiled_kernels_use_int64_row_offsets checks the TTIR (program id sign-extended to i64, i64 row offsets for the Q and K tiles); it fails on the 6a61f6e kernel ('%t not extended'). tests_new.per_test records the reason each test failed before (before_failure_kind)."
+   },
+   {
+    "id": "kernels_rope:R8",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "strict_kernels._fb_rope_table added to the builder-identity test."
+   },
+   {
+    "id": "kernels_rope:R9",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "tests_summary_lines keys name exactly what ran; findings[2].verdict = coverage_gap_test_added."
+   },
+   {
+    "id": "kernels_rope:R10",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "bench_series.plot: before_* series removed (host-load confounded); GBps only for T >= 8192; new experiments.bench_graph (CUDA-graph replay, device time per launch, old vs new kernel interleaved)."
+   },
+   {
+    "id": "kernels_rope:R11",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "trace() is static and says so (scope); rope_table.sha256 -> sha256_pinned; runtime_provenance() reports the digest of the table this process built and the explicit/implicit layer-kind call counts."
+   },
+   {
+    "id": "kernels_rope:R12",
+    "severity": "nit",
+    "verdict": "fixed",
+    "what": "REPORT Design usage line now shows rope_rows once per forward + local=."
+   }
+  ],
+  "tests": {
+   "count": 16,
+   "before_failed": 14,
+   "before_failed_behaviour": 11,
+   "before_failed_api_missing": 3,
+   "after_passed_vllm_env": 16,
+   "after_passed_megatron_env": 16,
+   "per_test": [
+    {
+     "test": "TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-False]",
+     "before": "FAILED",
+     "before_failure": "AssertionError: %t not extended",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6 tree with the 6a61f6e triton/qknorm_rope.py (int32)"
+    },
+    {
+     "test": "TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-True]",
+     "before": "FAILED",
+     "before_failure": "AssertionError: %t not extended",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6 tree with the 6a61f6e triton/qknorm_rope.py (int32)"
+    },
+    {
+     "test": "TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-False]",
+     "before": "FAILED",
+     "before_failure": "AssertionError: %t not extended",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6 tree with the 6a61f6e triton/qknorm_rope.py (int32)"
+    },
+    {
+     "test": "TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-True]",
+     "before": "FAILED",
+     "before_failure": "AssertionError: %t not extended",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6 tree with the 6a61f6e triton/qknorm_rope.py (int32)"
+    },
+    {
+     "test": "TestWaveBLayerKind::test_env_var_makes_the_layer_kind_mandatory",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT RAISE ValueError",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBLayerKind::test_implicit_form_is_counted_and_warned_once",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT WARN. No warnings of type (<class 'RuntimeWarning'>,) were emitted.",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBLayerKind::test_switch_without_env",
+     "before": "FAILED",
+     "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'require_explicit_layer_kind'",
+     "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_canonical_table_built_under_inference_mode_is_a_normal_tensor",
+     "before": "FAILED",
+     "before_failure": "AssertionError: assert not True",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_first_build_inside_cuda_graph_capture_raises",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT RAISE RuntimeError",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_in_place_change_is_detected_without_a_sync",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT RAISE RuntimeError",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_runtime_provenance_reports_the_built_digest",
+     "before": "FAILED",
+     "before_failure": "AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'runtime_provenance'",
+     "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_verify_raises_on_a_digest_mismatch",
+     "before": "PASSED",
+     "before_failure": null,
+     "before_failure_kind": null,
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestWaveBTableIntegrity::test_verify_rehashes_instead_of_reading_the_memo",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT RAISE RuntimeError",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestF1RopeTableIdentity::test_canonical_table_is_cached_identical_object",
+     "before": "PASSED",
+     "before_failure": null,
+     "before_failure_kind": null,
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda",
+     "before": "FAILED",
+     "before_failure": "Failed: DID NOT RAISE RuntimeError",
+     "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    },
+    {
+     "test": "TestF1RopeTableIdentity::test_trace_records_table_provenance",
+     "before": "FAILED",
+     "before_failure": "KeyError: 'sha256_pinned'",
+     "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+     "after_vllm_env": "PASSED",
+     "after_megatron_env": "PASSED",
+     "before_tree": "f91e8b6"
+    }
+   ]
+  },
+  "probe_wave_b": {
+   "before_f91e8b6": {
+    "python": "/home/ubuntu/envs/vllm/bin/python",
+    "torch": "2.13.0+cu130",
+    "gpu": "NVIDIA A100-SXM4-80GB",
+    "module": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/old_f91e8b6/rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+    "r1_layer_kind": {
+     "env_unset": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     },
+     "env_1": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     }
+    },
+    "r2_builders": {
+     "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "reference.golden_ops.rope_table(cpu)": "accepted",
+     "rope_table_reads_the_canonical_cache": false
+    },
+    "r3_in_place": {
+     "in_place_change_detected": false,
+     "verify_after_data_write_raised": false,
+     "logged_digest_equals_pinned_after_write": true,
+     "actual_digest_equals_pinned_after_write": false,
+     "restored_digest_equals_pinned": true
+    },
+    "r4_capture": {
+     "first_build_in_capture_raised": false,
+     "cached_table_correct_before_replay": false,
+     "eager_rows_after_capture_wrong_elements": 16384,
+     "cached_after": true
+    },
+    "inference_mode_build": {
+     "table_is_inference_tensor": true
+    },
+    "ref_decode_batch_duplicate_ids": {
+     "duplicate_ids_raised": false,
+     "row0_equals_batch1": false,
+     "row0_abs_diff": 0.017895221710205078
+    },
+    "ref_xrt_checks": {
+     "minus_zero_vs_plus_zero_counted_equal": true,
+     "no_checks_reported_as_pass": true
+    },
+    "wall_s": 3.3
+   },
+   "after": {
+    "python": "/home/ubuntu/envs/vllm/bin/python",
+    "torch": "2.13.0+cu130",
+    "gpu": "NVIDIA A100-SXM4-80GB",
+    "module": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-5/rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+    "r1_layer_kind": {
+     "env_unset": {
+      "raised": false,
+      "q_hat_elements_differing_from_rope_path": 15994827,
+      "elements": 16777216,
+      "warnings": []
+     },
+     "env_1": {
+      "raised": true,
+      "error": "ValueError: qknorm_scaled_rope: the layer kind must be explicit (local=True for a sliding-window RoPE layer, local=False for a global NoPE layer); local=None is rejected be",
+      "warnings": []
+     }
+    },
+    "r2_builders": {
+     "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "reference.golden_ops.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+     "rope_table_reads_the_canonical_cache": true
+    },
+    "r3_in_place": {
+     "in_place_change_detected": true,
+     "in_place_error": "RuntimeError: the canonical RoPE table on cuda:0 (theta=500000.0, dim=64) was modified in place after it was built (tensor version counter changed); its rows no longer follow",
+     "verify_after_data_write_raised": true,
+     "verify_error": "RuntimeError: canonical RoPE table sha256 e6d3f01684b882c195238895d87a72b4620803cedf32e29113cf09569986d492 != pinned 088",
+     "logged_digest_equals_pinned_after_write": false,
+     "actual_digest_equals_pinned_after_write": false,
+     "restored_digest_equals_pinned": true
+    },
+    "r4_capture": {
+     "first_build_in_capture_raised": true,
+     "error": "RuntimeError: the canonical RoPE table must be built before CUDA-graph capture: call canonical_rope_table(device, verify=True) once at init (before warm-up/capture)",
+     "cached_after": false
+    },
+    "inference_mode_build": {
+     "table_is_inference_tensor": false
+    },
+    "ref_decode_batch_duplicate_ids": {
+     "duplicate_ids_raised": true,
+     "error": "ValueError: KVPlan sequence ids must be unique; got [0, 0]"
+    },
+    "ref_xrt_checks": {
+     "minus_zero_vs_plus_zero_counted_equal": false,
+     "no_checks_reported_as_pass": false
+    },
+    "wall_s": 3.9
+   }
+  },
+  "bits_changed": "none: rope_table rows are gathered from the canonical table, which is the same formula (tests compare against the formula evaluated directly); xrt_reference_triton.json was regenerated at this commit"
+ }
 }

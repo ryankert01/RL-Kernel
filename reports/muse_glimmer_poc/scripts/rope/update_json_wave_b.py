@@ -10,7 +10,8 @@ usage: python update_json_wave_b.py --json <kernels_rope.json> --commit <sha> \\
     --tests-before-log <pytest -rfE log of the wave B tests at f91e8b6> \\
     --ttir-before-log <pytest log of the TTIR test with the 6a61f6e kernel> \\
     --tests-after-vllm <pytest -rA log> --tests-after-megatron <pytest -rA log> \\
-    --suite-vllm <log> --probe-before <json> --probe-after <json> --bench-graph <json>
+    --suite-vllm <log> --suite-commit <sha> --probe-before <json> --probe-after <json> \\
+    --bench-graph <json>
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ def outcomes(log: str) -> dict[str, str]:
     res = {}
     for line in Path(log).read_text().splitlines():
         m = re.match(r"^(PASSED|FAILED|ERROR|SKIPPED)\s+(\S+)", line)
-        if m:
+        if m and "::" in m.group(2):
             res[m.group(2).split("::", 1)[1]] = m.group(1)
     return res
 
@@ -60,12 +61,14 @@ def per_test(before: dict[str, str], errors: dict[str, str], after_v: dict[str, 
     for t in tests:
         key = t.replace("::", ".")
         err = errors.get(key)
-        b = before.get(t, "NOT RUN")
+        # the before logs are -rfE: a collected test that is not listed there passed
+        b = before.get(t, "PASSED")
+        ok = b == "PASSED"
         rows.append({
             "test": t,
             "before": b,
-            "before_failure": None if b == "PASSED" else err,
-            "before_failure_kind": None if b == "PASSED" else classify(err),
+            "before_failure": None if ok else err,
+            "before_failure_kind": None if ok else classify(err),
             "after_vllm_env": after_v.get(t, "NOT RUN"),
             "after_megatron_env": after_m.get(t, "NOT RUN"),
         })
@@ -75,8 +78,8 @@ def per_test(before: dict[str, str], errors: dict[str, str], after_v: dict[str, 
 def main() -> int:
     ap = argparse.ArgumentParser()
     for name in ("json", "commit", "wave_a_before_log", "tests_before_log", "ttir_before_log",
-                 "tests_after_vllm", "tests_after_megatron", "suite_vllm", "probe_before",
-                 "probe_after", "bench_graph"):
+                 "tests_after_vllm", "tests_after_megatron", "suite_vllm", "suite_commit",
+                 "probe_before", "probe_after", "bench_graph"):
         ap.add_argument("--" + name.replace("_", "-"), required=True, dest=name)
     a = ap.parse_args()
     d = json.loads(Path(a.json).read_text())
@@ -122,6 +125,10 @@ def main() -> int:
     errors_b = first_errors(a.tests_before_log)
     ttir_before = outcomes(a.ttir_before_log)
     ttir_err = first_errors(a.ttir_before_log)
+    if not ttir_err:  # a grep-filtered log: no section headers, take its first 'E' line
+        e_lines = [x[1:].strip() for x in Path(a.ttir_before_log).read_text().splitlines()
+                   if x.startswith("E ")]
+        ttir_err = {t.replace("::", "."): e_lines[0][:200] for t in ttir_before if e_lines}
     before_b.update(ttir_before)
     errors_b.update(ttir_err)
     rows = per_test(before_b, errors_b, after_v, after_m, wb_tests)
@@ -256,7 +263,8 @@ def main() -> int:
             "test_qknorm_rope+test_strict_model_tiny_vllm_env": last_line(a.tests_after_vllm),
             "test_qknorm_rope+test_megatron_strict_binding+test_strict_model_tiny_megatron_env":
                 last_line(a.tests_after_megatron),
-            "muse_glimmer_suite_vllm_env (--ignore distributed)": last_line(a.suite_vllm),
+            f"muse_glimmer_suite_vllm_env (--ignore distributed; at {a.suite_commit})":
+                last_line(a.suite_vllm),
         },
     }
 
