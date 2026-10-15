@@ -505,6 +505,8 @@ class StrictRolloutEngine:
             source = (
                 f"recomputed by each of the {len(workers)} TP workers over the tensors it read "
                 "and installed (strict unmerged slots); all agree"
+                if lora_hash is not None
+                else f"no adapter loaded (all {len(workers)} TP workers report None)"
             )
         elif self._native_lora is not None:
             from rl_engine.models.muse_glimmer.runtime.vllm_worker_tools import (
