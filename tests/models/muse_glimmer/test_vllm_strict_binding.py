@@ -349,11 +349,34 @@ class TestLoRA:
         b_row_zero = torch.zeros(128, 8, dtype=torch.bfloat16, device=DEVICE)
         base_row = vs.row_parallel_project(state, x, w_row)
         assert torch.equal(vs.row_parallel_project(state, x, w_row, (a_row, b_row_zero)), base_row)
-        # Explicit formula check for the non-zero case (column parallel).
-        z = fb.det_gemm(x, a)
-        delta = fb.det_gemm(z, b_one, k_chunks=1)
-        expected = (base.float() + delta.float()).to(torch.bfloat16)
+        # Explicit formula check for the non-zero case (column parallel): the declared unmerged
+        # rule y = bf16(acc32(W x) + sum_k B[:, k] z[k]) with z = bf16(acc32(A x)), one rounding.
+        acc = fb.det_gemm(x, w_col, out_dtype=torch.float32)
+        z = fb.det_gemm(x, a, out_dtype=torch.float32).to(torch.bfloat16)
+        loop = torch.zeros_like(acc)
+        for k in range(z.shape[1]):
+            loop = loop + z[:, k : k + 1].float() * b_one[:, k].float().unsqueeze(0)
+        expected = (acc + loop).to(torch.bfloat16)
         assert torch.equal(vs.column_parallel_project(state, x, w_col, (a, b_one)), expected)
+
+    def test_lora_rule_matches_megatron_binding(self):
+        """The rollout's strict LoRA forward equals the trainer's (megatron_lora) bit for bit."""
+
+        from rl_engine.models.muse_glimmer.runtime import megatron_lora as ml
+        from rl_engine.models.muse_glimmer.runtime.strict_kernels import TPComm
+
+        state = vs.StrictBindingState(ops=probe_ops(resolve_ops(), DEVICE))
+        comm = TPComm(None)
+        for tokens in (1, 5, 37):
+            x = _bf(tokens, 1024)
+            w_col, a, b = _bf(512, 1024), _bf(16, 1024) * 0.03, _bf(512, 16) * 0.05
+            y = vs.column_parallel_project(state, x, w_col, (a, b))
+            y_meg = ml.StrictColumnLinear.apply(x, a.float(), b.float(), comm, 512, w_col)
+            assert torch.equal(y, y_meg)
+            w_row, a_row, b_row = _bf(256, 1024), _bf(16, 1024) * 0.03, _bf(256, 16) * 0.05
+            y = vs.row_parallel_project(state, x, w_row, (a_row, b_row))
+            y_meg = ml.StrictRowLinear.apply(x, w_row, a_row.float(), b_row.float(), comm, 1024)
+            assert torch.equal(y, y_meg)
 
 
 @gpu

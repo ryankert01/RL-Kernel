@@ -34,13 +34,19 @@ is exactly vocab tiles ``[8r/t, 8(r+1)/t)`` of 25344 rows.
 
 LoRA (strict unmerged slots)
 ----------------------------
-``load_lora`` stores per-layer ``(A, B)`` for q/k/v/gate/o and mlp gate/up/down; the forward adds
-``B (A x)`` as ``y = bf16(fp32(main_bf16) + fp32(lora_bf16))`` where ``main`` is the untouched strict
-GEMM output and ``lora = det_gemm(det_gemm(x, A) -> bf16, B) -> bf16``.  Column-parallel slots keep
-``A`` replicated and shard ``B`` rows like the base weight; row-parallel slots shard ``A`` columns
-like the base weight (K chunks + tree) and keep ``B`` replicated.  ``B = 0`` is a bitwise no-op
-(``x + 0.0 == x`` in IEEE except the sign of an exact zero).  The ``B`` GEMM reduces over ``K = r``
-in a single chunk (``r`` is not 8-chunkable).
+``load_lora`` stores per-layer ``(A, B)`` for q/k/v/gate/o and mlp gate/up/down.  The declared
+unmerged form is the one of the Megatron binding (``runtime/megatron_lora.py``), so trainer and
+rollout compute the same bits::
+
+    z = bf16( acc32(A x) )                         # canonical 8-chunk det GEMM, one rounding
+    y = bf16( acc32(W x) + sum_{k<r} B[:, k] z[k] )  # base fp32 accumulator (NOT rounded) +
+                                                   # fixed-order fp32 loop over the rank
+                                                   # (``strict_kernels.small_k_fp32``), one rounding
+
+Column-parallel slots keep ``A`` replicated and shard ``B`` rows like the base weight; row-parallel
+slots shard ``A`` columns like the base weight (K chunks + tree: ``acc32`` is the cross-rank tree of
+the fp32 sub-tree partials) and keep ``B`` replicated.  ``B = 0`` is a bitwise no-op
+(``acc + 0.0 == acc``; the one rounding is the same as without LoRA).
 
 Fail-closed checks: ``check_runtime_binding`` (native class, four-GEMM grouping, speculative off),
 config pins, ``enforce_eager`` / no torch.compile, bf16 KV cache, canonical lm_head tiling.
@@ -411,33 +417,39 @@ def tree_over_ranks(state: StrictBindingState, partial: torch.Tensor) -> torch.T
 # ----------------------------------------------------------------------------------------------
 
 
-def _lora_gemm(
+_PAD = 64  # M/N padding of the LoRA A GEMM (same as strict_kernels._GemmBackend.partial)
+
+
+def _padded_partial(
     state: StrictBindingState,
     a: torch.Tensor,
     w: torch.Tensor,
-    *,
-    k_chunks: int,
-) -> torch.Tensor:
-    try:
-        return state.ops.det_gemm(a, w, out_dtype=torch.bfloat16, k_chunks=k_chunks)
-    except Exception as exc:  # noqa: BLE001 - small-N / small-K LoRA shapes may be out of contract
-        state.note(f"lora gemm fallback ({fb.GEMM_LABEL}): {type(exc).__name__}: {exc}")
-        state.call_counts["lora_gemm.fallback"] += 1
-        return fb.det_gemm(a, w, out_dtype=torch.bfloat16, k_chunks=k_chunks)
-
-
-def _lora_partial(
-    state: StrictBindingState,
-    a: torch.Tensor,
-    w_local: torch.Tensor,
     chunk_ids: tuple[int, ...],
 ) -> torch.Tensor:
-    try:
-        return state.ops.det_gemm_partial(a, w_local, chunk_ids)
-    except Exception as exc:  # noqa: BLE001
-        state.note(f"lora partial gemm fallback ({fb.GEMM_LABEL}): {type(exc).__name__}: {exc}")
-        state.call_counts["lora_gemm.fallback"] += 1
-        return fb.det_gemm_partial(a, w_local, chunk_ids)
+    """fp32 canonical sub-tree partial of ``a @ w.T`` with M and N zero-padded to 64.
+
+    This is the exact call pattern of ``strict_kernels._GemmBackend.partial`` (the Megatron
+    binding's GEMM entry), needed for the rank-r LoRA ``A`` GEMM whose N (= r) is below one tile.
+    Zero rows/columns cannot change the bits of the other outputs; K is never padded.
+    """
+
+    m, n = a.shape[0], w.shape[0]
+    m_pad = -(-m // _PAD) * _PAD
+    n_pad = -(-n // _PAD) * _PAD
+    a_in = a if m_pad == m else torch.nn.functional.pad(a, (0, 0, 0, m_pad - m))
+    w_in = w if n_pad == n else torch.nn.functional.pad(w, (0, 0, 0, n_pad - n))
+    out = state.ops.det_gemm_partial(a_in.contiguous(), w_in, tuple(chunk_ids))
+    if m_pad != m or n_pad != n:
+        out = out[:m, :n]
+    return out
+
+
+def lora_small_k(z: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """``sum_k B[:, k] z[k]`` in fp32, fixed order over the rank (Megatron's ``small_k_fp32``)."""
+
+    from rl_engine.models.muse_glimmer.runtime.strict_kernels import small_k_fp32
+
+    return small_k_fp32(z.contiguous(), b.contiguous())
 
 
 def column_parallel_project(
@@ -446,15 +458,15 @@ def column_parallel_project(
     w_shard: torch.Tensor,
     lora: tuple[torch.Tensor, torch.Tensor] | None = None,
 ) -> torch.Tensor:
-    """``bf16(x @ W_shard^T)`` through det_gemm (+ strict unmerged LoRA)."""
+    """``bf16(x @ W_shard^T)`` through det_gemm (+ strict unmerged LoRA, one rounding)."""
 
-    y = state.ops.det_gemm(x, w_shard, out_dtype=torch.bfloat16)
     if lora is None:
-        return y
+        return state.ops.det_gemm(x, w_shard, out_dtype=torch.bfloat16)
     lora_a, lora_b = lora
-    z = _lora_gemm(state, x, lora_a, k_chunks=CANONICAL_TP)
-    delta = _lora_gemm(state, z, lora_b, k_chunks=1)
-    return (y.float() + delta.float()).to(torch.bfloat16)
+    acc = state.ops.det_gemm(x, w_shard, out_dtype=torch.float32)
+    z = _padded_partial(state, x, lora_a, tuple(range(CANONICAL_TP))).to(torch.bfloat16)
+    state.call_counts["lora.column"] += 1
+    return (acc + lora_small_k(z, lora_b)).to(torch.bfloat16)
 
 
 def row_parallel_project(
@@ -466,14 +478,13 @@ def row_parallel_project(
     """Row-parallel GEMM: local canonical-chunk partial -> all-gather -> tree -> one bf16 cast."""
 
     chunk_ids = fb.rank_chunk_ids(state.tp_size, state.tp_rank)
-    partial = state.ops.det_gemm_partial(x_local, w_local, chunk_ids)
-    y = tree_over_ranks(state, partial).to(torch.bfloat16)
+    acc = tree_over_ranks(state, state.ops.det_gemm_partial(x_local, w_local, chunk_ids))
     if lora is None:
-        return y
+        return acc.to(torch.bfloat16)
     lora_a_local, lora_b = lora
-    z = tree_over_ranks(state, _lora_partial(state, x_local, lora_a_local, chunk_ids))
-    delta = _lora_gemm(state, z.to(torch.bfloat16), lora_b, k_chunks=1)
-    return (y.float() + delta.float()).to(torch.bfloat16)
+    z = tree_over_ranks(state, _padded_partial(state, x_local, lora_a_local, chunk_ids))
+    state.call_counts["lora.row"] += 1
+    return (acc + lora_small_k(z.to(torch.bfloat16), lora_b)).to(torch.bfloat16)
 
 
 def strict_selected_logp(
@@ -675,6 +686,7 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
         first_attention = first_attention or attention
     if first_attention is None:
         raise RuntimeError("no Muse Glimmer attention layers found")
+    _bind_final_norm(state, model.model.norm)
     state.model = model
     state.lm_head = model.lm_head
     state.model_class = type(model).__name__
@@ -689,6 +701,28 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
     state.cfg["window_keys_incl_self"] = int(pins["sliding_window"])
     state.cfg["sampling"] = "native"
     state.persist()
+
+
+def _bind_final_norm(state: StrictBindingState, norm: Any) -> None:
+    """Route the final norm (``MuseGlimmerModel.norm``, y = x_hat * w) to the strict O2 op.
+
+    vLLM's native ``MuseGlimmerRMSNorm`` uses ``torch.mean`` (unspecified reduction order), so it
+    is replaced on the instance; the module object, its weight and ``MuseGlimmerModel.forward``
+    stay native.
+    """
+
+    if int(getattr(norm, "weight_offset", 0)) != 0 or not bool(getattr(norm, "with_scale", True)):
+        raise RuntimeError("strict Muse Glimmer: final norm is not the weighted (w, no +1) form")
+    eps = float(norm.eps)
+
+    def final_norm_forward(hidden_states: torch.Tensor) -> torch.Tensor:
+        state.call_counts["final_norm"] += 1
+        return state.ops.weighted_rmsnorm(hidden_states, norm.weight, eps=eps)
+
+    norm.forward = final_norm_forward
+    hook = "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.norm.forward (instance)"
+    if hook not in state.hooks:
+        state.hooks.append(hook)
 
 
 def _patch_lm_head_padding(state: StrictBindingState) -> None:
@@ -1058,6 +1092,17 @@ def worker_load_lora(
     if state.model is None:
         raise RuntimeError("LoRA can only be loaded after the Muse Glimmer model is bound")
     device = next(state.model.parameters()).device
+    t0 = time.perf_counter()
+    if state_dict:
+        from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
+
+        received = lora_sha256(state_dict)
+        if received != str(sha256):
+            raise RuntimeError(
+                f"rank {state.tp_rank}: received LoRA hashes to {received}, declared {sha256} "
+                "(muse_glimmer_lora_sha256_v1; fail closed)"
+            )
+    hash_ms = (time.perf_counter() - t0) * 1e3
     pairs = parse_lora_state_dict(state_dict)
     new_slots: dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]] = {}
     for (layer, name), (lora_a, lora_b) in pairs.items():
@@ -1081,7 +1126,107 @@ def worker_load_lora(
         "layers": len(new_slots),
         "slots": sum(len(v) for v in new_slots.values()),
         "sha256": state.lora_sha256,
+        "rehash_ms": hash_ms,
+        "install_ms": (time.perf_counter() - t0) * 1e3,
     }
+
+
+def worker_check_lora_rule(
+    _worker: Any, layer: int, tokens: int = 7, seed: int = 0
+) -> dict[str, Any]:
+    """Check the declared unmerged LoRA rule on this rank's REAL layer weights (TP1 only).
+
+    For each of the 8 slots of ``layer`` (with the LoRA currently loaded) and random bf16 inputs
+    ``x`` of ``tokens`` rows, compares bitwise:
+
+    * ``binding``: the forward path the engine uses (``column_parallel_project`` /
+      ``row_parallel_project``);
+    * ``formula``: ``bf16(acc32(W x) + loop_k B[:, k] z[k])`` with ``z = bf16(acc32(A x))``, the
+      fp32 loop written out here independently (exact bf16 products, sequential fp32 adds);
+    * ``megatron``: ``runtime.megatron_lora.StrictColumnLinear/StrictRowLinear.forward`` (the
+      trainer's implementation, imported read-only; it has no Megatron dependency) on the same
+      tensors at TP1.
+
+    Also reports the max |difference| against an fp64 evaluation of ``W x + B (A x)`` (tolerance
+    view) and whether the LoRA term changes any bit of the base projection.
+    """
+
+    state = require_state()
+    if state.tp_size != 1:
+        raise RuntimeError("worker_check_lora_rule compares against TP1 references; run at TP1")
+    slots = state.lora.get(int(layer))
+    if not slots:
+        raise RuntimeError(f"no LoRA loaded for layer {layer}")
+    model = state.model
+    decoder = model.model.layers[int(layer)]
+    attn, mlp = decoder.self_attn, decoder.mlp
+    w_q, w_k, w_v = canonical_qkv_slices(attn.qkv_proj.weight, attn.q_size, attn.kv_size)
+    w_gate_mlp, w_up = canonical_gate_up_slices(mlp.gate_up_proj.weight)
+    weights = {
+        "q_proj": w_q,
+        "k_proj": w_k,
+        "v_proj": w_v,
+        "gate_proj": attn.output_gate_proj.weight,
+        "o_proj": attn.o_proj.weight,
+        "mlp.gate_proj": w_gate_mlp,
+        "mlp.up_proj": w_up,
+        "mlp.down_proj": mlp.down_proj.weight,
+    }
+    from rl_engine.models.muse_glimmer.runtime import megatron_lora as ml
+    from rl_engine.models.muse_glimmer.runtime.strict_kernels import TPComm
+
+    comm = TPComm(None)
+    device = w_q.device
+    gen = torch.Generator(device="cpu").manual_seed(int(seed))
+    out: dict[str, Any] = {"layer": int(layer), "tokens": int(tokens), "slots": {}}
+    for name, w in weights.items():
+        if name not in slots:
+            continue
+        lora_a, lora_b = slots[name]
+        k_in = w.shape[1]
+        x = torch.randn(int(tokens), k_in, generator=gen).to(device=device, dtype=torch.bfloat16)
+        if name in _COLUMN_PARALLEL:
+            y_bind = column_parallel_project(state, x, w, (lora_a, lora_b))
+            y_base = column_parallel_project(state, x, w)
+            acc = state.ops.det_gemm(x, w, out_dtype=torch.float32)
+            y_meg = ml.StrictColumnLinear.apply(
+                x, lora_a.float(), lora_b.float(), comm, int(w.shape[0]), w
+            )
+        else:
+            y_bind = row_parallel_project(state, x, w, (lora_a, lora_b))
+            y_base = row_parallel_project(state, x, w)
+            acc = state.ops.det_gemm_partial(x, w, tuple(range(CANONICAL_TP)))
+            y_meg = ml.StrictRowLinear.apply(
+                x, w, lora_a.float(), lora_b.float(), comm, int(w.shape[1])
+            )
+        z = _padded_partial(state, x, lora_a, tuple(range(CANONICAL_TP))).to(torch.bfloat16)
+        zf, bf = z.float(), lora_b.float()
+        loop = torch.zeros_like(acc)
+        for k in range(zf.shape[1]):
+            loop = loop + zf[:, k : k + 1] * bf[:, k].unsqueeze(0)
+        y_formula = (acc + loop).to(torch.bfloat16)
+        ref64 = x.double() @ w.double().t() + (x.double() @ lora_a.double().t()) @ (
+            lora_b.double().t()
+        )
+        out["slots"][name] = {
+            "shape_x": list(x.shape),
+            "shape_w": list(w.shape),
+            "rank": int(lora_a.shape[0]),
+            "binding_equals_formula": bool(torch.equal(y_bind, y_formula)),
+            "binding_equals_megatron": bool(torch.equal(y_bind, y_meg.to(torch.bfloat16))),
+            "lora_changed_elements": int((y_bind != y_base).sum().item()),
+            "elements": int(y_bind.numel()),
+            "max_abs_vs_fp64": float((y_bind.double() - ref64).abs().max().item()),
+            "max_abs_base_vs_fp64": float(
+                (y_base.double() - x.double() @ w.double().t()).abs().max().item()
+            ),
+            "max_abs_lora_term": float(loop.abs().max().item()),
+        }
+    out["all_equal"] = all(
+        v["binding_equals_formula"] and v["binding_equals_megatron"]
+        for v in out["slots"].values()
+    )
+    return out
 
 
 __all__ = [
@@ -1106,6 +1251,8 @@ __all__ = [
     "shard_lora",
     "strict_selected_logp",
     "tree_over_ranks",
+    "lora_small_k",
+    "worker_check_lora_rule",
     "worker_load_lora",
     "worker_provenance",
 ]

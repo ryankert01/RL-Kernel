@@ -1,28 +1,47 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 RL-Kernel Contributors
 
-"""CLI: native vs strict Muse Glimmer rollout through vLLM 0.31 with bit-pattern logprob dumps.
+"""CLI: native vs strict Muse-Glimmer-30B rollout through vLLM 0.31 with bit-pattern logprob dumps.
 
-Examples (run under a GPU lease; the lease sets CUDA_VISIBLE_DEVICES)::
+One engine is built per invocation and the requested experiments run on it in order (the 60 GB
+load dominates otherwise).  Run under a GPU lease (the lease sets CUDA_VISIBLE_DEVICES)::
 
     python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 1 --native \
-        --out native_tp1.json
+        --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --temperatures 0,1 \
+        --prefill-check --out native_tp1.json
     python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 1 --strict \
-        --prefill-check --out strict_tp1.json
-    python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 2 --strict \
-        --score native_tp1.json --out strict_tp2_score.json
+        --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --temperatures 0,1 \
+        --prefill-check --lora-zero-check --lora-random-check \
+        --xrt-score reports/muse_glimmer_poc/data/xrt_tokens.json \
+        --xrt-out reports/muse_glimmer_poc/data/xrt_vllm_strict_tp1.json --out strict_tp1.json
 
-Output JSON: ``{"token_ids": [[...]], "logprobs": [[fp32...]], "logprobs_hex": [["%08x"...]],
-"prompt_token_ids": [[...]], "meta": {...provenance, timing...}}`` plus, with ``--prefill-check``,
-``prefill_logprobs`` / ``prefill_logprobs_hex`` / ``decode_vs_prefill_equal``.
+Experiments (all optional, in this order):
+
+* generate (``--prompt-file``; for a ``muse_glimmer_xrt_v1`` file the prompts are
+  ``token_ids[:completion_start]`` of the sequences whose id starts with ``--xrt-filter``), once per
+  ``--temperatures`` entry; ``--prefill-check`` re-scores prompt+completion in one prefill and
+  compares the fp32 bit patterns token by token.
+* ``--lora-zero-check``: rank-r LoRA with random A and B = 0 on every slot of every layer; the
+  prefill scores must be bit-identical to the no-LoRA ones.
+* ``--lora-random-check``: non-zero random rank-r LoRA (seeded, :func:`random_lora_state_dict`),
+  hashed with ``e2e.sync.lora_sha256``; checks ``provenance()["lora_sha256"]``, the unmerged rule
+  on real layer weights (``worker_check_lora_rule``), decode == prefill under LoRA, and that the
+  LoRA changes the scores.  ``--xrt-lora-out`` also scores the xrt file under this LoRA.
+* ``--xrt-score FILE --xrt-out OUT``: ``muse_glimmer_xrt_logprobs_v1`` dump of the xrt file.
+* ``--bench``: batch ``--bench-batch`` x ``--bench-tokens`` (ignore_eos) throughput, TTFT, per-step
+  decode ms (synchronized worker step timer), peak memory and KV-cache size.
+* ``--profile``: torch.profiler top ops of one prefill step and one decode step (batch
+  ``--bench-batch``).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import struct
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -32,13 +51,12 @@ DEFAULT_MODEL = os.path.expanduser("~/models/Muse-Glimmer-30B")
 DEFAULT_PROMPTS = [
     "The capital of France is",
     "Write one sentence about the ocean.",
-    "Explain why the sky is blue in two sentences.",
-    "List three prime numbers greater than 10:",
-    'def fibonacci(n):\n    """Return the n-th Fibonacci number."""\n',
-    "Translate to German: The weather is nice today.",
     "Q: What is 17 * 23?\nA:",
     "Once upon a time, in a small village by the sea,",
 ]
+XRT_SCHEMA = "muse_glimmer_xrt_v1"
+XRT_OUT_SCHEMA = "muse_glimmer_xrt_logprobs_v1"
+RUN_SCHEMA = "muse_glimmer_vllm_run_v1"
 
 
 def fp32_hex(value: float) -> str:
@@ -49,9 +67,56 @@ def hex_rows(rows: list[list[float]]) -> list[list[str]]:
     return [[fp32_hex(v) for v in row] for row in rows]
 
 
-def _load_prompts(path: str | None, tokenizer: Any, chat_template: bool) -> list[list[int]]:
+def _git_head() -> str | None:
+    try:
+        root = Path(__file__).resolve().parents[4]
+        return subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _env_record() -> dict[str, Any]:
+    import torch
+
+    record: dict[str, Any] = {
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    }
+    for name in ("triton", "vllm", "transformers"):
+        try:
+            module = __import__(name)
+            record[name] = str(getattr(module, "__version__", "unknown"))
+        except Exception:  # noqa: BLE001
+            record[name] = None
+    return record
+
+
+# ----------------------------------------------------------------------------------------------
+# Inputs
+# ----------------------------------------------------------------------------------------------
+
+
+def load_prompts(
+    path: str | None, tokenizer: Any, chat_template: bool, xrt_filter: str
+) -> tuple[list[str], list[list[int]]]:
+    """Return (ids, prompt token lists) from a list file or a ``muse_glimmer_xrt_v1`` file."""
+
     if path:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(data, dict) and data.get("schema") == XRT_SCHEMA:
+            ids, prompts = [], []
+            for seq in data["sequences"]:
+                if not str(seq["id"]).startswith(xrt_filter):
+                    continue
+                ids.append(str(seq["id"]))
+                prompts.append([int(t) for t in seq["token_ids"][: int(seq["completion_start"])]])
+            if not prompts:
+                raise ValueError(f"no xrt sequences match --xrt-filter {xrt_filter!r}")
+            return ids, prompts
         if isinstance(data, dict):
             data = data.get("prompts") or data.get("prompt_token_ids")
         if not isinstance(data, list):
@@ -72,7 +137,268 @@ def _load_prompts(path: str | None, tokenizer: Any, chat_template: bool) -> list
             prompts.append([int(t) for t in ids])
         else:
             prompts.append([int(t) for t in item])
-    return prompts
+    return [f"prompt_{i}" for i in range(len(prompts))], prompts
+
+
+def random_lora_state_dict(
+    *, seed: int, rank: int = 16, b_std: float = 0.01, zero_b: bool = False, layers: int = 52
+) -> dict[str, Any]:
+    """Seeded bf16 LoRA on every slot named by ``e2e.sync`` (``layers.{i}.{proj}.lora_{A,B}``).
+
+    A ~ U(-1/sqrt(K), 1/sqrt(K)) (kaiming-uniform bound, as the Megatron binding's init);
+    B ~ N(0, b_std^2) (or exactly 0 with ``zero_b``).  Drawn on CPU with one torch.Generator in
+    sorted key order, so the tensors (and the hash) depend only on (seed, rank, b_std, zero_b).
+    """
+
+    import torch
+
+    from rl_engine.models.muse_glimmer.e2e.sync import LORA_PROJECTIONS
+    from rl_engine.models.muse_glimmer.runtime.vllm_strict import LORA_SHAPES
+
+    gen = torch.Generator(device="cpu").manual_seed(int(seed))
+    state: dict[str, torch.Tensor] = {}
+    keys = []
+    for layer in range(int(layers)):
+        for proj in LORA_PROJECTIONS:
+            keys.append((f"layers.{layer}.{proj}", proj))
+    for prefix, proj in sorted(keys):
+        k_in, n_out = LORA_SHAPES[proj]
+        bound = 1.0 / math.sqrt(k_in)
+        a = (torch.rand(rank, k_in, generator=gen) * 2.0 - 1.0) * bound
+        if zero_b:
+            b = torch.zeros(n_out, rank)
+        else:
+            b = torch.randn(n_out, rank, generator=gen) * float(b_std)
+        state[f"{prefix}.lora_A"] = a.to(torch.bfloat16).contiguous()
+        state[f"{prefix}.lora_B"] = b.to(torch.bfloat16).contiguous()
+    return state
+
+
+# ----------------------------------------------------------------------------------------------
+# Comparisons
+# ----------------------------------------------------------------------------------------------
+
+
+def compare_rows(a_rows: list[list[float]], b_rows: list[list[float]]) -> dict[str, Any]:
+    """Bitwise + numeric comparison of two ragged fp32 logprob tables."""
+
+    per_seq = []
+    total = mismatched = 0
+    max_abs = 0.0
+    abs_series: list[list[float]] = []
+    first: Any = None
+    for i, (ra, rb) in enumerate(zip(a_rows, b_rows, strict=True)):
+        if len(ra) != len(rb):
+            raise ValueError(f"row {i}: {len(ra)} vs {len(rb)} entries")
+        diffs = [abs(x - y) for x, y in zip(ra, rb)]
+        bits = [fp32_hex(x) != fp32_hex(y) for x, y in zip(ra, rb)]
+        count = sum(bits)
+        if count and first is None:
+            first = {"row": i, "token": bits.index(True)}
+        per_seq.append({"tokens": len(ra), "mismatched": count, "max_abs": max(diffs or [0.0])})
+        total += len(ra)
+        mismatched += count
+        max_abs = max(max_abs, max(diffs or [0.0]))
+        abs_series.append(diffs)
+    return {
+        "tokens": total,
+        "mismatched": mismatched,
+        "bitwise_equal": mismatched == 0,
+        "max_abs_diff": max_abs,
+        "first_mismatch": first,
+        "per_sequence": per_seq,
+        "abs_diff_per_token": abs_series,
+    }
+
+
+def _score_check(engine: Any, prompts: list[list[int]], samples: list[list[Any]]) -> Any:
+    flat_prompts = [p for p, group in zip(prompts, samples, strict=True) for _ in group]
+    flat_tokens = [s.token_ids for group in samples for s in group]
+    flat_logprobs = [s.logprobs for group in samples for s in group]
+    sequences = [p + c for p, c in zip(flat_prompts, flat_tokens, strict=True)]
+    starts = [len(p) for p in flat_prompts]
+    t0 = time.perf_counter()
+    prefill = engine.logprobs(sequences, starts)
+    seconds = time.perf_counter() - t0
+    check = compare_rows(flat_logprobs, prefill)
+    check["prefill_seconds"] = seconds
+    check["prefill_logprobs_hex"] = hex_rows(prefill)
+    return check, sequences, starts, prefill
+
+
+def run_generate(
+    engine: Any,
+    ids: list[str],
+    prompts: list[list[int]],
+    *,
+    temperature: float,
+    max_tokens: int,
+    n: int,
+    prefill_check: bool,
+    tokenizer: Any,
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    samples = engine.generate(prompts, n=n, max_tokens=max_tokens, temperature=temperature)
+    seconds = time.perf_counter() - t0
+    flat_tokens = [s.token_ids for group in samples for s in group]
+    flat_logprobs = [s.logprobs for group in samples for s in group]
+    generated = sum(len(t) for t in flat_tokens)
+    record: dict[str, Any] = {
+        "temperature": temperature,
+        "n": n,
+        "max_tokens": max_tokens,
+        "ids": [i for i, group in zip(ids, samples, strict=True) for _ in group],
+        "prompt_lens": [len(p) for p, group in zip(prompts, samples, strict=True) for _ in group],
+        "token_ids": flat_tokens,
+        "logprobs": flat_logprobs,
+        "logprobs_hex": hex_rows(flat_logprobs),
+        "finish_reasons": [s.finish_reason for group in samples for s in group],
+        "texts": [tokenizer.decode(t) for t in flat_tokens],
+        "generate_ms": seconds * 1e3,
+        "generated_tokens": generated,
+        "tokens_per_s": generated / seconds if seconds else None,
+    }
+    if prefill_check:
+        check, _seqs, _starts, _pre = _score_check(engine, prompts, samples)
+        record["decode_vs_prefill"] = check
+    return record, samples
+
+
+def xrt_dump(
+    engine: Any, xrt_path: str, *, strict: bool, tp: int, backend: str, extra: dict[str, Any]
+) -> tuple[dict[str, Any], list[list[float]]]:
+    data = json.loads(Path(xrt_path).read_text(encoding="utf-8"))
+    if data.get("schema") != XRT_SCHEMA:
+        raise ValueError(f"{xrt_path} is not {XRT_SCHEMA}")
+    seqs = data["sequences"]
+    t0 = time.perf_counter()
+    rows = engine.logprobs(
+        [[int(t) for t in s["token_ids"]] for s in seqs], [int(s["completion_start"]) for s in seqs]
+    )
+    seconds = time.perf_counter() - t0
+    import vllm
+
+    out = {
+        "schema": XRT_OUT_SCHEMA,
+        "runtime": f"vllm-{vllm.__version__}",
+        "mode": "strict" if strict else "native",
+        "tp": tp,
+        "backend": backend,
+        "sequences": [
+            {"id": s["id"], "logprobs_hex": [fp32_hex(v) for v in row]}
+            for s, row in zip(seqs, rows, strict=True)
+        ],
+        "source": {
+            "file": str(xrt_path),
+            "checkpoint_revision": data.get("checkpoint_revision"),
+            "tokenizer_json_sha256": data.get("tokenizer_json_sha256"),
+        },
+        "score_ms": seconds * 1e3,
+        **extra,
+    }
+    return out, rows
+
+
+# ----------------------------------------------------------------------------------------------
+# Throughput / memory / profiler
+# ----------------------------------------------------------------------------------------------
+
+
+def _bench_prompts(prompts: list[list[int]], batch: int) -> list[list[int]]:
+    return [prompts[i % len(prompts)] for i in range(batch)]
+
+
+def run_bench(engine: Any, prompts: list[list[int]], *, batch: int, tokens: int) -> dict[str, Any]:
+    from vllm import SamplingParams
+    from vllm.inputs import TokensPrompt
+
+    from rl_engine.models.muse_glimmer.runtime import vllm_worker_tools as tools
+
+    llm = engine.llm
+    batch_prompts = [TokensPrompt(prompt_token_ids=p) for p in _bench_prompts(prompts, batch)]
+
+    def params(max_tokens: int) -> list[Any]:
+        return [
+            SamplingParams(
+                max_tokens=max_tokens,
+                temperature=1.0,
+                seed=1000 + i,
+                ignore_eos=True,
+                logprobs=0,
+                detokenize=False,
+            )
+            for i in range(batch)
+        ]
+
+    def timed(max_tokens: int) -> tuple[float, int]:
+        t0 = time.perf_counter()
+        outs = llm.generate(batch_prompts, params(max_tokens), use_tqdm=False)
+        seconds = time.perf_counter() - t0
+        return seconds, sum(len(o.outputs[0].token_ids) for o in outs)
+
+    timed(2)  # warm-up (Triton compile caches, allocator)
+    llm.collective_rpc(tools.worker_memory, kwargs={"reset_peak": True})
+    ttft_runs = [timed(1)[0] for _ in range(3)]
+    full_s, full_tokens = timed(tokens)
+    llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "start"})
+    timed_s, _ = timed(tokens)
+    steps = llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "stop"})
+    memory = llm.collective_rpc(tools.worker_memory)
+    rank0 = steps[0] if steps else []
+    decode_steps = [s for s in rank0 if s["tokens"] == s["reqs"]]
+    prefill_steps = [s for s in rank0 if s["tokens"] != s["reqs"]]
+    decode_ms = sorted(s["ms"] for s in decode_steps)
+    prompt_tokens = sum(len(p) for p in _bench_prompts(prompts, batch))
+    return {
+        "batch": batch,
+        "max_tokens": tokens,
+        "prompt_tokens": prompt_tokens,
+        "generated_tokens": full_tokens,
+        "wall_s": full_s,
+        "tokens_per_s": full_tokens / full_s if full_s else None,
+        "ttft_ms_runs": [t * 1e3 for t in ttft_runs],
+        "ttft_ms": min(ttft_runs) * 1e3,
+        "ttft_definition": "wall time of generate(max_tokens=1) for the whole batch (min of 3)",
+        "decode_ms_per_step_from_wall": (full_s - min(ttft_runs)) / max(1, tokens - 1) * 1e3,
+        "step_timer_wall_s": timed_s,
+        "step_series_rank0": rank0,
+        "decode_step_ms_median": decode_ms[len(decode_ms) // 2] if decode_ms else None,
+        "decode_step_ms_p90": decode_ms[int(len(decode_ms) * 0.9)] if decode_ms else None,
+        "prefill_steps_rank0": prefill_steps,
+        "memory_per_rank": memory,
+    }
+
+
+def run_profile(engine: Any, prompts: list[list[int]], *, batch: int) -> dict[str, Any]:
+    from vllm import SamplingParams
+    from vllm.inputs import TokensPrompt
+
+    from rl_engine.models.muse_glimmer.runtime import vllm_worker_tools as tools
+
+    llm = engine.llm
+    batch_prompts = [TokensPrompt(prompt_token_ids=p) for p in _bench_prompts(prompts, batch)]
+
+    def params(max_tokens: int) -> list[Any]:
+        return [
+            SamplingParams(max_tokens=max_tokens, temperature=1.0, seed=7 + i, ignore_eos=True,
+                           logprobs=0, detokenize=False)
+            for i in range(batch)
+        ]
+
+    out: dict[str, Any] = {}
+    for label, step_index, max_tokens in (("prefill", 0, 1), ("decode", 1, 3)):
+        llm.collective_rpc(
+            tools.worker_profile, kwargs={"action": "arm", "step_index": step_index, "top": 25}
+        )
+        llm.generate(batch_prompts, params(max_tokens), use_tqdm=False)
+        results = llm.collective_rpc(tools.worker_profile, kwargs={"action": "result"})
+        out[label] = results[0] if results else None
+    return out
+
+
+# ----------------------------------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,30 +410,32 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--strict", action="store_true", default=True)
     mode.add_argument("--native", action="store_true")
-    parser.add_argument(
-        "--prompt-file", default=None, help="JSON list of strings or token-id lists"
-    )
+    parser.add_argument("--prompt-file", default=None)
+    parser.add_argument("--xrt-filter", default="gsm8k_")
     parser.add_argument("--chat-template", action="store_true")
-    parser.add_argument("--max-tokens", type=int, default=32)
-    parser.add_argument("--max-model-len", type=int, default=2048)
-    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--no-generate", action="store_true")
+    parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument("--temperatures", default="0")
     parser.add_argument("--n", type=int, default=1)
+    parser.add_argument("--max-model-len", type=int, default=4096)
+    parser.add_argument("--max-num-seqs", type=int, default=64)
+    parser.add_argument("--gpu-util", type=float, default=0.90)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--gpu-ids", default=None, help="comma list; ignored when a lease set CUDA_VISIBLE_DEVICES"
-    )
-    parser.add_argument(
-        "--score",
-        default=None,
-        help="score the prompt_token_ids+token_ids of a previous output JSON instead of generating",
-    )
-    parser.add_argument(
-        "--prefill-check", action="store_true", help="after generate, rescore via logprobs()"
-    )
-    parser.add_argument(
-        "--lora-zero-check", action="store_true", help="load an all-zero LoRA and re-score"
-    )
+    parser.add_argument("--prefill-check", action="store_true")
+    parser.add_argument("--lora-zero-check", action="store_true")
+    parser.add_argument("--lora-random-check", action="store_true")
     parser.add_argument("--lora-rank", type=int, default=16)
+    parser.add_argument("--lora-seed", type=int, default=20261015)
+    parser.add_argument("--lora-b-std", type=float, default=0.01)
+    parser.add_argument("--lora-rule-layers", default="0,3,51")
+    parser.add_argument("--xrt-score", default=None)
+    parser.add_argument("--xrt-out", default=None)
+    parser.add_argument("--xrt-lora-out", default=None)
+    parser.add_argument("--bench", action="store_true")
+    parser.add_argument("--bench-batch", type=int, default=32)
+    parser.add_argument("--bench-tokens", type=int, default=256)
+    parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--native-lora", action="store_true", help="native: enable vLLM LoRA")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
     strict = not args.native
@@ -115,22 +443,27 @@ def main(argv: list[str] | None = None) -> int:
     from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import StrictRolloutEngine
 
     visible = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if args.gpu_ids:
-        gpu_ids = [int(g) for g in args.gpu_ids.split(",")]
-    elif visible:
-        gpu_ids = list(range(len(visible.split(","))))
-    else:
-        gpu_ids = list(range(args.tp))
+    gpu_ids = list(range(len(visible.split(",")))) if visible else list(range(args.tp))
 
     from transformers import AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=False)
     result: dict[str, Any] = {
-        "mode": "score" if args.score else "generate",
-        "strict": strict,
+        "schema": RUN_SCHEMA,
+        "mode": "strict" if strict else "native",
         "tp": args.tp,
+        "commit": _git_head(),
+        "command": " ".join([os.path.basename(sys.executable), "-m", __spec__.name if __spec__
+                             else "run_vllm_strict", *(argv if argv is not None else sys.argv[1:])]),
+        "env": _env_record(),
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
+    out_path = Path(args.out)
 
+    def flush() -> None:
+        out_path.write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+
+    t_load = time.perf_counter()
     engine = StrictRolloutEngine(
         args.model,
         tensor_parallel_size=args.tp,
@@ -138,125 +471,182 @@ def main(argv: list[str] | None = None) -> int:
         strict=strict,
         max_model_len=args.max_model_len,
         seed=args.seed,
+        max_num_seqs=args.max_num_seqs,
+        gpu_memory_utilization=args.gpu_util,
+        max_lora_rank=args.lora_rank,
+        enable_native_lora=args.native_lora,
+    )
+    result["engine_load_s"] = time.perf_counter() - t_load
+    backend = (
+        "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)"
+        if strict
+        else "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)"
     )
     try:
-        if args.score:
-            previous = json.loads(Path(args.score).read_text(encoding="utf-8"))
-            prompt_ids = previous["prompt_token_ids"]
-            completions = previous["token_ids"]
-            sequences = [p + c for p, c in zip(prompt_ids, completions, strict=True)]
-            starts = [len(p) for p in prompt_ids]
-            t0 = time.time()
-            logprobs = engine.logprobs(sequences, starts)
-            result.update(
-                {
-                    "prompt_token_ids": prompt_ids,
-                    "token_ids": completions,
-                    "logprobs": logprobs,
-                    "logprobs_hex": hex_rows(logprobs),
-                    "score_seconds": time.time() - t0,
-                    "scored_from": args.score,
-                }
-            )
-            if "logprobs_hex" in previous:
-                result["bits_equal_to_scored_file"] = (
-                    previous["logprobs_hex"] == result["logprobs_hex"]
+        ids, prompts = load_prompts(args.prompt_file, tokenizer, args.chat_template, args.xrt_filter)
+        result["prompt_ids"] = ids
+        result["prompt_token_ids"] = prompts
+        temperatures = [float(t) for t in args.temperatures.split(",") if t.strip()]
+        result["generate"] = []
+        greedy_samples = None
+        if not args.no_generate:
+            for temperature in temperatures:
+                record, samples = run_generate(
+                    engine,
+                    ids,
+                    prompts,
+                    temperature=temperature,
+                    max_tokens=args.max_tokens,
+                    n=args.n,
+                    prefill_check=args.prefill_check,
+                    tokenizer=tokenizer,
                 )
-                diffs = [
-                    abs(a - b)
-                    for ra, rb in zip(previous["logprobs"], logprobs, strict=True)
-                    for a, b in zip(ra, rb, strict=True)
+                result["generate"].append(record)
+                if greedy_samples is None:
+                    greedy_samples = samples
+                flush()
+        base_scores = None
+        if greedy_samples is not None and (args.lora_zero_check or args.lora_random_check):
+            _c, seqs, starts, base_scores = _score_check(engine, prompts, greedy_samples)
+        if args.lora_zero_check and strict and base_scores is not None:
+            from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
+
+            state = random_lora_state_dict(seed=args.lora_seed, rank=args.lora_rank, zero_b=True)
+            digest = lora_sha256(state)
+            engine.load_lora(state, digest)
+            with_lora = engine.logprobs(seqs, starts)
+            prov_hash = engine.provenance()["lora_sha256"]
+            result["lora_zero"] = {
+                "rank": args.lora_rank,
+                "slots": len(state) // 2,
+                "sha256": digest,
+                "provenance_lora_sha256": prov_hash,
+                "hash_identity": prov_hash == digest,
+                "vs_no_lora": compare_rows(base_scores, with_lora),
+            }
+            engine.clear_lora()
+            flush()
+        if args.lora_random_check and strict and base_scores is not None:
+            from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
+            from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_check_lora_rule
+
+            state = random_lora_state_dict(
+                seed=args.lora_seed, rank=args.lora_rank, b_std=args.lora_b_std
+            )
+            digest = lora_sha256(state)
+            t0 = time.perf_counter()
+            engine.load_lora(state, digest)
+            load_ms = (time.perf_counter() - t0) * 1e3
+            prov = engine.provenance()
+            record = {
+                "rank": args.lora_rank,
+                "seed": args.lora_seed,
+                "b_std": args.lora_b_std,
+                "recipe": "run_vllm_strict.random_lora_state_dict(seed, rank, b_std)",
+                "slots": len(state) // 2,
+                "elements": int(sum(t.numel() for t in state.values())),
+                "sha256": digest,
+                "provenance_lora_sha256": prov["lora_sha256"],
+                "hash_identity": prov["lora_sha256"] == digest,
+                "worker_hashes": [w.get("lora_sha256") for w in prov["workers"]],
+                "load_ms": load_ms,
+                "lora_replies": prov["lora_replies"],
+            }
+            with_lora = engine.logprobs(seqs, starts)
+            record["scores_vs_no_lora"] = compare_rows(base_scores, with_lora)
+            if args.tp == 1:
+                record["unmerged_rule"] = [
+                    engine.llm.collective_rpc(worker_check_lora_rule, args=(int(layer),))[0]
+                    for layer in args.lora_rule_layers.split(",")
                 ]
-                result["max_abs_diff_to_scored_file"] = max(diffs) if diffs else 0.0
-        else:
-            prompts = _load_prompts(args.prompt_file, tokenizer, args.chat_template)
-            t0 = time.time()
-            samples = engine.generate(
-                prompts, n=args.n, max_tokens=args.max_tokens, temperature=args.temperature
-            )
-            gen_seconds = time.time() - t0
-            flat_tokens = [s.token_ids for group in samples for s in group]
-            flat_logprobs = [s.logprobs for group in samples for s in group]
-            flat_prompts = [p for p, group in zip(prompts, samples, strict=True) for _ in group]
-            generated = sum(len(t) for t in flat_tokens)
-            result.update(
-                {
-                    "prompt_token_ids": flat_prompts,
-                    "token_ids": flat_tokens,
-                    "logprobs": flat_logprobs,
-                    "logprobs_hex": hex_rows(flat_logprobs),
-                    "finish_reasons": [s.finish_reason for group in samples for s in group],
-                    "texts": [tokenizer.decode(t) for t in flat_tokens],
-                    "generate_seconds": gen_seconds,
-                    "generated_tokens": generated,
-                    "tokens_per_s": generated / gen_seconds if gen_seconds else None,
-                }
-            )
-            if args.prefill_check:
-                sequences = [p + c for p, c in zip(flat_prompts, flat_tokens, strict=True)]
-                starts = [len(p) for p in flat_prompts]
-                t1 = time.time()
-                prefill = engine.logprobs(sequences, starts)
-                result["prefill_seconds"] = time.time() - t1
-                result["prefill_logprobs"] = prefill
-                result["prefill_logprobs_hex"] = hex_rows(prefill)
-                result["decode_vs_prefill_equal"] = (
-                    result["prefill_logprobs_hex"] == result["logprobs_hex"]
+            gens = []
+            for temperature in temperatures:
+                gen, _s = run_generate(
+                    engine,
+                    ids,
+                    prompts,
+                    temperature=temperature,
+                    max_tokens=args.max_tokens,
+                    n=args.n,
+                    prefill_check=True,
+                    tokenizer=tokenizer,
                 )
-                diffs = [
-                    abs(a - b)
-                    for ra, rb in zip(flat_logprobs, prefill, strict=True)
-                    for a, b in zip(ra, rb, strict=True)
-                ]
-                result["decode_vs_prefill_max_abs_diff"] = max(diffs) if diffs else 0.0
-                if args.lora_zero_check and strict:
-                    import hashlib
-
-                    import torch
-
-                    state_dict: dict[str, torch.Tensor] = {}
-                    from rl_engine.models.muse_glimmer.runtime.vllm_strict import LORA_SHAPES
-
-                    for layer in (0, 51):
-                        for name, (k, n) in LORA_SHAPES.items():
-                            state_dict[f"layers.{layer}.{name}.lora_A"] = torch.randn(
-                                args.lora_rank, k, dtype=torch.bfloat16
-                            )
-                            state_dict[f"layers.{layer}.{name}.lora_B"] = torch.zeros(
-                                n, args.lora_rank, dtype=torch.bfloat16
-                            )
-                    digest = hashlib.sha256(b"zero-lora").hexdigest()
-                    engine.load_lora(state_dict, digest)
-                    with_lora = engine.logprobs(sequences, starts)
-                    result["lora_zero_logprobs_hex"] = hex_rows(with_lora)
-                    result["lora_zero_equal_to_prefill"] = (
-                        result["lora_zero_logprobs_hex"] == result["prefill_logprobs_hex"]
-                    )
-                    result["lora_sha256"] = digest
-                    engine.load_lora({}, "")
+                gens.append(gen)
+            record["generate"] = gens
+            result["lora_random"] = record
+            flush()
+            if args.xrt_score and args.xrt_lora_out:
+                dump, _rows = xrt_dump(
+                    engine,
+                    args.xrt_score,
+                    strict=strict,
+                    tp=args.tp,
+                    backend=backend,
+                    extra={"commit": result["commit"], "lora_sha256": digest,
+                           "lora_recipe": record["recipe"], "lora_seed": args.lora_seed,
+                           "lora_rank": args.lora_rank, "lora_b_std": args.lora_b_std},
+                )
+                Path(args.xrt_lora_out).write_text(json.dumps(dump, indent=1), encoding="utf-8")
+                result["xrt_lora"] = {"out": args.xrt_lora_out, "score_ms": dump["score_ms"]}
+            engine.clear_lora()
+            flush()
+        if args.xrt_score:
+            dump, rows = xrt_dump(
+                engine,
+                args.xrt_score,
+                strict=strict,
+                tp=args.tp,
+                backend=backend,
+                extra={"commit": result["commit"], "lora_sha256": None},
+            )
+            if args.xrt_out:
+                Path(args.xrt_out).write_text(json.dumps(dump, indent=1), encoding="utf-8")
+            result["xrt"] = {
+                "out": args.xrt_out,
+                "score_ms": dump["score_ms"],
+                "logprobs": rows,
+                "ids": [s["id"] for s in dump["sequences"]],
+            }
+            flush()
+        if args.bench:
+            result["bench"] = run_bench(
+                engine, prompts, batch=args.bench_batch, tokens=args.bench_tokens
+            )
+            flush()
+        if args.profile:
+            result["profile"] = run_profile(engine, prompts, batch=args.bench_batch)
+            flush()
         result["meta"] = engine.provenance()
+        result["status"] = "completed"
+    except Exception as exc:  # noqa: BLE001 - keep partial results on disk
+        import traceback
+
+        result["status"] = "failed"
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        result["traceback"] = traceback.format_exc()
+        raise
     finally:
+        flush()
         engine.close()
-    Path(args.out).write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     summary = {
-        k: v
-        for k, v in result.items()
-        if k
-        in (
-            "mode",
-            "strict",
-            "tp",
-            "generated_tokens",
-            "tokens_per_s",
-            "generate_seconds",
-            "score_seconds",
-            "prefill_seconds",
-            "decode_vs_prefill_equal",
-            "decode_vs_prefill_max_abs_diff",
-            "bits_equal_to_scored_file",
-            "max_abs_diff_to_scored_file",
-            "lora_zero_equal_to_prefill",
-        )
+        "mode": result["mode"],
+        "tp": result["tp"],
+        "status": result.get("status"),
+        "generate": [
+            {
+                "temperature": g["temperature"],
+                "tokens": g["generated_tokens"],
+                "tokens_per_s": g["tokens_per_s"],
+                "decode_vs_prefill_mismatched": (g.get("decode_vs_prefill") or {}).get(
+                    "mismatched"
+                ),
+            }
+            for g in result.get("generate", [])
+        ],
+        "lora_zero_equal": (result.get("lora_zero") or {}).get("vs_no_lora", {}).get(
+            "bitwise_equal"
+        ),
+        "lora_random_identity": (result.get("lora_random") or {}).get("hash_identity"),
     }
     print(json.dumps(summary, indent=2), file=sys.stderr)
     return 0
