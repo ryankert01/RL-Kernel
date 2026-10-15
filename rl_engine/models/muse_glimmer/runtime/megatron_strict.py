@@ -290,6 +290,7 @@ class MuseGlimmerStrictBinding:
         seed: int,
         checkpoint_layers: bool,
         drop_vision: bool,
+        lora_b_init_std: float = 0.0,
     ) -> None:
         self.model = model
         self.dims = _dims_from_manifest()
@@ -338,6 +339,7 @@ class MuseGlimmerStrictBinding:
                     tp_world=self.tp_world,
                     seed=self.seed,
                     device=self.device,
+                    b_init_std=lora_b_init_std,
                 )
                 for i in range(self.dims.layers)
             ]
@@ -733,8 +735,13 @@ def install_museglimmer_megatron_strict(
     seed: int = 0,
     checkpoint_layers: bool = True,
     drop_vision: bool = True,
+    lora_b_init_std: float = 0.0,
 ) -> MuseGlimmerStrictBinding:
-    """Bind the strict operator set to a Bridge ``MuseGlimmerModel`` (fails closed)."""
+    """Bind the strict operator set to a Bridge ``MuseGlimmerModel`` (fails closed).
+
+    ``lora_b_init_std > 0`` draws LoRA ``B`` from ``N(0, std)`` (TP-invariant CPU generator)
+    instead of zeros; parity tests only (makes every LoRA gradient non-trivial).
+    """
     inner = _unwrap(model)
     binding = MuseGlimmerStrictBinding(
         inner,
@@ -743,6 +750,7 @@ def install_museglimmer_megatron_strict(
         seed=seed,
         checkpoint_layers=checkpoint_layers,
         drop_vision=drop_vision,
+        lora_b_init_std=lora_b_init_std,
     )
     inner._muse_strict_binding = binding
     return binding

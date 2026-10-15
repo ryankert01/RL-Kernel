@@ -38,6 +38,7 @@ from typing import Any, Iterable, Mapping
 import torch
 from torch import nn
 
+from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256 as _canonical_lora_sha256
 from rl_engine.models.muse_glimmer.runtime.strict_kernels import (
     CANONICAL_CHUNKS,
     TPComm,
@@ -216,12 +217,29 @@ def muse_glimmer_projection_shapes(
     )
 
 
+def _cpu_generator(seed: int, layer: int, name: str, which: str) -> torch.Generator:
+    tag = f"{seed}:{layer}:{name}" + ("" if which == "A" else f":{which}")
+    digest = hashlib.sha256(tag.encode()).digest()
+    return torch.Generator(device="cpu").manual_seed(int.from_bytes(digest[:8], "little") % (2**63))
+
+
 def _init_a_full(shape: ProjectionShape, rank: int, seed: int, layer: int) -> torch.Tensor:
     """Full ``A (r, K)`` drawn on CPU from a seed that depends only on (seed, layer, name)."""
-    digest = hashlib.sha256(f"{seed}:{layer}:{shape.name}".encode()).digest()
-    gen = torch.Generator(device="cpu").manual_seed(int.from_bytes(digest[:8], "little") % (2**63))
+    gen = _cpu_generator(seed, layer, shape.name, "A")
     bound = 1.0 / math.sqrt(shape.k_total)  # kaiming_uniform(a=sqrt(5)) bound for fan_in=K
     return (torch.rand(rank, shape.k_total, generator=gen, dtype=torch.float32) * 2.0 - 1.0) * bound
+
+
+def _init_b_full(shape: ProjectionShape, rank: int, seed: int, layer: int, std: float) -> torch.Tensor:
+    """Full ``B (N, r)``: zeros (the default, an exact no-op) or ``N(0, std)`` drawn on CPU.
+
+    The random form exists for parity tests only (it makes every LoRA gradient non-trivial);
+    it depends on (seed, layer, name) and never on the TP layout.
+    """
+    if std == 0.0:
+        return torch.zeros(shape.n_total, rank, dtype=torch.float32)
+    gen = _cpu_generator(seed, layer, shape.name, "B")
+    return torch.randn(shape.n_total, rank, generator=gen, dtype=torch.float32) * float(std)
 
 
 class LayerLoRA(nn.Module):
@@ -237,6 +255,7 @@ class LayerLoRA(nn.Module):
         tp_world: int,
         seed: int,
         device: torch.device | str,
+        b_init_std: float = 0.0,
     ) -> None:
         super().__init__()
         self.layer_index = layer_index
@@ -249,17 +268,19 @@ class LayerLoRA(nn.Module):
         for s in self.shapes.values():
             key = s.name.replace(".", "__")
             a_full = _init_a_full(s, rank, seed, layer_index)
+            b_full = _init_b_full(s, rank, seed, layer_index, b_init_std)
             if s.mode == "column":
                 if s.n_total % tp_world:
                     raise ValueError(f"{s.name}: N={s.n_total} not divisible by tp={tp_world}")
+                n_l = s.n_total // tp_world
                 a_local = a_full
-                b_local = torch.zeros(s.n_total // tp_world, rank, dtype=torch.float32)
+                b_local = b_full[tp_rank * n_l : (tp_rank + 1) * n_l].contiguous()
             else:
                 if s.k_total % tp_world:
                     raise ValueError(f"{s.name}: K={s.k_total} not divisible by tp={tp_world}")
                 k_l = s.k_total // tp_world
                 a_local = a_full[:, tp_rank * k_l : (tp_rank + 1) * k_l].contiguous()
-                b_local = torch.zeros(s.n_total, rank, dtype=torch.float32)
+                b_local = b_full
             self.a[key] = nn.Parameter(a_local.to(device))
             self.b[key] = nn.Parameter(b_local.to(device))
 
@@ -267,9 +288,24 @@ class LayerLoRA(nn.Module):
         key = name.replace(".", "__")
         return self.a[key], self.b[key]
 
+    @torch.no_grad()
+    def reset_b(self, std: float, seed: int) -> None:
+        """Re-draw every ``B`` from the TP-invariant generator (``std=0`` → zeros)."""
+        for s in self.shapes.values():
+            _, b = self.pair(s.name)
+            b_full = _init_b_full(s, self.rank, seed, self.layer_index, std)
+            if s.mode == "column":
+                n_l = s.n_total // self.tp_world
+                b_full = b_full[self.tp_rank * n_l : (self.tp_rank + 1) * n_l]
+            b.copy_(b_full.to(device=b.device))
+
 
 def lora_state_bytes(state: Mapping[str, torch.Tensor]) -> bytes:
-    """Canonical byte stream: sorted keys, ``key\\n`` + shape + bf16 little-endian payload."""
+    """Legacy byte stream (sorted keys, ``key\\n`` + shape + bf16 payload); NOT the sync hash.
+
+    Kept for reference only: :func:`lora_sha256` is the E2E canonical
+    ``muse_glimmer_lora_sha256_v1`` hash of ``rl_engine.models.muse_glimmer.e2e.sync``.
+    """
     stream = bytearray()
     for key in sorted(state):
         t = state[key]
@@ -282,26 +318,75 @@ def lora_state_bytes(state: Mapping[str, torch.Tensor]) -> bytes:
 
 
 def lora_sha256(state: Mapping[str, torch.Tensor]) -> str:
-    return hashlib.sha256(lora_state_bytes(state)).hexdigest()
+    """The E2E canonical hash (schema ``muse_glimmer_lora_sha256_v1``, ``e2e/sync.py``)."""
+    return _canonical_lora_sha256(state)
 
 
-def export_lora(layers: Iterable[LayerLoRA], comm: TPComm) -> tuple[dict[str, torch.Tensor], str]:
-    """Gather full ``(r, K)`` / ``(N, r)`` bf16 tensors on every rank and hash them."""
+def gather_lora(
+    layers: Iterable[LayerLoRA],
+    comm: TPComm,
+    *,
+    source: str = "param",
+    dtype: torch.dtype = torch.bfloat16,
+    to_cpu: bool = True,
+) -> dict[str, torch.Tensor]:
+    """Full (TP-gathered) LoRA tensors keyed ``layers.{i}.{proj}.lora_{A,B}``.
+
+    ``source="param"`` gathers the fp32 masters, ``source="grad"`` their gradients (zeros when a
+    gradient is absent). Sharded tensors (column ``B`` by rows, row ``A`` by columns) are
+    all-gathered in rank order (data movement only); replicated tensors are taken from this rank.
+    Every rank must call this (collectives); every rank receives the same tensors.
+    """
+    if source not in ("param", "grad"):
+        raise ValueError(f"source must be 'param' or 'grad', got {source!r}")
     state: dict[str, torch.Tensor] = {}
     for lora in layers:
         for s in lora.shapes.values():
             a, b = lora.pair(s.name)
-            a16 = a.detach().to(torch.bfloat16)
-            b16 = b.detach().to(torch.bfloat16)
-            if s.mode == "column":
-                b_full = torch.cat(comm.all_gather(b16.contiguous()), dim=0)
-                a_full = a16
+            if source == "grad":
+                a_t = a.grad if a.grad is not None else torch.zeros_like(a)
+                b_t = b.grad if b.grad is not None else torch.zeros_like(b)
             else:
-                a_full = torch.cat(comm.all_gather(a16.contiguous()), dim=1)
-                b_full = b16
+                a_t, b_t = a, b
+            a_t = a_t.detach().to(dtype).contiguous()
+            b_t = b_t.detach().to(dtype).contiguous()
+            if s.mode == "column":
+                b_full = torch.cat(comm.all_gather(b_t), dim=0) if comm.world > 1 else b_t
+                a_full = a_t
+            else:
+                a_full = torch.cat(comm.all_gather(a_t), dim=1) if comm.world > 1 else a_t
+                b_full = b_t
             prefix = f"layers.{lora.layer_index}.{s.name}"
-            state[f"{prefix}.lora_A"] = a_full.cpu().contiguous()
-            state[f"{prefix}.lora_B"] = b_full.cpu().contiguous()
+            state[f"{prefix}.lora_A"] = (a_full.cpu() if to_cpu else a_full).contiguous()
+            state[f"{prefix}.lora_B"] = (b_full.cpu() if to_cpu else b_full).contiguous()
+    return state
+
+
+def replicated_lora_grads_agree(layers: Iterable[LayerLoRA], comm: TPComm) -> tuple[int, int]:
+    """``(tensors_checked, tensors_differing)`` for the TP-replicated LoRA gradients.
+
+    Column ``A`` and row ``B`` are replicated on every rank and must receive bitwise-identical
+    gradients (each rank's backward sees the same full upstream values). Checked by gathering
+    each replicated gradient from all ranks and comparing with ``torch.equal``.
+    """
+    checked = differing = 0
+    if comm.world == 1:
+        return 0, 0
+    for lora in layers:
+        for s in lora.shapes.values():
+            a, b = lora.pair(s.name)
+            p = a if s.mode == "column" else b
+            g = p.grad if p.grad is not None else torch.zeros_like(p)
+            parts = comm.all_gather(g.detach().float().contiguous())
+            checked += 1
+            if not all(torch.equal(parts[0], q) for q in parts[1:]):
+                differing += 1
+    return checked, differing
+
+
+def export_lora(layers: Iterable[LayerLoRA], comm: TPComm) -> tuple[dict[str, torch.Tensor], str]:
+    """Gather full ``(r, K)`` / ``(N, r)`` bf16 tensors on every rank and hash them (sync v1)."""
+    state = gather_lora(layers, comm, source="param", dtype=torch.bfloat16)
     return state, lora_sha256(state)
 
 
@@ -352,10 +437,12 @@ __all__ = [
     "StrictColumnLinear",
     "StrictRowLinear",
     "export_lora",
+    "gather_lora",
     "import_lora",
     "lora_is_bitwise_noop",
     "lora_parameters",
     "lora_sha256",
     "lora_state_bytes",
     "muse_glimmer_projection_shapes",
+    "replicated_lora_grads_agree",
 ]
