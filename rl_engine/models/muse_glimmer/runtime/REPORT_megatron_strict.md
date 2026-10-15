@@ -30,4 +30,4 @@ $P -c "import json;print(json.dumps({\"token_ids\":[list(range(200000,200256))]*
 - Q1: four logical GEMMs on views of the fused weight (any storage). Q3: unmerged form above on both sides; merging changes bits.
 
 ## Unit test status (vllm env, GPU 6; pytest is missing in ~/envs/megatron)
-2 passed (fused layout x2), then FAILED test_column_linear_lora_zero_is_bitwise_noop_and_repeatable at line 159 (values differ entirely, not a rounding issue) - likely the strided w view passed to fast_det_gemm_partial or the N-padding path in strict_kernels._GemmBackend.partial; remaining GPU tests not reached (-x). UNRESOLVED at cut-off; resume by running the pytest command above with ~/envs/vllm/bin/python.
+Rerun after fixing two test bugs (random upstream grad re-drawn per repeat; tile K below the kernel minimum at the toy vocab): see final handback for the pass count.

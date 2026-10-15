@@ -150,9 +150,9 @@ def test_column_linear_lora_zero_is_bitwise_noop_and_repeatable():
     a2 = a.clone().requires_grad_(True)
     xg = x.clone().requires_grad_(True)
     grads = []
+    gy = torch.randn(m, n, device="cuda").to(torch.bfloat16)
     for _ in range(2):
         y = StrictColumnLinear.apply(xg, a2, b2, comm, n, w)
-        gy = torch.randn_like(y)
         g = torch.autograd.grad((y.float() * gy.float()).sum(), (xg, a2, b2))
         grads.append(g)
     for g1, g2 in zip(grads[0], grads[1], strict=True):
@@ -234,7 +234,7 @@ def test_row_linear_tp2_matches_tp1_bitwise_and_lora_noop():
 
 @requires_cuda
 def test_lm_head_tiles_tp2_equals_tp1_and_reference():
-    vocab, padded, hidden, m = 1000, 1024, 256, 24
+    vocab, padded, hidden, m = 2000, 2048, 256, 24
     tile_rows = padded // 8
     mult, cap = 0.19611613513818404, 20.0
     h = torch.randn(m, hidden, device="cuda").to(torch.bfloat16)
