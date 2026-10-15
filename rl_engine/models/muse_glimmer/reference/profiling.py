@@ -65,6 +65,7 @@ GROUPS = (
     "qknorm_rope",
     "attention_global",
     "attention_local",
+    "kv_cache",
     "ffn_gemm",
     "ffn_act",
     "lm_head_softcap_logprob",
@@ -81,7 +82,8 @@ _GROUP_OF = {
     "ffn_act": "ffn_act",
     "lm_head_gemm": "lm_head_softcap_logprob",
     "softcap_logprob": "lm_head_softcap_logprob",
-    "kv_evict": "other",
+    "kv_evict": "kv_cache",
+    "kv_write": "kv_cache",
     "other": "other",
 }
 _ROOT = "forward"
@@ -89,7 +91,7 @@ ANNOT_PREFIX = "mgrg"
 
 
 def group_of(cls: str, kind: str) -> str:
-    if cls in ("attention", "kv_write", "attn_glue"):
+    if cls in ("attention", "attn_glue"):
         return "attention_local" if kind == "local" else "attention_global"
     return _GROUP_OF.get(cls, "other")
 

@@ -25,7 +25,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from rl_engine.models.muse_glimmer.reference.profiling import CLASSES, GROUPS  # noqa: E402
+from rl_engine.models.muse_glimmer.reference.profiling import (  # noqa: E402
+    CLASSES,
+    GROUPS,
+    group_of,
+)
 from rl_engine.models.muse_glimmer.reference.xrt_scoring import (  # noqa: E402
     compare_xrt,
     source_commit,
@@ -131,35 +135,78 @@ def profile_record(strict: dict[str, Any] | None, hf: dict[str, Any] | None) -> 
             return f"decode B={r['batch']} ctx={r['context']}"
         return f"{r['phase']} T={r['T']}"
 
+    def regroup(by_kind: dict[str, dict[str, float]]) -> tuple[dict[str, float],
+                                                                dict[str, float]]:
+        groups = {g: 0.0 for g in GROUPS}
+        for kind, row in by_kind.items():
+            for cls, ms in row.items():
+                groups[group_of(cls, kind)] += ms
+        tot = sum(groups.values())
+        return groups, {g: (v / tot if tot else 0.0) for g, v in groups.items()}
+
     for name, prof in (("strict_triton", strict), ("hf_bf16_sdpa", hf)):
         if prof is None:
             out[name] = {"status": "NOT RUN"}
             continue
         runs = []
+        n_glob, n_loc = prof["layers"]["global"], prof["layers"]["local"]
         for r in prof["runs"]:
             lab = label(r)
             if lab not in configs:
                 configs.append(lab)
+            r = dict(r)
+            r["by_group_ms"], r["by_group_frac"] = regroup(r["by_kind_class_ms"])
+            kp = r.get("kernel_profile") or {}
+            if "by_kind_class_gpu_ms" in kp:
+                r["by_group_gpu_ms"], r["by_group_gpu_frac"] = regroup(kp["by_kind_class_gpu_ms"])
+                gpu_kind = kp["by_kind_class_gpu_ms"]
+                r["per_layer_type_gpu_ms"] = {
+                    "global": {c: v / n_glob for c, v in gpu_kind["global"].items()},
+                    "local": {c: v / n_loc for c, v in gpu_kind["local"].items()},
+                }
+                r["gpu_busy_frac_of_wall"] = kp["gpu_busy_ms"] / r["clean_total_ms_median"]
             runs.append({"config": lab, **r})
         out[name] = {k: v for k, v in prof.items() if k != "runs"}
         out[name]["runs"] = runs
     out["configs"] = configs
-    # plot-ready stacked bars: ms per group per config, both targets
-    bars: dict[str, Any] = {"configs": configs, "groups": list(GROUPS)}
+    # plot-ready stacked bars: ms per group per config, both targets, wall and GPU-kernel views
+    bars: dict[str, Any] = {
+        "configs": configs,
+        "groups": list(GROUPS),
+        "views": {
+            "wall": "CUDA-event exclusive time per region, median of repeats (includes CPU "
+                    "launch gaps inside each region; instrumented run)",
+            "gpu": "torch.profiler kernel time charged to the innermost region at launch "
+                   "(one call; excludes idle gaps)",
+        },
+    }
+
+    def col(by_cfg: dict[str, Any], key: str, sub: str | None = None) -> list[Any]:
+        vals = []
+        for c in configs:
+            r = by_cfg.get(c)
+            v = None if r is None else r.get(key)
+            if sub is not None and v is not None:
+                v = v.get(sub)
+            vals.append(v)
+        return vals
+
     for name in ("strict_triton", "hf_bf16_sdpa"):
         prof = out.get(name, {})
         by_cfg = {r["config"]: r for r in prof.get("runs", [])}
         bars[name] = {
-            "ms": {g: [by_cfg[c]["by_group_ms"][g] if c in by_cfg else None for c in configs]
-                   for g in GROUPS},
-            "frac": {g: [by_cfg[c]["by_group_frac"][g] if c in by_cfg else None for c in configs]
-                     for g in GROUPS},
-            "clean_total_ms": [by_cfg[c]["clean_total_ms_median"] if c in by_cfg else None
-                               for c in configs],
-            "instrumented_total_ms": [by_cfg[c]["total_ms_median"] if c in by_cfg else None
-                                      for c in configs],
-            "peak_allocated_gib": [by_cfg[c]["peak_allocated_gib"] if c in by_cfg else None
-                                   for c in configs],
+            "wall_ms": {g: col(by_cfg, "by_group_ms", g) for g in GROUPS},
+            "wall_frac": {g: col(by_cfg, "by_group_frac", g) for g in GROUPS},
+            "gpu_ms": {g: col(by_cfg, "by_group_gpu_ms", g) for g in GROUPS},
+            "gpu_frac": {g: col(by_cfg, "by_group_gpu_frac", g) for g in GROUPS},
+            "clean_total_ms": col(by_cfg, "clean_total_ms_median"),
+            "instrumented_total_ms": col(by_cfg, "total_ms_median"),
+            "gpu_busy_ms": [None if (r := by_cfg.get(c)) is None
+                            else (r.get("kernel_profile") or {}).get("gpu_busy_ms")
+                            for c in configs],
+            "peak_allocated_gib": col(by_cfg, "peak_allocated_gib"),
+            "activation_peak_gib": col(by_cfg, "activation_peak_gib"),
+            "tokens_per_s_clean": col(by_cfg, "tokens_per_s_clean"),
         }
     s_runs = {r["config"]: r for r in out.get("strict_triton", {}).get("runs", [])}
     h_runs = {r["config"]: r for r in out.get("hf_bf16_sdpa", {}).get("runs", [])}
