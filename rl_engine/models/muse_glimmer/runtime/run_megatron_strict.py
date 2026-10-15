@@ -65,10 +65,16 @@ def _git_sha() -> str:
 
 
 def _git_dirty() -> bool | None:
-    """True when tracked files differ from HEAD (the measured code is not exactly the commit)."""
+    """True when tracked CODE differs from HEAD (the measured code is not exactly the commit).
+
+    Only ``rl_engine/`` and ``tests/`` count: the runs themselves rewrite tracked data files under
+    ``reports/``.
+    """
     try:
         out = subprocess.check_output(
-            ["git", "-C", str(_REPO), "status", "--porcelain", "--untracked-files=no"], text=True
+            ["git", "-C", str(_REPO), "status", "--porcelain", "--untracked-files=no", "--",
+             "rl_engine", "tests"],
+            text=True,
         )
     except Exception:  # noqa: BLE001
         return None
