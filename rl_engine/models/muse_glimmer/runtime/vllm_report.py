@@ -264,6 +264,35 @@ def throughput(results: dict) -> list[str]:
     return rows
 
 
+def profiles(results: dict) -> list[str]:
+    entries = results.get("profile")
+    if not isinstance(entries, list) or not entries:
+        return []
+    rows = [
+        "| config | step (tokens / requests) | kernel time (ms) | top kernels (self CUDA ms) |",
+        "|---|---|---|---|",
+    ]
+    for entry in entries:
+        for kind in ("prefill", "decode"):
+            prof = entry.get(kind)
+            if not isinstance(prof, dict):
+                continue
+            kernels = [o for o in prof.get("top_ops", []) if o.get("is_kernel")][:3]
+            top = ", ".join(f"`{o['name'][:48]}` {o['self_cuda_ms']:.1f}" for o in kernels)
+            step = prof.get("step", {})
+            rows.append(
+                f"| {entry['mode']} tp{entry['tp']} {kind} | {step.get('tokens')} / "
+                f"{step.get('reqs')} | {prof.get('kernel_cuda_ms', 0):.1f} | {top} |"
+            )
+    rows.append("")
+    rows.append(
+        "One step under torch.profiler on rank 0 (kernel rows only; the profiled step's wall time "
+        "is inflated by the profiler and is not reported). Compare the decode kernel time with "
+        "the unprofiled decode step median above: the gap is host-side (eager Python launches)."
+    )
+    return rows
+
+
 def render(results: dict) -> str:
     static = results.get("report_static") or {}
     lines: list[str] = []
@@ -301,6 +330,12 @@ def render(results: dict) -> str:
         if static.get(key):
             lines.append(static[key])
             lines.append("")
+    prof_rows = profiles(results)
+    if prof_rows:
+        lines.append("## Profiles")
+        lines.append("")
+        lines.extend(prof_rows)
+        lines.append("")
     for section in (
         "what_changed",
         "design_notes",
