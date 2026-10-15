@@ -2,6 +2,90 @@
 
 Branch `worktree-agent-a36c9d51e305a64a2`; A100-SXM4-80GB, torch 2.13.0+cu130, Triton 3.7.1.
 
+> **Review follow-up (2026-10-15, GEMM correctness row, branch `worktree-wf_7b064961-36f-4`).**
+> The adversarial review raised 7 findings on this op (det_gemm:1–7). All were reproduced or
+> shown by code inspection, and all were fixed. The original report below is kept; statements the
+> review proved wrong are marked **[corrected]**. Machine-readable results (raw series for plots)
+> are in `reports/muse_glimmer_poc/data/kernels_gemm.json`.
+
+## Review follow-up: findings, fixes, evidence
+
+| id | verdict | fix | test (fails before, passes after) |
+|---|---|---|---|
+| det_gemm:1 | **confirmed, fixed** | `plan_chunks` lowers BLOCK_K until every chunk loop runs >= 2 iterations (16 for 32-wide chunks, 32 for 64-wide); `tl.static_assert(ITERS >= 2)`; once-per-variant TTGIR check that the 7 tree adds are present (`TreeIRError`, fail closed) | `test_kernel_equals_declared_tree[K256/K512-*]`, `test_da_reduce_n256_equals_declared_tree`, `test_dw_ragged_rule_equals_declared_tree[T255..T512]`, `test_g2_tile_constants_do_not_change_bits[*-K256/K512]`, `test_tree_ir_guard` |
+| det_gemm:2 | **confirmed, fixed** | new autograd entries `column_parallel_fast_det_gemm` (dA: fp32 sub-tree partial per rank, combined with `runtime.tp_canonical_tree.combine_tree` via `tree_reduce_over_ranks`, one bf16 rounding) and `row_parallel_fast_det_gemm` (forward partial + tree, local backward) | `test_column_parallel_autograd_tp_equals_tp1[q/k/mlp_gate x TP2/4/8]`, `test_row_parallel_autograd_tp_equals_tp1[o/down x TP1/2/4/8]` |
+| det_gemm:3 | **confirmed, fixed** | `fast_det_gemm.trace = trace` (provenance travels with the callable) | `test_g5_trace_is_emitted_and_stable` |
+| det_gemm:4 | **confirmed, fixed (declared)** | the dY -> bf16 cast is now declared in `trace()["grad_cast"]`; contract wording proposed below (no behaviour change: the bf16 MMA needs bf16 operands) | `test_g5_trace_is_emitted_and_stable` |
+| det_gemm:5 | **confirmed, fixed** | `trace(m_size, out_dtype, k_chunks)`; adds `runtime` (GPU name, capability, torch/Triton versions), `k_rule`, `block_k_rule`, `da_chunk_rule`, `min_chunk_iters`, `tree_ir_guard` | `test_g5_trace_is_emitted_and_stable` |
+| det_gemm:6 | **confirmed by code inspection, fixed** | launch wrapped in `torch.cuda.device(a.device)` (Triton 3.7.1 `runtime/jit.py:713-714` launches on `get_current_device()`) | `test_launch_follows_operand_device` — **NOT RUN** (needs two visible GPUs; this row leases one) |
+| det_gemm:7 | **confirmed, fixed** | the tautological golden test is replaced by an explicit ascending-k fp64 loop | `test_g1_forward_fp32_golden_vs_explicit_fp64_loop` |
+
+### det_gemm:1 — with one BLOCK_K step per chunk the compiler removed the tree
+
+When `CHUNK_LEN == BLOCK_K` (chunks of 32 or 64, i.e. K = 256 / 512, the k/v-proj dA over
+N = 256, and every dW with 32 < T <= 512 tokens) MLIR folds the 1-trip loop and Triton's TTIR
+combine pass rewrites `dot(a1, b1, 0) + acc0` into `dot(a1, b1, acc0)`. Compiled TTIR at K=256
+(BLOCK 64x64, before): `scf.for` = 0, 8 `tt.dot` of which 4 take the previous chunk's dot as the
+accumulator (`%acc_52 = tt.dot %a_50, %b_51, %acc`), **3** fp32 tree adds left (`s0123`, `s4567`,
+`root`) instead of 7; PTX: 96 `add.f32` instead of 224. After the fix the same launch has 8 loops,
+7 tree adds, 224 `add.f32` (identical structure to the K=4096 kernel).
+
+Kernel output vs the declared tree evaluated outside the kernel (8 single-chunk launches +
+`combine_tree`), number of fp32 outputs that differ bitwise:
+
+| path | shape | before (ITERS=1) | after (ITERS=2) |
+|---|---|---|---|
+| forward K=256 | M=16 / 64 / 256, N=384 | 2918 / 11949 / 47419 of 6144 / 24576 / 98304 | 0 |
+| forward K=512 | M=16 / 64 / 256, N=384 | 4029 / 16346 / 65600 | 0 |
+| dA k_proj (reduce N=256) | M=1 / 64 / 4096, K=6656 | 3166 / 203138 / 13188190 (of 27.3 M) | 0 |
+| dW tokens (N=384, K=1024) | T=16 / 256 / 300 / 512 / 4096 | 0 / 190301 / 214164 / 262455 / 0 (of 393216) | 0 |
+| forward K in {768, 1024, 1536, 2048, 4096, 6656} | M=16/64/256 | 0 | 0 |
+
+**Which bits change (exhaustive).** Only launches with `NUM_CHUNKS >= 2` and a chunk length of 32
+or 64 are affected; there the old kernel was not the declared tree and the new one is:
+(a) dA of `k_proj` / `v_proj` (reduction over N = 256), every M; (b) every weight gradient
+reduced over 32 < T <= 512 tokens (T_pad = 256 or 512); (c) any forward / partial with
+K_pad / NUM_CHUNKS in {32, 64} — never a Muse-Glimmer forward (K = 6656 / 4096 / 19968 give
+chunks of 832 / 512 / 2496, BLOCK_K 64, unchanged launch). **The model forward bits (prefill,
+decode, every TP degree, lm_head logits) are unchanged** — verified by the bit ledger in the JSON
+(`bit_ledger`: SHA-256 of every forward output before vs after). Single-chunk launches
+(`fast_det_gemm_partial` with one chunk id, used by the Megatron binding's column-parallel dX)
+have no in-kernel adds and are unchanged; the fixed TP1 kernel now equals those leaves + tree.
+
+### det_gemm:2 — TP-capable backward
+
+At TP > 1 the column-parallel input gradient reduces over N, which is split across ranks. The
+plain autograd backward on a shard reduced the rank's N/t columns with a fresh 8-chunk tree and
+rounded to bf16; summing those does not reproduce TP1. Measured (M=256, simulated ranks on one
+GPU): the "naive" rank-local autograd + sum differs from TP1 in **37–41 %** of dA elements
+(q_proj TP2/4/8: 639150 / 686487 / 703717 of 1703936; k_proj, attn_gate, mlp_gate, up_proj
+alike); `column_parallel_fast_det_gemm` gives **0 mismatches on every rank** at TP2/4/8 for all
+five column-parallel shapes, and `row_parallel_fast_det_gemm` gives 0 mismatches in forward, dA
+and dW for o_proj / down_proj at TP2/4/8 (a left fold of the same partials differs in 28–87
+outputs at TP4/8: the tree is load-bearing). Design: forward is local (column) or partial +
+`y_reduce` (row); each rank's dA partial is `tree_gemm(dY_local, W_local, fp32,
+num_chunks=8/t)` — chunk length N/8 at every t, so it is a node of the TP1 tree;
+`da_reduce(partial)` must return the fp32 root over all ranks in rank order
+(`tree_reduce_over_ranks(collective)` = rank-ordered all-gather + `tp_canonical_tree.combine_tree`);
+one bf16 rounding. dW and row-parallel dA need no exchange. A tp > 1 call without a reduce raises.
+
+### Contract wording proposed (integrator / RFC)
+
+* O3, reduction order: "Within a chunk the fp32 accumulator starts at +0 and is advanced by an
+  ascending-k chain of bf16 MMAs; chunk partials are combined only by the explicit fp32 tree adds.
+  An implementation must make sure the compiler cannot fold a tree add into an MMA accumulator
+  (Triton: >= 2 BLOCK_K iterations per chunk, verified on the compiled IR)."
+* O3, alignment: "Forward and input-gradient reductions require K % 256 == 0 (8 chunks x 32).
+  Weight-gradient reductions over T tokens (and an input-gradient reduction over an output dim
+  that is not a multiple of 256) use K_pad = roundup(K, 256), 8 chunks of K_pad/8, positions >= K
+  contribute exact zeros. Any other K is out of contract and must raise."
+* O3, backward: "dY enters the backward GEMMs as bf16 (one rounding; also for the fp32 lm_head
+  logits gradient). Column-parallel dX at TP t: each rank reduces its 8/t chunks of N to an fp32
+  sub-tree partial, the partials are combined in the canonical tree (all-gather + tree) and rounded
+  once. Column-parallel dW, row-parallel dX/dW need no cross-rank reduction."
+* O3, tiles: "BLOCK_M/N/K, num_warps, num_stages are performance-only *given* >= 2 iterations per
+  chunk; record the effective BLOCK_K rule in trace()."
+
 ## Summary
 
 * New Triton kernel `det_gemm_tree_kernel`: one program per `(BLOCK_M, BLOCK_N)` output tile, K

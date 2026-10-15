@@ -49,6 +49,7 @@ call on tensors that do not live on the current device launches on the right con
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 from dataclasses import asdict, dataclass
@@ -376,8 +377,10 @@ def tree_gemm(
     if m_size == 0 or n_size == 0:
         return out
     grid = (triton.cdiv(m_size, cfg.block_m) * triton.cdiv(n_size, cfg.block_n),)
-    # Triton launches on the *current* device/stream: pin it to the operands' device.
-    with torch.cuda.device(a.device):
+    # Triton launches on the *current* device/stream: pin it to the operands' device (the context
+    # switch is only paid when the operands do not live on the current device).
+    on_current = a.device.index is None or a.device.index == torch.cuda.current_device()
+    with contextlib.nullcontext() if on_current else torch.cuda.device(a.device):
         compiled = det_gemm_tree_kernel[grid](
             a,
             b,
@@ -404,16 +407,8 @@ def tree_gemm(
             num_stages=cfg.num_stages,
         )
     _verify_tree_ir(compiled, plan.num_chunks, cfg.block_m, cfg.block_n)
-    _LAST_LAUNCH.clear()
-    _LAST_LAUNCH.update(
-        shape=(m_size, n_size, k_size),
-        shape_class=shape_class,
-        config=asdict(cfg),
-        plan=asdict(plan),
-        grid=grid,
-        n_regs=getattr(compiled, "n_regs", None),
-        n_spills=getattr(compiled, "n_spills", None),
-    )
+    # Raw objects only (asdict on every decode call costs ~10 us); converted in last_launch().
+    _LAST_LAUNCH["raw"] = ((m_size, n_size, k_size), shape_class, cfg, plan, grid, compiled)
     return out
 
 
@@ -471,7 +466,19 @@ def _verify_tree_ir(compiled: object, num_chunks: int, block_m: int, block_n: in
 def last_launch() -> dict[str, object]:
     """Launch constants and ptxas register/spill counts of the most recent ``tree_gemm``."""
 
-    return dict(_LAST_LAUNCH)
+    raw = _LAST_LAUNCH.get("raw")
+    if raw is None:
+        return {}
+    shape, shape_class, cfg, plan, grid, compiled = raw
+    return {
+        "shape": shape,
+        "shape_class": shape_class,
+        "config": asdict(cfg),
+        "plan": asdict(plan),
+        "grid": grid,
+        "n_regs": getattr(compiled, "n_regs", None),
+        "n_spills": getattr(compiled, "n_spills", None),
+    }
 
 
 __all__ = [
