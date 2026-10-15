@@ -494,14 +494,19 @@ class MuseGlimmerStrictBinding:
         d = self.dims
         lw = self.layers[i]
         t = x_n.shape[0]
-        heads_l = d.heads // self.tp_world
-        kv_l = d.kv_heads // self.tp_world
         q = self._col(x_n, lw.q_blocks, i, "q_proj", d.q_width)
         k = self._col(x_n, lw.k_blocks, i, "k_proj", d.kv_width)
         v = self._col(x_n, lw.v_blocks, i, "v_proj", d.kv_width)
         g = self._col(x_n, lw.gate_blocks, i, "gate_proj", d.q_width)
-        q3 = q.view(t, heads_l, d.head_dim)
-        k3 = k.view(t, kv_l, d.head_dim)
+        if self.tp_world > 1:
+            # The strict O4/O5 kernels take the full 32 Q / 2 KV heads: gather the head shards
+            # (data movement only), compute attention redundantly, keep the local head columns.
+            q = GatherHeads.apply(q, self.comm)
+            k = GatherHeads.apply(k, self.comm)
+            v = GatherHeads.apply(v, self.comm)
+            g = GatherHeads.apply(g, self.comm)
+        q3 = q.view(t, d.heads, d.head_dim)
+        k3 = k.view(t, d.kv_heads, d.head_dim)
         if lw.sliding:
             qh, kh = self.ops.qknorm_scaled_rope(q3, k3, cos, sin, eps=d.rms_eps, qk_scale=d.qk_scale)
             window: int | None = d.window
@@ -509,9 +514,10 @@ class MuseGlimmerStrictBinding:
             qh, kh = self.ops.qknorm_scaled_rope(q3, k3, None, None, eps=d.rms_eps, qk_scale=d.qk_scale)
             window = None
         y = self.ops.gated_attention(
-            qh, kh, v.view(t, kv_l, d.head_dim), g, cu_seqlens, cu_seqlens, positions, window=window
+            qh, kh, v.view(t, d.kv_heads, d.head_dim), g, cu_seqlens, cu_seqlens, positions, window=window
         )
-        o = self._row(y.reshape(t, heads_l * d.head_dim), lw.o_local, i, "o_proj", d.q_width)
+        y_local = SliceLocalHeads.apply(y.reshape(t, d.q_width), self.comm)
+        o = self._row(y_local, lw.o_local, i, "o_proj", d.q_width)
         resid, x_f = self.ops.fused_post_norm_residual_pre_norm(
             o, resid, lw.w_post_attn, d.post_eps, lw.w_pre_ffn, d.rms_eps, pre_form="centered"
         )
@@ -598,6 +604,53 @@ class MuseGlimmerStrictBinding:
             "final_norm_roundtrip_mismatches": getattr(self, "final_norm_roundtrip_mismatches", None),
             "notes": list(self.notes),
         }
+
+
+class GatherHeads(torch.autograd.Function):
+    """TP all-gather of a head-sharded ``(T, N_local)`` activation along dim 1 (rank order).
+
+    Forward is data movement only; backward keeps this rank's slice of the full gradient.
+    """
+
+    @staticmethod
+    def forward(ctx, x_local, comm):
+        ctx.comm = comm
+        ctx.n_local = x_local.shape[1]
+        if comm.world == 1:
+            return x_local
+        return torch.cat(comm.all_gather(x_local.contiguous()), dim=1)
+
+    @staticmethod
+    def backward(ctx, grad_full):
+        comm = ctx.comm
+        if comm.world == 1:
+            return grad_full, None
+        start = comm.rank * ctx.n_local
+        return grad_full[:, start : start + ctx.n_local].contiguous(), None
+
+
+class SliceLocalHeads(torch.autograd.Function):
+    """Keep this rank's ``N/t`` columns of a replicated ``(T, N)`` activation.
+
+    Backward all-gathers the local gradients so every rank sees the full upstream gradient
+    (the replicated attention backward then produces identical dK/dV on every rank).
+    """
+
+    @staticmethod
+    def forward(ctx, y_full, comm):
+        ctx.comm = comm
+        if comm.world == 1:
+            return y_full
+        n_local = y_full.shape[1] // comm.world
+        start = comm.rank * n_local
+        return y_full[:, start : start + n_local].contiguous()
+
+    @staticmethod
+    def backward(ctx, grad_local):
+        comm = ctx.comm
+        if comm.world == 1:
+            return grad_local, None
+        return torch.cat(comm.all_gather(grad_local.contiguous()), dim=1), None
 
 
 class StrictLMHeadLogprob(torch.autograd.Function):
@@ -785,10 +838,12 @@ def load_bridge_model(
 
 
 __all__ = [
+    "GatherHeads",
     "LayerWeights",
     "ModelDims",
     "MuseGlimmerStrictBinding",
     "NATIVE_BRIDGE_MODEL_CLASS",
+    "SliceLocalHeads",
     "StrictBindingError",
     "StrictLMHeadLogprob",
     "binding_lora_parameters",
