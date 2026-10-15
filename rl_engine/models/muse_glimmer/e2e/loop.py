@@ -187,9 +187,13 @@ def _flatten_rollout(
     }
 
 
-def _check_train_logps(train_logps: Sequence[torch.Tensor], sequences: list[list[int]], starts: list[int]) -> None:
+def _check_train_logps(
+    train_logps: Sequence[torch.Tensor], sequences: list[list[int]], starts: list[int]
+) -> None:
     if len(train_logps) != len(sequences):
-        raise ValueError(f"trainer returned {len(train_logps)} tensors for {len(sequences)} samples")
+        raise ValueError(
+            f"trainer returned {len(train_logps)} tensors for {len(sequences)} samples"
+        )
     for i, (t, seq, start) in enumerate(zip(train_logps, sequences, starts)):
         expected = len(seq) - start
         if t.dim() != 1 or t.numel() != expected:
@@ -368,7 +372,10 @@ def _summarize(
             "mismatch_k3_kl": "mean(exp(d) - d - 1), d = train - rollout",
             "first_drift": "first (step, sample, token) with a bitwise mismatch, batch order",
             "advantage": "(r - mean_group) / max(std_group, 1e-6), population std",
-            "loss": "-mean_tokens(min(rho*A, clip(rho, 1-eps, 1+eps)*A)), rho = exp(lp_train - lp_rollout)",
+            "loss": (
+                "-mean_tokens(min(rho*A, clip(rho, 1-eps, 1+eps)*A)), "
+                "rho = exp(lp_train - lp_rollout)"
+            ),
             "lora_sha256": "sha256 over sorted(name|dtype|shape\\n + raw LE bytes)",
         },
         "files": {
@@ -392,7 +399,8 @@ process, no VIME, no Ray). Mode `{mode}` = `<train>/<rollout>`.
 | Rollout engine | {rollout_engine} (TP{rollout_tp}, GPUs {rollout_gpus}, strict={rollout_strict}) |
 | Trainer engine | {trainer_engine} (TP{train_tp}, GPUs {train_gpus}, strict={train_strict}) |
 | Task | {task} |
-| Batch | {steps} steps × {prompts} prompts × {samples} samples, max_tokens {max_tokens}, T={temperature} |
+| Batch | {steps} steps × {prompts} prompts × {samples} samples |
+| Generation | max_tokens {max_tokens}, temperature {temperature} |
 | LoRA / optimizer | rank {lora_rank}, lr {lr}, clip ε {clip_eps}, KL coef {kl_coef} |
 | Seed | {seed} |
 
@@ -405,7 +413,9 @@ process, no VIME, no Ray). Mode `{mode}` = `<train>/<rollout>`.
 | Max abs logprob diff (all steps) | {max_abs:.3e} |
 | Reward mean first / last / all steps | {reward_first} / {reward_last} / {reward_mean} |
 | Weight-sync identity checks | {sync_passed} / {sync_checks} passed |
-| Mean time per step (s) | {step_s} (rollout {rollout_s}, train logp {train_logp_s}, train step {train_step_s}, sync {sync_s}) |
+| Mean time per step (s) | {step_s} |
+| Rollout / train-logp / train-step / sync (s) | {rollout_s} / {train_logp_s} / {train_step_s} |
+| Sync (s) | {sync_s} |
 
 Files: `steps.jsonl` (one JSON object per step with rewards, advantages, GRPO stats, drift and
 sync records), `rounds.csv` (one row per step), `summary.json` (this table as data plus the
@@ -504,7 +514,10 @@ def run_loop(
         "trainer_start": trainer.provenance(),
     }
     _write_json(run_dir / "provenance.json", provenance)
-    emit(f"initial sync ok: lora {initial_sync['exported_sha256'][:12]} via {initial_sync['transport']}")
+    emit(
+        f"initial sync ok: lora {initial_sync['exported_sha256'][:12]} "
+        f"via {initial_sync['transport']}"
+    )
 
     records: list[dict[str, Any]] = []
     status = "ok"

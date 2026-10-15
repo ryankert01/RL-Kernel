@@ -57,7 +57,9 @@ class FirstTokenParityTask:
         return {"task": self.name}
 
 
-def _engines(mode: str, *, perturb: float = 0.0, lora_rank: int = 4, lr: float = 1e-3, seed: int = 7):
+def _engines(
+    mode: str, *, perturb: float = 0.0, lora_rank: int = 4, lr: float = 1e-3, seed: int = 7
+):
     train_strict, rollout_strict = loop.parse_mode(mode)
     trainer = mocks.MockTrainer(
         "mock", tensor_parallel_size=4, gpu_ids=[4, 5, 6, 7], lora_rank=lora_rank, lr=lr,
@@ -72,8 +74,9 @@ def _engines(mode: str, *, perturb: float = 0.0, lora_rank: int = 4, lr: float =
 
 def _config(tmp_path: Path, mode: str, **overrides) -> loop.LoopConfig:
     kwargs = dict(
-        run_dir=tmp_path / mode.replace("/", "-"), steps=3, prompts_per_step=2, samples_per_prompt=4,
-        max_tokens=10, lora_rank=4, lr=1e-3, mode=mode, mock=True, task="first-token-parity",
+        run_dir=tmp_path / mode.replace("/", "-"), steps=3, prompts_per_step=2,
+        samples_per_prompt=4, max_tokens=10, lora_rank=4, lr=1e-3, mode=mode, mock=True,
+        task="first-token-parity",
     )
     kwargs.update(overrides)
     return loop.LoopConfig(**kwargs)
@@ -110,7 +113,10 @@ def test_loop_three_steps_strict_strict_zero_drift(tmp_path: Path) -> None:
     # The parity reward splits at least one group, so the LoRA actually moves.
     assert any(r["trainer_step"]["grad_norm"] > 0 for r in records)
     assert summary["weight_sync"]["initial_sha256"] != summary["weight_sync"]["final_sha256"]
-    for name in ("steps.jsonl", "rounds.csv", "summary.json", "README.md", "provenance.json", "config.json"):
+    expected_files = (
+        "steps.jsonl", "rounds.csv", "summary.json", "README.md", "provenance.json", "config.json"
+    )
+    for name in expected_files:
         assert (cfg.run_dir / name).exists(), name
     assert sorted(p.name for p in (cfg.run_dir / "mismatch-sidecars").glob("*.pt")) == [
         "step0000.pt", "step0001.pt", "step0002.pt",
@@ -150,7 +156,8 @@ def test_mixed_and_native_modes_drift(tmp_path: Path, mode: str) -> None:
 def test_sidecar_recompute_matches_logged(tmp_path: Path) -> None:
     cfg, _, records = _run(tmp_path, "strict/native", steps=2)
     for record in records:
-        payload = drift.load_sidecar(cfg.run_dir / "mismatch-sidecars" / f"step{record['step']:04d}.pt")
+        sidecar = cfg.run_dir / "mismatch-sidecars" / f"step{record['step']:04d}.pt"
+        payload = drift.load_sidecar(sidecar)
         recomputed = drift.metrics_from_sidecar(payload).to_dict()
         assert recomputed == record["drift"]
         assert payload["response_lengths"] == [len(t) for t in payload["train_log_probs"]]
@@ -200,7 +207,8 @@ def test_strict_primitives_shape_invariant_and_accurate() -> None:
     assert torch.equal(batched, single)
     assert torch.allclose(batched, torch.exp(x), rtol=1e-6, atol=0.0)
     y = torch.linspace(1e-3, 1e3, 1001)
-    assert torch.equal(mocks.strict_log(y), torch.stack([mocks.strict_log(y[i : i + 1])[0] for i in range(1001)]))
+    single_log = torch.stack([mocks.strict_log(y[i : i + 1])[0] for i in range(1001)])
+    assert torch.equal(mocks.strict_log(y), single_log)
     assert torch.allclose(mocks.strict_log(y), torch.log(y), rtol=0.0, atol=1e-6)
     weight = torch.randn(7, 5)
     xs = torch.randn(3, 4, 5)
@@ -226,7 +234,8 @@ def test_strict_engines_batch_and_phase_invariance() -> None:
     assert drift.compare_logprobs(batched, sampled).bitwise_equal
     assert drift.compare_logprobs(rollout.logprobs(seqs, starts), sampled).bitwise_equal
     assert all(len(s.logprobs) == len(s.token_ids) for g in groups for s in g)
-    assert all(t.requires_grad and t.dtype == torch.float32 for t in trainer.token_logprobs(seqs, starts))
+    with_grad = trainer.token_logprobs(seqs, starts)
+    assert all(t.requires_grad and t.dtype == torch.float32 for t in with_grad)
 
 
 def test_byte_tokenizer_roundtrip() -> None:
@@ -279,9 +288,11 @@ def test_lora_sha256_known_answer_stability_and_sensitivity() -> None:
     sd = _lora_dict()
     digest = sync.lora_sha256(sd)
     assert digest == _reference_lora_sha256(sd)
-    assert digest == sync.lora_sha256(dict(reversed(list(sd.items()))))  # insertion order irrelevant
+    reordered = dict(reversed(list(sd.items())))
+    assert digest == sync.lora_sha256(reordered)  # insertion order irrelevant
     assert digest == sync.lora_sha256({k: v.clone() for k, v in sd.items()})
-    assert digest == sync.lora_sha256({k: v.T.contiguous().T for k, v in sd.items()})  # strides irrelevant
+    transposed_twice = {k: v.T.contiguous().T for k, v in sd.items()}
+    assert digest == sync.lora_sha256(transposed_twice)  # strides irrelevant
     tiny = {"layers.0.q_proj.lora_A": torch.zeros(1, 2, dtype=torch.bfloat16)}
     expected = hashlib.sha256(b"layers.0.q_proj.lora_A|torch.bfloat16|1,2\n" + bytes(4)).hexdigest()
     assert sync.lora_sha256(tiny) == expected
@@ -300,10 +311,11 @@ def test_lora_sha256_known_answer_stability_and_sensitivity() -> None:
 
 def test_validate_lora_state_dict_schema() -> None:
     sd = _lora_dict()
+    q_a = sd["layers.0.q_proj.lora_A"]
     with pytest.raises(sync.WeightSyncError):
-        sync.validate_lora_state_dict({**sd, "layers.0.lm_head.lora_A": sd["layers.0.q_proj.lora_A"]})
+        sync.validate_lora_state_dict({**sd, "layers.0.lm_head.lora_A": q_a})
     with pytest.raises(sync.WeightSyncError):
-        sync.validate_lora_state_dict({**sd, "layers.0.q_proj.lora_A": sd["layers.0.q_proj.lora_A"].float()})
+        sync.validate_lora_state_dict({**sd, "layers.0.q_proj.lora_A": q_a.float()})
     bad = dict(sd)
     bad["layers.0.q_proj.lora_B"] = torch.zeros(5, 3, dtype=torch.bfloat16)
     with pytest.raises(sync.WeightSyncError):
@@ -359,7 +371,10 @@ def test_group_advantages_zero_mean_and_uniform_groups() -> None:
 
 
 def test_grpo_zero_drift_ratio_one_and_no_clipping() -> None:
-    train = [torch.tensor([-1.0, -2.0, -0.5], requires_grad=True), torch.tensor([-0.1, -3.0], requires_grad=True)]
+    train = [
+        torch.tensor([-1.0, -2.0, -0.5], requires_grad=True),
+        torch.tensor([-0.1, -3.0], requires_grad=True),
+    ]
     rollout = [t.detach().clone() for t in train]
     adv = torch.tensor([1.0, -1.0])
     out = grpo.grpo_token_loss(train, rollout, adv, clip_eps=0.2)
@@ -375,7 +390,10 @@ def test_grpo_zero_drift_ratio_one_and_no_clipping() -> None:
 
 def test_grpo_clipping_active_blocks_gradient() -> None:
     log_ratio = math.log(1.5)
-    train = [torch.tensor([log_ratio], requires_grad=True), torch.tensor([log_ratio], requires_grad=True)]
+    train = [
+        torch.tensor([log_ratio], requires_grad=True),
+        torch.tensor([log_ratio], requires_grad=True),
+    ]
     rollout = [torch.zeros(1), torch.zeros(1)]
     out = grpo.grpo_token_loss(train, rollout, torch.tensor([1.0, -1.0]), clip_eps=0.2)
     assert out.stats["clip_frac"] == 1.0
@@ -390,9 +408,11 @@ def test_grpo_optional_kl_term() -> None:
     train = [torch.tensor([-1.0, -1.5], requires_grad=True)]
     rollout = [torch.tensor([-1.0, -1.5])]
     adv = torch.tensor([0.0])
-    same = grpo.grpo_token_loss(train, rollout, adv, kl_coef=0.1, logp_ref=[torch.tensor([-1.0, -1.5])])
+    ref_same = [torch.tensor([-1.0, -1.5])]
+    same = grpo.grpo_token_loss(train, rollout, adv, kl_coef=0.1, logp_ref=ref_same)
     assert same.stats["kl"] == 0.0 and same.loss.item() == 0.0
-    moved = grpo.grpo_token_loss(train, rollout, adv, kl_coef=0.1, logp_ref=[torch.tensor([-0.5, -2.5])])
+    ref_moved = [torch.tensor([-0.5, -2.5])]
+    moved = grpo.grpo_token_loss(train, rollout, adv, kl_coef=0.1, logp_ref=ref_moved)
     assert moved.stats["kl"] > 0.0 and moved.loss.item() > 0.0
     with pytest.raises(ValueError):
         grpo.grpo_token_loss(train, rollout, adv, kl_coef=0.1)

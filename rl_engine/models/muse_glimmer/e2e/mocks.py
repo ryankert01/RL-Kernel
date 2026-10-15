@@ -572,7 +572,9 @@ class MockRolloutEngine:
         return groups
 
     @torch.no_grad()
-    def logprobs(self, token_ids: list[list[int]], completion_start: list[int]) -> list[list[float]]:
+    def logprobs(
+        self, token_ids: list[list[int]], completion_start: list[int]
+    ) -> list[list[float]]:
         out: list[list[float]] = []
         for row, start in zip(token_ids, completion_start):
             ids = torch.tensor([list(row)], dtype=torch.long)
