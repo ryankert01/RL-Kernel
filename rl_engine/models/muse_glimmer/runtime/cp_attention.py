@@ -41,31 +41,23 @@ sentence "apply the output gate after the CP merge" has no object here; see REPO
 Backward (training)
 -------------------
 ``dq`` and ``dgate`` are row-local to the owner rank (same O5 argument; the full K/V is present).
-``dK``/``dV`` need every rank's queries. So that CP-c bits equal CP-1 bits, the query axis is
-reduced in ONE canonical two-level fp32 tree (the O3 K-chunk rule applied to the query axis):
-
-* inner level: the kernel's 8 Q-head-group partials, ``((0+1)+(2+3))+((4+5)+(6+7))``;
-* outer level: :data:`CP_CANONICAL_QUERY_CHUNKS` = 8 contiguous query chunks of the FULL
-  sequence; each chunk is accumulated by the kernel over its own query blocks in ascending
-  order and the chunk partials are combined in the same tree. CP rank ``i`` of ``c`` owns
-  chunks ``[i*8/c, (i+1)*8/c)``, combines them locally (its sub-tree root), and the ranks'
-  roots are combined by a deterministic rank-ordered all_gather followed by the same tree
-  evaluated locally. No NCCL reduce-scatter is ever used.
+``dK``/``dV`` follow the kernel's query-chunk rule (``triton/gated_attention_bwd.py``): leaves
+``(query chunk c, Q-head group g)`` with ``chunk c = [floor(c*T/8), floor((c+1)*T/8))``, folded
+per group over the 8 chunks in the O3 tree, then over the groups in the same tree. CP rank ``i``
+of ``c`` owns chunks ``[8i/c, 8(i+1)/c)`` (rank boundaries are chunk boundaries whenever
+``T % c == 0``, no ``T % 8`` requirement). One kernel call on the rank's rows against the full
+K/V yields, per group, the sub-tree root of its chunks (the other chunks are exact zero leaves);
+the rank roots travel by a deterministic rank-ordered all_gather and are folded in the same tree;
+then the group tree; one bf16 rounding. The expression is identical at CP1/2/4/8 and to the
+one-shot kernel (``strict_gated_attention_bwd``), so all of them agree bit for bit. No NCCL
+reduce-scatter is ever used.
 
 Cast points: K/V/positions move as bits; the fp32 tree root of dK/dV is rounded to bf16 once;
 ``y``, ``o``, ``lse``, ``dq`` and ``dgate`` carry the kernel's own casts (O5).
 
-Sibling ops
------------
-The strict kernel is imported from the WS1 siblings
-(``rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen`` and
-``...triton.gated_attention_bwd.{gated_attention_bwd_preprocess,
-strict_gated_attention_bwd_partials}``). While they are absent
-this module runs :func:`fallback_gated_attention_fwd` /
-:func:`fallback_gated_attention_bwd_partials`: a pure-torch fp32 stand-in with FIXED tensor
-shapes (one GQA group x 8 query tiles of 64 rows per GEMM) that follows the O5 block order and
-casts, so that its per-row bits are independent of the launch composition and the CP tests are
-meaningful today. It is reported as a fallback by :func:`trace` and is NOT the strict kernel.
+Kernels (no fallback: strict ops fail closed): forward
+``ops.gated_attention.strict_gated_attention_fwd_varlen`` (head counts as parameters, so TP head
+shards use the same wrapper), backward ``triton.gated_attention_bwd``.
 """
 
 from __future__ import annotations
@@ -75,13 +67,17 @@ from typing import Any, Optional, Sequence
 
 import torch
 
+from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree
+from rl_engine.models.muse_glimmer.ops.gated_attention import strict_gated_attention_fwd_varlen
+from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as _bwd
+
 __all__ = [
+    "BACKWARD_IMPL",
     "CP_CANONICAL_QUERY_CHUNKS",
     "CPAttentionPlan",
     "CPGatedAttentionFn",
     "CPLayoutError",
     "FORWARD_IMPL",
-    "BACKWARD_IMPL",
     "SUPPORTED_CP_WORLDS",
     "SUPPORTED_LAYOUTS",
     "TPCPTopology",
@@ -91,8 +87,6 @@ __all__ = [
     "cp_gated_attention_backward",
     "cp_gated_attention_forward",
     "cp_tp_gated_attention_forward",
-    "fallback_gated_attention_bwd_partials",
-    "fallback_gated_attention_fwd",
     "gated_attention_rows",
     "make_cp_collective",
     "trace",
@@ -105,134 +99,27 @@ NUM_Q_HEADS = 32
 NUM_KV_HEADS = 2
 HEAD_DIM = 128
 GQA_GROUP = NUM_Q_HEADS // NUM_KV_HEADS  # 16
-HEADS_PER_CANONICAL_GROUP = 4  # O5: dK/dV partials per 4-head group (TP8 shard)
+HEADS_PER_CANONICAL_GROUP = _bwd.HEADS_PER_GROUP  # O5: dK/dV partials per 4-head group
 SLIDING_WINDOW = 2048
 
 SUPPORTED_CP_WORLDS = (1, 2, 4, 8)
 SUPPORTED_LAYOUTS = ("allgather",)
-CP_CANONICAL_QUERY_CHUNKS = 8
+CP_CANONICAL_QUERY_CHUNKS = _bwd.NUM_QUERY_CHUNKS
 REJECTED_LAYOUTS = ("zigzag", "striped", "ring", "interleaved")
 
-# O5 tile constants (compile-time; never autotuned). The fallback mirrors them.
-BLOCK_N = 64
-BLOCK_M = 64
-# Fixed number of query tiles per fallback GEMM so that every GEMM has one shape
-# (GQA_GROUP * FALLBACK_TILE_GROUP rows of BLOCK_M) regardless of T, CP degree or TP shard.
-FALLBACK_TILE_GROUP = 8
+BLOCK_N = _bwd.BLOCK_N
+BLOCK_M = _bwd.BLOCK_M
 
-_NEG_INF = float("-inf")
+FORWARD_IMPL = "rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen"
+BACKWARD_IMPL = (
+    "rl_engine.models.muse_glimmer.triton.gated_attention_bwd."
+    "gated_attention_bwd_preprocess + strict_gated_attention_bwd_partials (query-chunk rule)"
+)
+TREE_IMPL = "rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree"
 
 
 class CPLayoutError(ValueError):
     """Raised when a CP layout other than the contiguous ``allgather`` layout is requested."""
-
-
-# --------------------------------------------------------------------------------------------
-# Sibling ops (fixed interfaces) with clearly-labelled fallbacks
-# --------------------------------------------------------------------------------------------
-try:  # canonical fp32 tree (O3); tiny pure-torch sibling
-    from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree as _sibling_tree
-
-    def combine_tree(partials: Sequence[torch.Tensor]) -> torch.Tensor:
-        """Canonical fixed fp32 tree ``((0+1)+(2+3))+((4+5)+(6+7))`` (sibling implementation)."""
-        return _sibling_tree(partials)
-
-    TREE_IMPL = "rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree"
-except ImportError:  # pragma: no cover - depends on the sibling worktree
-
-    def combine_tree(partials: Sequence[torch.Tensor]) -> torch.Tensor:
-        """Canonical fixed fp32 tree ``((0+1)+(2+3))+((4+5)+(6+7))`` (local copy of O3).
-
-        1, 2, 4 or 8 fp32 partials in chunk/rank order; every ``+`` is one exact IEEE fp32
-        add, so the result is bitwise identical to the same adds performed inside a kernel.
-        """
-        parts = list(partials)
-        count = len(parts)
-        if count not in (1, 2, 4, 8):
-            raise ValueError(f"combine_tree expects 1, 2, 4 or 8 partials, got {count}")
-        for index, part in enumerate(parts):
-            if part.dtype != torch.float32:
-                raise TypeError(f"combine_tree partial {index} must be float32, got {part.dtype}")
-            if part.shape != parts[0].shape:
-                raise ValueError("combine_tree partials must share one shape")
-        if count == 1:
-            return parts[0]
-        if count == 2:
-            return parts[0] + parts[1]
-        if count == 4:
-            return (parts[0] + parts[1]) + (parts[2] + parts[3])
-        lower = (parts[0] + parts[1]) + (parts[2] + parts[3])
-        upper = (parts[4] + parts[5]) + (parts[6] + parts[7])
-        return lower + upper
-
-    TREE_IMPL = "FALLBACK:cp_attention.combine_tree (local copy of the O3 tree)"
-
-
-_strict_fwd = None
-FORWARD_IMPL = (
-    "FALLBACK:cp_attention.fallback_gated_attention_fwd (pure torch fp32, O5 block order)"
-)
-for _module_name in (
-    "rl_engine.models.muse_glimmer.ops.gated_attention",
-    "rl_engine.models.muse_glimmer.triton.gated_attention_fwd",
-):
-    try:
-        _module = __import__(_module_name, fromlist=["strict_gated_attention_fwd_varlen"])
-        _strict_fwd = getattr(_module, "strict_gated_attention_fwd_varlen")
-        FORWARD_IMPL = f"{_module_name}.strict_gated_attention_fwd_varlen"
-        break
-    except (ImportError, AttributeError):  # pragma: no cover - depends on the sibling worktree
-        continue
-
-try:  # the sibling kernel body itself, for TP head shards the WS1 wrapper does not accept
-    from rl_engine.models.muse_glimmer.triton import gated_attention_fwd as _fwd_kernel_module
-except ImportError:  # pragma: no cover - depends on the sibling worktree
-    _fwd_kernel_module = None
-
-_strict_bwd_partials = None
-BACKWARD_IMPL = (
-    "FALLBACK:cp_attention.fallback_gated_attention_bwd_partials (pure torch fp32, FA2 order)"
-)
-try:  # sibling Triton backward: row-local preprocess + fp32 dK/dV partials per 4-head group
-    from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as _bwd_module
-
-    def _strict_bwd_partials(  # type: ignore[misc]
-        q: torch.Tensor,
-        k: torch.Tensor,
-        v: torch.Tensor,
-        gate_logits: torch.Tensor,
-        o: torch.Tensor,
-        lse: torch.Tensor,
-        dy: torch.Tensor,
-        cu_seqlens_q: torch.Tensor,
-        cu_seqlens_k: torch.Tensor,
-        q_pos: torch.Tensor,
-        *,
-        window: Optional[int],
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Sibling kernels -> ``(dq, dk_partials (8,Tk,2,128) fp32, dv_partials, dgate)``."""
-        dgate, do, delta = _bwd_module.gated_attention_bwd_preprocess(dy, o, gate_logits)
-        dq, dk_partials, dv_partials = _bwd_module.strict_gated_attention_bwd_partials(
-            q, k, v, do, lse, delta, cu_seqlens_q, cu_seqlens_k, q_pos, window=window
-        )
-        return dq, dk_partials, dv_partials, dgate
-
-    BACKWARD_IMPL = (
-        "rl_engine.models.muse_glimmer.triton.gated_attention_bwd."
-        "gated_attention_bwd_preprocess + strict_gated_attention_bwd_partials"
-    )
-except ImportError:  # pragma: no cover - depends on the sibling worktree
-    try:  # interface location named by the RFC brief
-        from rl_engine.models.muse_glimmer.ops.gated_attention_autograd import (
-            strict_gated_attention_bwd_partials as _strict_bwd_partials,
-        )
-
-        BACKWARD_IMPL = (
-            "rl_engine.models.muse_glimmer.ops.gated_attention_autograd."
-            "strict_gated_attention_bwd_partials"
-        )
-    except ImportError:
-        pass
 
 
 # --------------------------------------------------------------------------------------------
@@ -242,8 +129,8 @@ except ImportError:  # pragma: no cover - depends on the sibling worktree
 class CPAttentionPlan:
     """Contiguous-chunk (``allgather``) context-parallel plan for one logical sequence.
 
-    ``cp_rank`` owns tokens ``[cp_rank*T/cp_world, (cp_rank+1)*T/cp_world)``. ``T`` must be a
-    multiple of ``cp_world`` and, for the backward, of :data:`CP_CANONICAL_QUERY_CHUNKS`.
+    ``cp_rank`` owns tokens ``[cp_rank*T/cp_world, (cp_rank+1)*T/cp_world)``; ``T`` must be a
+    multiple of ``cp_world`` (then the rank boundaries are canonical query-chunk boundaries).
     """
 
     cp_world: int
@@ -346,8 +233,9 @@ class TPCPTopology:
         if self.tp_world not in (1, 2):
             raise ValueError(
                 "TPCPTopology supports tp_world in (1, 2): with 2 KV heads every TP rank owns "
-                "its own KV head; TP4/TP8 replicate KV heads (kv_head_replication) and are out "
-                f"of scope for this POC; got {self.tp_world}"
+                "its own KV head; TP4/TP8 replicate KV heads (kv_head_replication) and need the "
+                "cross-rank dK/dV tree, out of scope for this POC topology; "
+                f"got {self.tp_world}"
             )
         if not 0 <= self.tp_rank < self.tp_world:
             raise ValueError(f"tp_rank {self.tp_rank} out of range for tp_world {self.tp_world}")
@@ -416,8 +304,8 @@ def make_cp_collective(group: Any = None, device: torch.device | int | None = No
     Prefers the repo's CUDA-IPC fixed-tree collective (``rl_engine._C``). When the compiled
     extension is absent (this POC environment) it uses the torch.distributed transport
     ``TorchDistributedDeterministicCollective``: ``all_gather`` is ``all_gather_into_tensor``
-    (bitwise data movement, rank order), reductions are local balanced-rank-tree sums. Both
-    expose ``all_gather``, ``all_gather_many`` and ``reduce_scatter`` with identical semantics.
+    (bitwise data movement, rank order). Only ``all_gather`` / ``all_gather_many`` are used here;
+    every reduction is the canonical tree evaluated locally.
     """
     try:
         import rl_engine._C  # noqa: F401
@@ -448,355 +336,12 @@ def _all_gather_many(tensors: Sequence[torch.Tensor], collective: Any) -> tuple[
 
 
 # --------------------------------------------------------------------------------------------
-# Fallback kernel (pure torch, fixed shapes, O5 block order) - NOT the strict kernel
+# Kernel calls on one logical sequence
 # --------------------------------------------------------------------------------------------
-def _disable_tf32() -> None:
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
-
-
-def _check_single_sequence(
-    cu_seqlens_q: torch.Tensor, cu_seqlens_k: torch.Tensor, tq: int, tk: int
-) -> None:
-    cq = cu_seqlens_q.tolist()
-    ck = cu_seqlens_k.tolist()
-    if cq != [0, tq] or ck != [0, tk]:
-        raise NotImplementedError(
-            "the fallback gated-attention kernel handles one sequence per call "
-            f"(cu_seqlens_q={cq}, cu_seqlens_k={ck}); packed varlen needs the strict kernel"
-        )
-
-
-def _tile_rows(x: torch.Tensor, group: int) -> torch.Tensor:
-    """``(TILE_GROUP*BLOCK_M, G, D) -> (G*TILE_GROUP, BLOCK_M, D)`` head-major, tile-minor."""
-    return (
-        x.permute(1, 0, 2)
-        .reshape(group, FALLBACK_TILE_GROUP, BLOCK_M, x.size(-1))
-        .reshape(group * FALLBACK_TILE_GROUP, BLOCK_M, x.size(-1))
-    )
-
-
-def _untile_rows(x: torch.Tensor, group: int) -> torch.Tensor:
-    """Inverse of :func:`_tile_rows`: ``(G*TILES, BLOCK_M, D) -> (TILES*BLOCK_M, G, D)``."""
-    return (
-        x.reshape(group, FALLBACK_TILE_GROUP * BLOCK_M, x.size(-1)).permute(1, 0, 2).contiguous()
-    )
-
-
-def _pairwise_sum_last(x: torch.Tensor) -> torch.Tensor:
-    """Fixed balanced-tree sum over a power-of-two last dim using only elementwise adds.
-
-    Elementwise ops are batch-invariant by construction, so the per-row result does not depend
-    on how many rows share the tensor (unlike ``torch.sum`` whose kernel config does).
-    """
-    while x.size(-1) > 1:
-        x = x[..., 0::2] + x[..., 1::2]
-    return x[..., 0]
-
-
-def _block_range(p_min: int, p_max: int, tk: int, window: Optional[int]) -> tuple[int, int]:
-    first = 0 if window is None else max(p_min - window + 1, 0) // BLOCK_N
-    last = min(p_max, tk - 1) // BLOCK_N
-    return first, last
-
-
-def fallback_gated_attention_fwd(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    gate_logits: torch.Tensor,
-    cu_seqlens_q: torch.Tensor,
-    cu_seqlens_k: torch.Tensor,
-    q_pos: torch.Tensor,
-    *,
-    window: Optional[int],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """FALLBACK for ``strict_gated_attention_fwd_varlen``: ``(y bf16, o bf16, lse fp32)``.
-
-    Pure torch fp32 with the O5 block order: KV blocks of 64 aligned at absolute key position 0,
-    ascending from ``floor(max(0, p_min-W+1)/64)`` (local) or 0 (global) to ``floor(p_max/64)``;
-    ``m_new = max(m, rowmax)``; ``alpha = exp(m - m_new)``; ``p = exp(s - m_new)``;
-    ``l = l*alpha + rowsum(p)``; ``acc = acc*alpha + (p -> bf16) @ V``; ``o = acc / l -> bf16``;
-    ``y = (o -> fp32) * sigmoid(g) -> bf16``; ``lse = m + log(l)``. Every GEMM has the FIXED
-    shape (GQA_GROUP * 8 tiles * 64 rows) so a row's bits never depend on the launch.
-    Shapes: ``q (Tq, Hq, 128)``, ``k/v (Tk, Hkv, 128)``, ``gate (Tq, Hq*128)``, ``q_pos (Tq,)``.
-    """
-    _disable_tf32()
-    tq, hq, d = q.shape
-    tk, hkv, _ = k.shape
-    group = hq // hkv
-    if hq % hkv or group != GQA_GROUP or d != HEAD_DIM:
-        raise ValueError(f"unsupported head geometry Hq={hq}, Hkv={hkv}, D={d}")
-    _check_single_sequence(cu_seqlens_q, cu_seqlens_k, tq, tk)
-    device = q.device
-    sm_scale = float(d) ** -0.5
-    rows_per_group = FALLBACK_TILE_GROUP * BLOCK_M
-    n_row_groups = -(-tq // rows_per_group)
-    tq_pad = n_row_groups * rows_per_group
-    tk_pad = -(-tk // BLOCK_N) * BLOCK_N
-
-    q_pad = torch.zeros((tq_pad, hq, d), dtype=torch.bfloat16, device=device)
-    q_pad[:tq] = q
-    g_pad = torch.zeros((tq_pad, hq, d), dtype=torch.bfloat16, device=device)
-    g_pad[:tq] = gate_logits.view(tq, hq, d)
-    pos_pad = torch.full((tq_pad,), -1, dtype=torch.int64, device=device)
-    pos_pad[:tq] = q_pos.to(torch.int64)
-    k_pad = torch.zeros((tk_pad, hkv, d), dtype=torch.bfloat16, device=device)
-    k_pad[:tk] = k
-    v_pad = torch.zeros((tk_pad, hkv, d), dtype=torch.bfloat16, device=device)
-    v_pad[:tk] = v
-
-    y_out = torch.empty((tq_pad, hq, d), dtype=torch.bfloat16, device=device)
-    o_out = torch.empty((tq_pad, hq, d), dtype=torch.bfloat16, device=device)
-    lse_out = torch.empty((tq_pad, hq), dtype=torch.float32, device=device)
-    batch = group * FALLBACK_TILE_GROUP
-    pos_host = pos_pad.tolist()
-
-    for kv_head in range(hkv):
-        heads = slice(kv_head * group, (kv_head + 1) * group)
-        kf_all = k_pad[:, kv_head].float()
-        vf_all = v_pad[:, kv_head].float()
-        for rg in range(n_row_groups):
-            rows = slice(rg * rows_per_group, (rg + 1) * rows_per_group)
-            qf = _tile_rows(q_pad[rows, heads].float(), group)  # (B, 64, D)
-            pos = pos_pad[rows].view(FALLBACK_TILE_GROUP, BLOCK_M).expand(group, -1, -1)
-            pos = pos.reshape(batch, BLOCK_M)
-            valid = pos >= 0
-            valid_pos = [p for p in pos_host[rows] if p >= 0]
-            m_i = torch.full((batch, BLOCK_M), _NEG_INF, dtype=torch.float32, device=device)
-            l_i = torch.zeros((batch, BLOCK_M), dtype=torch.float32, device=device)
-            acc = torch.zeros((batch, BLOCK_M, d), dtype=torch.float32, device=device)
-            if valid_pos:
-                first, last = _block_range(min(valid_pos), max(valid_pos), tk, window)
-                for blk in range(first, last + 1):
-                    kf = kf_all[blk * BLOCK_N : (blk + 1) * BLOCK_N]
-                    vf = vf_all[blk * BLOCK_N : (blk + 1) * BLOCK_N]
-                    k_pos = torch.arange(blk * BLOCK_N, (blk + 1) * BLOCK_N, device=device)
-                    scores = torch.matmul(qf, kf.t()) * sm_scale  # (B, 64, 64) fp32
-                    keep = valid[:, :, None] & (k_pos < tk)[None, None, :]
-                    keep = keep & (k_pos[None, None, :] <= pos[:, :, None])
-                    if window is not None:
-                        keep = keep & (k_pos[None, None, :] > pos[:, :, None] - window)
-                    scores = torch.where(keep, scores, _NEG_INF)
-                    m_blk = scores.amax(dim=-1)
-                    m_new = torch.maximum(m_i, m_blk)
-                    m_safe = torch.where(m_new == _NEG_INF, 0.0, m_new)
-                    alpha = torch.exp(m_i - m_safe)
-                    p = torch.exp(scores - m_safe[:, :, None])
-                    l_i = l_i * alpha + p.sum(dim=-1)
-                    acc = acc * alpha[:, :, None] + torch.matmul(p.to(torch.bfloat16).float(), vf)
-                    m_i = m_new
-            o_f = acc / l_i[:, :, None]
-            o_bf = o_f.to(torch.bfloat16)
-            g = _tile_rows(g_pad[rows, heads].float(), group)
-            gate = 1.0 / (1.0 + torch.exp(-g))
-            y_bf = (o_bf.float() * gate).to(torch.bfloat16)
-            o_out[rows, heads] = _untile_rows(o_bf, group)
-            y_out[rows, heads] = _untile_rows(y_bf, group)
-            lse = m_i + torch.log(l_i)
-            lse_out[rows, heads] = lse.view(group, rows_per_group).t()
-    return (
-        y_out[:tq].reshape(tq, hq * d).contiguous(),
-        o_out[:tq].reshape(tq, hq * d).contiguous(),
-        lse_out[:tq].contiguous(),
-    )
-
-
-def fallback_gated_attention_bwd_partials(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    gate_logits: torch.Tensor,
-    o: torch.Tensor,
-    lse: torch.Tensor,
-    dy: torch.Tensor,
-    cu_seqlens_q: torch.Tensor,
-    cu_seqlens_k: torch.Tensor,
-    q_pos: torch.Tensor,
-    *,
-    window: Optional[int],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """FALLBACK for ``strict_gated_attention_bwd_partials``.
-
-    Returns ``(dq bf16 (Tq,Hq,128), dk_partials fp32 (Hq//4, Tk, Hkv, 128), dv_partials fp32,
-    dgate bf16 (Tq, Hq*128))``. FA2 order per (query tile, KV block ascending): ``p = exp(s -
-    lse)``; ``dV += (p->bf16)^T dO``; ``dP = dO V^T``; ``dS = p (dP - delta)``; ``dQ += (dS->bf16)
-    K``; ``dK += (dS->bf16)^T Q``; ``dO = (dy * sigmoid(g)) -> bf16``; ``delta = rowsum(dO * o)``
-    (fixed pairwise tree); ``dgate = dy * o * sigmoid(g) * (1 - sigmoid(g)) -> bf16``.
-    dK/dV partial of 4-head group ``j`` for a key block is the left fold, in ascending query-tile
-    order, of ``((h0 + h1) + h2) + h3`` over its heads; the softmax scale is applied once in
-    fp32 at the end. Fixed GEMM shapes as in :func:`fallback_gated_attention_fwd`.
-    """
-    _disable_tf32()
-    tq, hq, d = q.shape
-    tk, hkv, _ = k.shape
-    group = hq // hkv
-    if hq % hkv or group != GQA_GROUP or d != HEAD_DIM or hq % HEADS_PER_CANONICAL_GROUP:
-        raise ValueError(f"unsupported head geometry Hq={hq}, Hkv={hkv}, D={d}")
-    _check_single_sequence(cu_seqlens_q, cu_seqlens_k, tq, tk)
-    device = q.device
-    sm_scale = float(d) ** -0.5
-    groups_per_kv = group // HEADS_PER_CANONICAL_GROUP  # 4
-    n_groups = hq // HEADS_PER_CANONICAL_GROUP  # 8 at TP1, 4 at TP2
-    rows_per_group = FALLBACK_TILE_GROUP * BLOCK_M
-    n_row_groups = -(-tq // rows_per_group)
-    tq_pad = n_row_groups * rows_per_group
-    tk_pad = -(-tk // BLOCK_N) * BLOCK_N
-    batch = group * FALLBACK_TILE_GROUP
-
-    # Row-local gate backward (fp32) and the attention output gradient.
-    g_f = gate_logits.view(tq, hq, d).float()
-    sig = 1.0 / (1.0 + torch.exp(-g_f))
-    o_f = o.view(tq, hq, d).float()
-    dy_f = dy.view(tq, hq, d).float()
-    dgate = (dy_f * o_f * sig * (1.0 - sig)).to(torch.bfloat16).reshape(tq, hq * d)
-    do_bf = (dy_f * sig).to(torch.bfloat16)
-    delta = _pairwise_sum_last(do_bf.float() * o_f)  # (Tq, Hq) fp32
-
-    def _pad_rows(x: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
-        out = torch.zeros((tq_pad, *x.shape[1:]), dtype=dtype, device=device)
-        out[:tq] = x
-        return out
-
-    q_pad = _pad_rows(q, torch.bfloat16)
-    do_pad = _pad_rows(do_bf, torch.bfloat16)
-    lse_pad = _pad_rows(lse, torch.float32)
-    delta_pad = _pad_rows(delta, torch.float32)
-    pos_pad = torch.full((tq_pad,), -1, dtype=torch.int64, device=device)
-    pos_pad[:tq] = q_pos.to(torch.int64)
-    k_pad = torch.zeros((tk_pad, hkv, d), dtype=torch.bfloat16, device=device)
-    k_pad[:tk] = k
-    v_pad = torch.zeros((tk_pad, hkv, d), dtype=torch.bfloat16, device=device)
-    v_pad[:tk] = v
-    pos_host = pos_pad.tolist()
-
-    dq_out = torch.empty((tq_pad, hq, d), dtype=torch.bfloat16, device=device)
-    dk_partials = torch.zeros((n_groups, tk_pad, hkv, d), dtype=torch.float32, device=device)
-    dv_partials = torch.zeros((n_groups, tk_pad, hkv, d), dtype=torch.float32, device=device)
-
-    for kv_head in range(hkv):
-        heads = slice(kv_head * group, (kv_head + 1) * group)
-        kf_all = k_pad[:, kv_head].float()
-        vf_all = v_pad[:, kv_head].float()
-        dk_acc = torch.zeros((groups_per_kv, tk_pad, d), dtype=torch.float32, device=device)
-        dv_acc = torch.zeros((groups_per_kv, tk_pad, d), dtype=torch.float32, device=device)
-        for rg in range(n_row_groups):
-            rows = slice(rg * rows_per_group, (rg + 1) * rows_per_group)
-            qf = _tile_rows(q_pad[rows, heads].float(), group)
-            dof = _tile_rows(do_pad[rows, heads].float(), group)
-            lse_t = lse_pad[rows, heads].t().reshape(batch, BLOCK_M)
-            delta_t = delta_pad[rows, heads].t().reshape(batch, BLOCK_M)
-            pos = pos_pad[rows].view(FALLBACK_TILE_GROUP, BLOCK_M).expand(group, -1, -1)
-            pos = pos.reshape(batch, BLOCK_M)
-            valid = pos >= 0
-            lse_safe = torch.where(valid, lse_t, 0.0)
-            valid_pos = [p for p in pos_host[rows] if p >= 0]
-            dq_acc = torch.zeros((batch, BLOCK_M, d), dtype=torch.float32, device=device)
-            if valid_pos:
-                first, last = _block_range(min(valid_pos), max(valid_pos), tk, window)
-                for blk in range(first, last + 1):
-                    kslice = slice(blk * BLOCK_N, (blk + 1) * BLOCK_N)
-                    kf = kf_all[kslice]
-                    vf = vf_all[kslice]
-                    k_pos = torch.arange(blk * BLOCK_N, (blk + 1) * BLOCK_N, device=device)
-                    scores = torch.matmul(qf, kf.t()) * sm_scale
-                    keep = valid[:, :, None] & (k_pos < tk)[None, None, :]
-                    keep = keep & (k_pos[None, None, :] <= pos[:, :, None])
-                    if window is not None:
-                        keep = keep & (k_pos[None, None, :] > pos[:, :, None] - window)
-                    p = torch.where(keep, torch.exp(scores - lse_safe[:, :, None]), 0.0)
-                    pf = p.to(torch.bfloat16).float()
-                    dv_c = torch.bmm(pf.transpose(1, 2), dof)  # (B, 64 keys, D)
-                    dp = torch.matmul(dof, vf.t())  # (B, 64, 64)
-                    ds = p * (dp - delta_t[:, :, None])
-                    dsf = ds.to(torch.bfloat16).float()
-                    dq_acc = dq_acc + torch.matmul(dsf, kf)
-                    dk_c = torch.bmm(dsf.transpose(1, 2), qf)  # (B, 64 keys, D)
-                    for contrib, target in ((dk_c, dk_acc), (dv_c, dv_acc)):
-                        c = contrib.view(
-                            groups_per_kv,
-                            HEADS_PER_CANONICAL_GROUP,
-                            FALLBACK_TILE_GROUP,
-                            BLOCK_N,
-                            d,
-                        )
-                        hsum = ((c[:, 0] + c[:, 1]) + c[:, 2]) + c[:, 3]  # (groups, tiles, 64, D)
-                        for tile in range(FALLBACK_TILE_GROUP):
-                            target[:, kslice] += hsum[:, tile]
-            dq_out[rows, heads] = _untile_rows((dq_acc * sm_scale).to(torch.bfloat16), group)
-        groups = slice(kv_head * groups_per_kv, (kv_head + 1) * groups_per_kv)
-        dk_partials[groups, :, kv_head] = dk_acc * sm_scale
-        dv_partials[groups, :, kv_head] = dv_acc
-    return (
-        dq_out[:tq].contiguous(),
-        dk_partials[:, :tk].contiguous(),
-        dv_partials[:, :tk].contiguous(),
-        dgate,
-    )
-
-
-def _strict_fwd_head_shard(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    gate_logits: torch.Tensor,
-    cu_seqlens_q: torch.Tensor,
-    cu_seqlens_k: torch.Tensor,
-    q_pos: torch.Tensor,
-    *,
-    window: Optional[int],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """TOKEN-tile launch of the sibling kernel body for a TP head shard (one sequence).
-
-    The WS1 wrapper pins ``(Tq, 32, 128)`` / ``(Tk, 2, 128)``; a TP rank holds ``32/tp`` Q heads
-    and ``2/tp`` KV heads. This launches the SAME ``_gated_attention_fwd_kernel`` with the same
-    ``BLOCK_M/BLOCK_N/num_warps/num_stages`` as the wrapper's token tiles; only the ``H_Q``/
-    ``H_KV`` constexprs (row strides and grid) change and the GQA group stays 16, so a row's
-    arithmetic is bitwise the wrapper's (verified by test_cp_tp_topology).
-    """
-    kernel = _fwd_kernel_module
-    tq, hq, d = q.shape
-    hkv = k.shape[1]
-    if hq // hkv != GQA_GROUP or d != HEAD_DIM:
-        raise ValueError(f"head shard must keep the GQA group of 16, got Hq={hq}, Hkv={hkv}")
-    if cu_seqlens_q.numel() != 2:
-        raise NotImplementedError("the head-shard launcher handles one sequence per call")
-    y = torch.empty((tq, hq * d), dtype=torch.bfloat16, device=q.device)
-    o = torch.empty_like(y)
-    lse = torch.empty((tq, hq), dtype=torch.float32, device=q.device)
-    if tq == 0:
-        return y, o, lse
-    dummy = torch.zeros((1,), dtype=torch.int32, device=q.device)
-    grid = (-(-tq // kernel.BLOCK_M_TOKEN), 1, hq)
-    kernel._gated_attention_fwd_kernel[grid](
-        q.contiguous(),
-        gate_logits.contiguous(),
-        k.contiguous(),
-        v.contiguous(),
-        y,
-        o,
-        lse,
-        q_pos.contiguous(),
-        cu_seqlens_q.contiguous(),
-        cu_seqlens_k.contiguous(),
-        dummy,
-        dummy,
-        float(d**-0.5),
-        int(window) if window is not None else 0,
-        0,
-        H_Q=hq,
-        H_KV=hkv,
-        D=d,
-        PAGE=kernel.PAGE_SIZE,
-        BLOCK_M=kernel.BLOCK_M_TOKEN,
-        BLOCK_N=kernel.BLOCK_N,
-        LOCAL=window is not None,
-        PAGED=False,
-        HEAD_TILE=False,
-        num_warps=kernel.NUM_WARPS_TOKEN,
-        num_stages=kernel.NUM_STAGES,
-    )
-    return y, o, lse
+def _single_sequence_offsets(tq: int, tk: int, device: torch.device):
+    cu_q = torch.tensor([0, tq], dtype=torch.int32, device=device)
+    cu_k = torch.tensor([0, tk], dtype=torch.int32, device=device)
+    return cu_q, cu_k
 
 
 def gated_attention_rows(
@@ -808,44 +353,17 @@ def gated_attention_rows(
     *,
     window: Optional[int],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Strict kernel (sibling) or fallback on ONE sequence: ``(y, o, lse)`` for the given rows.
+    """Strict kernel on ONE sequence: ``(y, o, lse)`` for the given rows.
 
     ``q``/``gate``/``q_pos`` hold any subset of the sequence's query rows (ABSOLUTE positions);
-    ``k``/``v`` hold the full key sequence. This is exactly the call a CP rank makes. Full head
-    sets go through the WS1 wrapper, TP head shards through :func:`_strict_fwd_head_shard`
-    (same kernel body); both fall back to the fixed-shape torch kernel when absent.
+    ``k``/``v`` hold the full key sequence. This is exactly the call a CP rank makes. Head counts
+    come from the tensors (full 32/2 or a TP shard such as 16/1) and are validated by the wrapper.
     """
-    device = q.device
-    cu_q = torch.tensor([0, q.size(0)], dtype=torch.int32, device=device)
-    cu_k = torch.tensor([0, k.size(0)], dtype=torch.int32, device=device)
-    if q.size(1) == NUM_Q_HEADS and _strict_fwd is not None:
-        fwd = _strict_fwd
-    elif q.size(1) != NUM_Q_HEADS and _fwd_kernel_module is not None:
-        fwd = _strict_fwd_head_shard
-    else:
-        fwd = fallback_gated_attention_fwd
-    return fwd(q, k, v, gate, cu_q, cu_k, q_pos.to(torch.int32), window=window)
-
-
-def _kernel_backward_partials(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    gate: torch.Tensor,
-    o: torch.Tensor,
-    lse: torch.Tensor,
-    dy: torch.Tensor,
-    q_pos: torch.Tensor,
-    *,
-    window: Optional[int],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    device = q.device
-    cu_q = torch.tensor([0, q.size(0)], dtype=torch.int32, device=device)
-    cu_k = torch.tensor([0, k.size(0)], dtype=torch.int32, device=device)
-    bwd = _strict_bwd_partials
-    if bwd is None:
-        bwd = fallback_gated_attention_bwd_partials
-    return bwd(q, k, v, gate, o, lse, dy, cu_q, cu_k, q_pos.to(torch.int32), window=window)
+    cu_q, cu_k = _single_sequence_offsets(q.size(0), k.size(0), q.device)
+    return strict_gated_attention_fwd_varlen(
+        q, k, v, gate, cu_q, cu_k, q_pos.to(torch.int32), window=window,
+        num_q_heads=q.size(1), num_kv_heads=k.size(1),
+    )
 
 
 # --------------------------------------------------------------------------------------------
@@ -996,14 +514,30 @@ def cp_tp_gated_attention_forward(
     ``gate_local (T/cp, 4096/tp)``; ``cp_collective`` is the deterministic collective of this
     rank's CP group (ranks sharing ``tp_rank``). Attention needs no TP communication: every TP
     rank owns the KV head its Q heads read (``tp <= 2``), so the only collective is the CP AG of
-    this rank's K/V shard. Per-head arithmetic is unchanged by head sharding, so the result is
-    bitwise the TP1 x CP1 result restricted to this rank's heads and rows.
+    this rank's K/V shard. Per-head arithmetic is unchanged by head sharding (the strict wrapper
+    takes the head counts), so the result is bitwise the TP1 x CP1 result restricted to this
+    rank's heads and rows.
     """
     y, o, lse, _, _ = _cp_forward_core(
         q_local, k_local, v_local, gate_local, positions_local, topology.plan, cp_collective,
         window=window, q_heads=topology.q_heads, kv_heads=topology.kv_heads,
     )
     return (y, o, lse) if return_aux else y
+
+
+def _compact_groups(partials: torch.Tensor) -> torch.Tensor:
+    """``(G, T, H_KV, D)`` group partials -> ``(G, T, D)``: each group's own KV head slice."""
+    n_groups, _, hkv, _ = partials.shape
+    kv_of_group = torch.arange(n_groups, device=partials.device) // (n_groups // hkv)
+    return partials[torch.arange(n_groups, device=partials.device), :, kv_of_group]
+
+
+def _expand_groups(compact: torch.Tensor, hkv: int) -> torch.Tensor:
+    n_groups, total, d = compact.shape
+    out = torch.zeros((n_groups, total, hkv, d), dtype=compact.dtype, device=compact.device)
+    kv_of_group = torch.arange(n_groups, device=compact.device) // (n_groups // hkv)
+    out[torch.arange(n_groups, device=compact.device), :, kv_of_group] = compact
+    return out
 
 
 def cp_gated_attention_backward(
@@ -1022,63 +556,45 @@ def cp_gated_attention_backward(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """CP backward: ``(dq_local bf16, dk_local bf16, dv_local bf16, dgate_local bf16)``.
 
-    Reduction order (see module docstring): per canonical query chunk owned by this rank (in
-    ascending order) the kernel returns ``dq``/``dgate`` rows and fp32 dK/dV partials per 4-head
-    group; inner tree over the head groups; local tree over the owned chunks; rank-ordered
-    all_gather of the (T, Hkv, 128) fp32 rank roots; outer tree over the ranks evaluated
-    locally; one rounding to bf16; this rank's key slice is returned. ``dq``/``dgate`` are the
-    concatenation of the per-chunk kernel outputs (row-local, CP-invariant by O5).
+    Reduction order (module docstring): ONE kernel call on this rank's rows against the full K/V
+    gives ``dq``/``dgate`` rows and fp32 dK/dV group partials whose chunk axis is already folded
+    (the chunks of other ranks are exact zero leaves, so each group partial is this rank's
+    sub-tree root); rank-ordered all_gather of the ``(G, T, 128)`` roots; per group the canonical
+    tree over the ranks; then the canonical tree over the groups; one rounding to bf16; this
+    rank's key slice is returned. Head counts come from the tensors (32/2, or a TP2 shard 16/1).
     """
     total = k_full.size(0)
     t_local = q_local.size(0)
     if t_local * plan.cp_world != total:
         raise ValueError(f"q_local rows {t_local} x cp_world {plan.cp_world} != T {total}")
-    if total % CP_CANONICAL_QUERY_CHUNKS:
-        raise ValueError(
-            f"T={total} must be a multiple of {CP_CANONICAL_QUERY_CHUNKS} canonical query chunks"
-        )
     plan.validate_local_positions(positions_local, total)
-    start, _ = plan.local_token_range(total)
-    chunk_len = total // CP_CANONICAL_QUERY_CHUNKS
-    if chunk_len < t_local and t_local % chunk_len:
-        raise ValueError("local chunk must be a whole number of canonical query chunks")
-
-    dq_parts: list[torch.Tensor] = []
-    dgate_parts: list[torch.Tensor] = []
-    dk_roots: list[torch.Tensor] = []
-    dv_roots: list[torch.Tensor] = []
-    for chunk in plan.canonical_chunk_ids():
-        lo = chunk * chunk_len - start
-        rows = slice(lo, lo + chunk_len)
-        dq_c, dk_p, dv_p, dgate_c = _kernel_backward_partials(
-            q_local[rows].contiguous(),
-            k_full,
-            v_full,
-            gate_local[rows].contiguous(),
-            o_local[rows].contiguous(),
-            lse_local[rows].contiguous(),
-            dy_local[rows].contiguous(),
-            positions_local[rows],
-            window=window,
+    hq, hkv = q_local.size(1), k_full.size(1)
+    if hq // hkv != GQA_GROUP:
+        raise ValueError(
+            f"cp_gated_attention_backward needs whole KV-head groups per call, got {hq}/{hkv}"
         )
-        dq_parts.append(dq_c)
-        dgate_parts.append(dgate_c)
-        dk_roots.append(combine_tree(list(dk_p.unbind(0))))  # inner tree: head groups
-        dv_roots.append(combine_tree(list(dv_p.unbind(0))))
-    dk_rank = combine_tree(dk_roots)  # local part of the outer tree (owned chunks)
-    dv_rank = combine_tree(dv_roots)
+    start, end = plan.local_token_range(total)
+    cu_q, cu_k = _single_sequence_offsets(t_local, total, q_local.device)
+    dgate, do, delta = _bwd.gated_attention_bwd_preprocess(
+        dy_local.contiguous(), o_local.contiguous(), gate_local.contiguous(), num_q_heads=hq
+    )
+    dq, dk_part, dv_part = _bwd.strict_gated_attention_bwd_partials(
+        q_local.contiguous(), k_full, v_full, do, lse_local.contiguous(), delta, cu_q, cu_k,
+        positions_local.to(torch.int32), window=window, num_q_heads=hq, num_kv_heads=hkv,
+    )
     if plan.cp_world > 1:
-        dk_all, dv_all = _all_gather_many((dk_rank[None], dv_rank[None]), collective)
-        dk_full = combine_tree(list(dk_all.unbind(0)))  # upper levels of the outer tree
-        dv_full = combine_tree(list(dv_all.unbind(0)))
-    else:
-        dk_full, dv_full = dk_rank, dv_rank
-    end = start + t_local
+        dk_all, dv_all = _all_gather_many(
+            (_compact_groups(dk_part)[None], _compact_groups(dv_part)[None]), collective
+        )
+        dk_part = _expand_groups(combine_tree(list(dk_all.unbind(0))), hkv)  # tree over ranks
+        dv_part = _expand_groups(combine_tree(list(dv_all.unbind(0))), hkv)
+    dk_full = _bwd.combine_kv_partials(dk_part)  # tree over the Q-head groups -> bf16
+    dv_full = _bwd.combine_kv_partials(dv_part)
     return (
-        torch.cat(dq_parts, dim=0),
-        dk_full[start:end].to(torch.bfloat16).contiguous(),
-        dv_full[start:end].to(torch.bfloat16).contiguous(),
-        torch.cat(dgate_parts, dim=0),
+        dq,
+        dk_full[start:end].contiguous(),
+        dv_full[start:end].contiguous(),
+        dgate,
     )
 
 
@@ -1150,26 +666,24 @@ def trace(plan: Optional[CPAttentionPlan] = None) -> dict[str, Any]:
         ),
         "cp_gate": "kernel epilogue on owner rows (O5): y = (o->bf16->fp32) * sigmoid(g) -> bf16",
         "cp_backward_dkdv": (
-            "inner tree over 8 Q-head groups ((0+1)+(2+3))+((4+5)+(6+7)); outer tree over "
-            f"{CP_CANONICAL_QUERY_CHUNKS} canonical query chunks (same tree); rank roots exchanged "
-            "by rank-ordered all_gather and combined locally; one bf16 rounding"
+            f"kernel query-chunk rule: leaves (chunk c of {CP_CANONICAL_QUERY_CHUNKS} = "
+            "[floor(cT/8), floor((c+1)T/8)), Q-head group g); one kernel call per rank folds its "
+            "own chunks per group (other chunks exact zero leaves); rank roots (G,T,128) by "
+            "rank-ordered all_gather, canonical tree over ranks per group, canonical tree over "
+            "groups, one bf16 rounding == one-shot strict_gated_attention_bwd"
         ),
         "cp_backward_dq_dgate": "row-local on the owner rank (O5)",
         "reduction_order": (
-            "o5_kv_blocks_64_ascending_from_abs_0; canonical_two_level_tree_for_dkdv"
+            "o5_kv_blocks_64_ascending_from_abs_0; dkdv_query_chunk_tree_then_group_tree"
         ),
         "tile_config": {"BLOCK_N": BLOCK_N, "BLOCK_M": BLOCK_M},
         "forward_impl": FORWARD_IMPL,
-        "forward_is_fallback": _strict_fwd is None,
-        "tp_head_shard_launcher": (
-            "triton.gated_attention_fwd._gated_attention_fwd_kernel (token tiles)"
-            if _fwd_kernel_module is not None
-            else "FALLBACK:cp_attention.fallback_gated_attention_fwd"
-        ),
+        "forward_is_fallback": False,
         "backward_impl": BACKWARD_IMPL,
-        "backward_is_fallback": _strict_bwd_partials is None,
+        "backward_is_fallback": False,
+        "backward_kernel_id": _bwd.KERNEL_ID,
         "tree_impl": TREE_IMPL,
-        "fallback_fixed_gemm_rows": GQA_GROUP * FALLBACK_TILE_GROUP * BLOCK_M,
+        "tp_head_shards": "same wrapper with num_q_heads/num_kv_heads (16/1 at TP2)",
     }
     if plan is not None:
         record.update(plan.provenance())

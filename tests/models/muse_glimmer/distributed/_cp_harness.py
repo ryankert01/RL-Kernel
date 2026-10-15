@@ -28,6 +28,9 @@ import torch.multiprocessing as mp
 from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa
 
 LENGTHS = (2048, 4096, 8192)
+#: backward lengths add T % 8 != 0 (2100: canonical chunks of 262/263 rows, CP2/CP4 chunks of
+#: 1050/525) to exercise the query-chunk tail rule.
+BACKWARD_LENGTHS = (2048, 2100, 4096, 8192)
 WINDOW = 2048
 NUM_Q_HEADS = 32
 NUM_KV_HEADS = 2
@@ -257,7 +260,10 @@ def backward_parity_worker(
     lengths: Sequence[int],
     window: Optional[int],
 ) -> None:
-    """CP-``world`` autograd backward vs CP1: bitwise dq/dk/dv/dgate on the local rows."""
+    """CP-``world`` autograd backward vs CP1 AND vs the one-shot WS1 kernel
+    (``triton.gated_attention_bwd.strict_gated_attention_bwd``): bitwise dq/dk/dv/dgate rows."""
+    from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
+
     device = init_rank(rank, world, init_file)
     try:
         collective = cpa.make_cp_collective(None, device)
@@ -273,6 +279,20 @@ def backward_parity_worker(
             )
             y_ref.backward(inp["dy"])
             rows = slice(*plan.local_token_range(total))
+            # one-shot kernel on the full sequence (single launch, TP1, no CP plumbing)
+            cu = torch.tensor([0, total], dtype=torch.int32, device=device)
+            _y, o_full, lse_full = cpa.gated_attention_rows(
+                inp["q"], inp["k"], inp["v"], inp["gate"], inp["positions"], window=window
+            )
+            one_shot = bwd.strict_gated_attention_bwd(
+                inp["q"], inp["k"], inp["v"], inp["gate"], o_full, lse_full, inp["dy"], cu, cu,
+                inp["positions"], window=window,
+            )
+            for name, kernel_grad in zip(("q", "k", "v", "gate"), one_shot):
+                checks.append(
+                    compare(f"T={total} CP1 d{name} vs one-shot kernel", leaves[name].grad,
+                            kernel_grad)
+                )
             local = {n: inp[n][rows].clone().requires_grad_(True) for n in ("q", "k", "v", "gate")}
 
             def run() -> None:
@@ -287,9 +307,13 @@ def backward_parity_worker(
             timings[f"T={total} cp_fwd_bwd_ms"] = _sync_ms(run)
             first = {n: t.grad.clone() for n, t in local.items()}
             run()
-            for name in ("q", "k", "v", "gate"):
+            for name, kernel_grad in zip(("q", "k", "v", "gate"), one_shot):
                 checks.append(compare(f"T={total} d{name}", first[name], leaves[name].grad[rows]))
                 checks.append(compare(f"T={total} repeat d{name}", local[name].grad, first[name]))
+                checks.append(
+                    compare(f"T={total} CP{world} d{name} vs one-shot kernel", first[name],
+                            kernel_grad[rows])
+                )
         write_result(
             result_dir,
             rank,

@@ -32,6 +32,7 @@ if sys.path[:1] != [_REPO_ROOT]:
     sys.path.insert(0, _REPO_ROOT)
 
 from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa  # noqa: E402
+from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as _bwd  # noqa: E402
 
 _HQ, _HKV, _D = 32, 2, 128
 
@@ -153,8 +154,17 @@ def _run(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ).backward(inp["dy"][rows])
 
                 rec["cp_fwd_bwd_ms"] = _time_ms(fwd_bwd, warmup=1, iters=2)
-                for name in ("q", "k", "v", "gate"):
+                # the one-shot WS1 kernel on the full sequence (query-chunk rule, no CP plumbing)
+                cu = torch.tensor([0, total], dtype=torch.int32, device=device)
+                one_shot = _bwd.strict_gated_attention_bwd(
+                    inp["q"], inp["k"], inp["v"], inp["gate"], ref_o, ref_lse, inp["dy"], cu, cu,
+                    inp["positions"], window=window,
+                )
+                for name, kernel_grad in zip(("q", "k", "v", "gate"), one_shot):
                     rec[f"d{name}_mismatch"] = _mismatch(loc[name].grad, leaves[name].grad[rows])[0]
+                    rec[f"d{name}_vs_one_shot_mismatch"] = _mismatch(
+                        loc[name].grad, kernel_grad[rows]
+                    )[0]
             records.append(rec)
     if world > 1:
         gathered: list[Any] = [None] * world
@@ -168,7 +178,7 @@ def _run(args: argparse.Namespace) -> list[dict[str, Any]]:
 def _table(records: list[dict[str, Any]], backward: bool) -> str:
     head = ["layer", "T", "cp", "rank", "y!=", "o!=", "lse!=", "repeat", "fwd ms", "AG K/V ms"]
     if backward:
-        head += ["dq!=", "dk!=", "dv!=", "dgate!=", "fwd+bwd ms"]
+        head += ["dq!=", "dk!=", "dv!=", "dgate!=", "vs one-shot dk!=/dv!=", "fwd+bwd ms"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for r in sorted(records, key=lambda r: (r["layer"], r["T"], r["rank"])):
         row = [
@@ -180,7 +190,9 @@ def _table(records: list[dict[str, Any]], backward: bool) -> str:
         if backward:
             row += [
                 str(r["dq_mismatch"]), str(r["dk_mismatch"]), str(r["dv_mismatch"]),
-                str(r["dgate_mismatch"]), f"{r['cp_fwd_bwd_ms']:.0f}",
+                str(r["dgate_mismatch"]),
+                f"{r['dk_vs_one_shot_mismatch']}/{r['dv_vs_one_shot_mismatch']}",
+                f"{r['cp_fwd_bwd_ms']:.0f}",
             ]
         lines.append("| " + " | ".join(row) + " |")
     return "\n".join(lines)
@@ -210,7 +222,9 @@ def main() -> int:
         )
         if args.backward:
             all_ok = all_ok and all(
-                r[f"d{n}_mismatch"] == 0 for r in records for n in ("q", "k", "v", "gate")
+                r[f"d{n}_mismatch"] == 0 and r[f"d{n}_vs_one_shot_mismatch"] == 0
+                for r in records
+                for n in ("q", "k", "v", "gate")
             )
         print(f"\ntrace: {json.dumps(cpa.trace(), sort_keys=True)}")
         print(f"all bitwise: {all_ok}  ({time.perf_counter() - started:.1f}s)")

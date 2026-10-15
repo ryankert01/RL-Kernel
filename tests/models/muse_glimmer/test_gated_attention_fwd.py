@@ -394,6 +394,116 @@ def test_gqa_head_mapping(window):
     _assert_close_golden(o2, og, "gqa o")
 
 
+# ------------------------------------------------------------------------------- TP shards
+def _shard(t: torch.Tensor, lo: int, hi: int) -> torch.Tensor:
+    return t[:, lo:hi].contiguous()
+
+
+@LAYER_KINDS
+@pytest.mark.parametrize("tp", [2, 4, 8])
+def test_tp_head_shard_varlen_bitwise(window, tp):
+    """Rank r of TP t (16/1, 8/1, 4/1 heads) == the TP1 call's head slice, bit for bit.
+
+    Covers one-shot packed varlen (TOKEN and HEAD tiles, the HEAD tile holding a group of 8 or 4
+    in a 16-row tile at TP4/TP8) and chunked prefill.
+    """
+    lens = [5, 130, 2100, 1, 333]
+    seqs = [_inputs(n, seed=1200 + i) for i, n in enumerate(lens)]
+    q = torch.cat([s[0] for s in seqs])
+    k = torch.cat([s[1] for s in seqs])
+    v = torch.cat([s[2] for s in seqs])
+    gate = torch.cat([s[3] for s in seqs])
+    cu = _i32([0, *torch.tensor(lens).cumsum(0).tolist()])
+    pos = torch.cat([torch.arange(n, dtype=torch.int32, device=DEV) for n in lens])
+    hq_r = HQ // tp
+    for mode in ("token", "head"):
+        full = ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=window, tile_mode=mode
+        )
+        for r in range(tp):
+            kvh = (r * hq_r) // (HQ // HKV)
+            got = ga.strict_gated_attention_fwd_varlen(
+                _shard(q, r * hq_r, (r + 1) * hq_r), _shard(k, kvh, kvh + 1),
+                _shard(v, kvh, kvh + 1), _shard(gate, r * hq_r * D, (r + 1) * hq_r * D),
+                cu, cu, pos, window=window, tile_mode=mode, num_q_heads=hq_r, num_kv_heads=1,
+            )
+            cols = slice(r * hq_r * D, (r + 1) * hq_r * D)
+            want = (full[0][:, cols], full[1][:, cols], full[2][:, r * hq_r : (r + 1) * hq_r])
+            _assert_equal(got, want, f"TP{tp} rank {r} {mode} tiles")
+    # chunked prefill of the long sequence on rank 0's shard == its one-shot slice
+    n = 2100
+    q1, k1, v1, g1 = _inputs(n, seed=1300)
+    ref = _one_shot(q1, k1, v1, g1, window)
+    qs, gs = _shard(q1, 0, hq_r), _shard(g1, 0, hq_r * D)
+    ks, vs = _shard(k1, 0, 1), _shard(v1, 0, 1)
+    parts = []
+    for a, b in ((0, 2047), (2047, 2049), (2049, n)):
+        parts.append(
+            ga.strict_gated_attention_fwd_varlen(
+                qs[a:b].contiguous(), ks[:b].contiguous(), vs[:b].contiguous(),
+                gs[a:b].contiguous(), _i32([0, b - a]), _i32([0, b]),
+                torch.arange(a, b, dtype=torch.int32, device=DEV), window=window,
+                num_q_heads=hq_r, num_kv_heads=1,
+            )
+        )
+    got = tuple(torch.cat([p[i] for p in parts]) for i in range(3))
+    _assert_equal(got, (ref[0][:, : hq_r * D], ref[1][:, : hq_r * D], ref[2][:, :hq_r]),
+                  f"TP{tp} rank 0 chunked prefill")
+
+
+@LAYER_KINDS
+@pytest.mark.parametrize("tp", [2, 4, 8])
+def test_tp_head_shard_paged_decode_bitwise(window, tp):
+    """Paged decode batch on a replicated-KV shard cache == the TP1 decode's head slice."""
+    lens = [1, 17, 2049, 700]
+    seqs = [_inputs(n, seed=1400 + i) for i, n in enumerate(lens)]
+    hq_r = HQ // tp
+    full_cache = _new_cache(max(lens), num_seqs=len(lens))
+    for i, (_, k, v, _) in enumerate(seqs):
+        full_cache.append(i, k, v)
+        if window is not None:
+            full_cache.evict_window(i, window)
+    q = torch.cat([s[0][-1:] for s in seqs])
+    gate = torch.cat([s[3][-1:] for s in seqs])
+    cu_q = _i32(range(len(lens) + 1))
+    full = ga.strict_gated_attention_fwd_paged(
+        q, gate, full_cache.k_cache, full_cache.v_cache, full_cache.block_table,
+        full_cache.seq_lens, cu_q, window=window,
+    )
+    for r in range(tp):
+        kvh = (r * hq_r) // (HQ // HKV)
+        cache = PagedKVCache(
+            num_pages=full_cache.k_cache.shape[0], num_seqs=len(lens),
+            max_pages_per_seq=full_cache.max_pages_per_seq, device=DEV, num_kv_heads=1,
+        )
+        for i, (_, k, v, _) in enumerate(seqs):
+            cache.append(i, k[:, kvh : kvh + 1], v[:, kvh : kvh + 1])
+        got = ga.strict_gated_attention_fwd_paged(
+            _shard(q, r * hq_r, (r + 1) * hq_r), _shard(gate, r * hq_r * D, (r + 1) * hq_r * D),
+            cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens, cu_q,
+            window=window, num_q_heads=hq_r, num_kv_heads=1,
+        )
+        cols = slice(r * hq_r * D, (r + 1) * hq_r * D)
+        want = (full[0][:, cols], full[1][:, cols], full[2][:, r * hq_r : (r + 1) * hq_r])
+        _assert_equal(got, want, f"TP{tp} rank {r} paged decode")
+
+
+def test_rejects_unsupported_head_geometry():
+    q, k, v, gate = _inputs(8, seed=1)
+    cu = _i32([0, 8])
+    pos = torch.arange(8, dtype=torch.int32, device=DEV)
+    with pytest.raises(ValueError, match="TP shard"):  # 16 Q heads over 2 KV heads: not a shard
+        ga.strict_gated_attention_fwd_varlen(
+            q[:, :16].contiguous(), k, v, gate[:, : 16 * D].contiguous(), cu, cu, pos,
+            window=None, num_q_heads=16, num_kv_heads=2,
+        )
+    with pytest.raises(ValueError, match=r"q must be \(Tq, 8, 128\)"):  # declared != actual
+        ga.strict_gated_attention_fwd_varlen(
+            q, k[:, :1].contiguous(), v[:, :1].contiguous(), gate, cu, cu, pos, window=None,
+            num_q_heads=8, num_kv_heads=1,
+        )
+
+
 # ------------------------------------------------------------------------------- real shapes
 @LAYER_KINDS
 def test_real_shape_prefill_4096(window):
@@ -480,6 +590,7 @@ def test_g5_trace():
     assert t1["tile_config"]["token_tile"]["BLOCK_M"] == 64
     assert t1["tile_config"]["head_tile"]["BLOCK_M"] == 16
     assert t1["autotune"] is False and t1["tf32"] is False
+    assert [32, 2] in t1["head_geometries"] and [4, 1] in t1["head_geometries"]
     json.dumps(t1)  # serializable
 
 

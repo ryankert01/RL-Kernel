@@ -17,6 +17,13 @@ Rows covered: ``global_gated_attention``, ``local_gated_attention_train`` and
 The deterministic backward and the ``torch.autograd.Function`` live in a sibling module and
 import the three functions above by name.
 
+Head counts (tensor parallelism): every wrapper takes ``num_q_heads`` / ``num_kv_heads``
+(defaults 32 / 2 = the full Muse-Glimmer geometry, so existing callers are unchanged). A TP rank
+passes its shard: TP2 ``16/1``, TP4 ``8/1`` and TP8 ``4/1`` (KV head replicated). Only the
+geometries in :data:`SUPPORTED_HEAD_GEOMETRIES` are accepted (fail closed). Heads never interact
+in O5, so a rank's ``(y, o, lse)`` equal the matching slices of the full call bit for bit
+(``test_gated_attention_fwd.py::test_tp_head_shard_*``).
+
 Numerics are defined in ``docs/contracts/muse-glimmer-30b-strict-contract.md`` section O5 and
 restated in :mod:`rl_engine.models.muse_glimmer.triton.gated_attention_fwd`. Summary of the
 reduction order and cast points (identical in kernel and golden):
@@ -43,7 +50,9 @@ from rl_engine.models.muse_glimmer.triton.gated_attention_fwd import (
     NUM_WARPS_HEAD,
     NUM_WARPS_TOKEN,
     PAGE_SIZE,
+    SUPPORTED_HEAD_GEOMETRIES,
     _gated_attention_fwd_kernel,
+    check_head_geometry,
 )
 
 SLIDING_WINDOW = 2048
@@ -63,19 +72,23 @@ def _check(cond: bool, msg: str) -> None:
 
 
 def _validate_common(
-    q: torch.Tensor, gate_logits: torch.Tensor, cu_seqlens_q: torch.Tensor, window: int | None
+    q: torch.Tensor,
+    gate_logits: torch.Tensor,
+    cu_seqlens_q: torch.Tensor,
+    window: int | None,
+    hq: int,
 ) -> int:
     _check(q.is_cuda, "q must be a CUDA tensor")
     _check(q.dtype == torch.bfloat16, f"q must be bf16, got {q.dtype}")
     _check(
-        q.dim() == 3 and q.shape[1] == NUM_Q_HEADS and q.shape[2] == HEAD_DIM,
-        f"q must be (Tq, {NUM_Q_HEADS}, {HEAD_DIM}), got {tuple(q.shape)}",
+        q.dim() == 3 and q.shape[1] == hq and q.shape[2] == HEAD_DIM,
+        f"q must be (Tq, {hq}, {HEAD_DIM}) for num_q_heads={hq}, got {tuple(q.shape)}",
     )
     _check(q.is_contiguous(), "q must be contiguous")
     _check(gate_logits.dtype == torch.bfloat16, "gate_logits must be bf16")
     _check(
-        gate_logits.shape == (q.shape[0], NUM_Q_HEADS * HEAD_DIM),
-        f"gate_logits must be (Tq, {NUM_Q_HEADS * HEAD_DIM}), got {tuple(gate_logits.shape)}",
+        gate_logits.shape == (q.shape[0], hq * HEAD_DIM),
+        f"gate_logits must be (Tq, {hq * HEAD_DIM}), got {tuple(gate_logits.shape)}",
     )
     _check(gate_logits.is_contiguous() and gate_logits.device == q.device, "gate_logits layout")
     _check(
@@ -120,20 +133,23 @@ def _launch(
     window: int | None,
     paged: bool,
     tile_mode: str,
+    hq: int,
+    hkv: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     tq = q.shape[0]
-    y = torch.empty((tq, NUM_Q_HEADS * HEAD_DIM), dtype=torch.bfloat16, device=q.device)
+    y = torch.empty((tq, hq * HEAD_DIM), dtype=torch.bfloat16, device=q.device)
     o = torch.empty_like(y)
-    lse = torch.empty((tq, NUM_Q_HEADS), dtype=torch.float32, device=q.device)
+    lse = torch.empty((tq, hq), dtype=torch.float32, device=q.device)
     if tq == 0:
         return y, o, lse
 
     local = window is not None
     if tile_mode == "head":
-        grid = (max_seqlen_q, num_seqs, NUM_KV_HEADS)
+        # BLOCK_M stays 16 for every shard (group 16/8/4): same tile, same per-row bits
+        grid = (max_seqlen_q, num_seqs, hkv)
         block_m, num_warps = BLOCK_M_HEAD, NUM_WARPS_HEAD
     else:
-        grid = (triton_cdiv(max_seqlen_q, BLOCK_M_TOKEN), num_seqs, NUM_Q_HEADS)
+        grid = (triton_cdiv(max_seqlen_q, BLOCK_M_TOKEN), num_seqs, hq)
         block_m, num_warps = BLOCK_M_TOKEN, NUM_WARPS_TOKEN
 
     _gated_attention_fwd_kernel[grid](
@@ -152,8 +168,8 @@ def _launch(
         float(SOFTMAX_SCALE),
         int(window) if local else 0,
         int(max_pages),
-        H_Q=NUM_Q_HEADS,
-        H_KV=NUM_KV_HEADS,
+        H_Q=hq,
+        H_KV=hkv,
         D=HEAD_DIM,
         PAGE=PAGE_SIZE,
         BLOCK_M=block_m,
@@ -183,14 +199,16 @@ def strict_gated_attention_fwd_varlen(
     window: int | None,
     max_seqlen_q: int | None = None,
     tile_mode: str | None = None,
+    num_q_heads: int = NUM_Q_HEADS,
+    num_kv_heads: int = NUM_KV_HEADS,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Strict gated attention over packed sequences (training / prefill / chunked prefill).
 
     Args:
-        q: ``(Tq, 32, 128)`` bf16 queries (after qk-norm, scale and RoPE).
-        k, v: ``(Tk, 2, 128)`` bf16 keys/values. Keys of sequence ``i`` are
+        q: ``(Tq, H_Q, 128)`` bf16 queries (after qk-norm, scale and RoPE); ``H_Q = 32`` at TP1.
+        k, v: ``(Tk, H_KV, 128)`` bf16 keys/values. Keys of sequence ``i`` are
             ``k[cu_seqlens_k[i]:cu_seqlens_k[i+1]]`` at absolute positions ``0..len_k-1``.
-        gate_logits: ``(Tq, 4096)`` bf16 output of the attention gate projection of the
+        gate_logits: ``(Tq, H_Q*128)`` bf16 output of the attention gate projection of the
             layer input (input_layernorm output).
         cu_seqlens_q, cu_seqlens_k: ``(B+1,)`` int32 packed offsets.
         q_pos: ``(Tq,)`` int32 absolute positions of the queries (chunked prefill: the queries
@@ -198,17 +216,19 @@ def strict_gated_attention_fwd_varlen(
         window: ``None`` for a global (full causal) layer, ``2048`` for a local layer.
         max_seqlen_q: optional host-side ``max(len_q)`` (avoids one device sync).
         tile_mode: ``"token"`` / ``"head"`` to force a tile shape; default picks by length.
+        num_q_heads, num_kv_heads: per-rank head counts (``SUPPORTED_HEAD_GEOMETRIES``).
 
     Returns:
-        ``(y, o, lse)``: gated output bf16 ``(Tq, 4096)``, pre-gate output bf16 ``(Tq, 4096)``,
-        ``lse = m + log(l)`` fp32 ``(Tq, 32)``.
+        ``(y, o, lse)``: gated output bf16 ``(Tq, H_Q*128)``, pre-gate output bf16
+        ``(Tq, H_Q*128)``, ``lse = m + log(l)`` fp32 ``(Tq, H_Q)``.
     """
-    num_seqs = _validate_common(q, gate_logits, cu_seqlens_q, window)
+    hq, hkv = check_head_geometry(num_q_heads, num_kv_heads)
+    num_seqs = _validate_common(q, gate_logits, cu_seqlens_q, window, hq)
     for name, t in (("k", k), ("v", v)):
         _check(t.dtype == torch.bfloat16, f"{name} must be bf16")
         _check(
-            t.dim() == 3 and t.shape[1] == NUM_KV_HEADS and t.shape[2] == HEAD_DIM,
-            f"{name} must be (Tk, {NUM_KV_HEADS}, {HEAD_DIM}), got {tuple(t.shape)}",
+            t.dim() == 3 and t.shape[1] == hkv and t.shape[2] == HEAD_DIM,
+            f"{name} must be (Tk, {hkv}, {HEAD_DIM}), got {tuple(t.shape)}",
         )
         _check(t.is_contiguous() and t.device == q.device, f"{name} layout/device")
     _check(k.shape == v.shape, "k and v must have the same shape")
@@ -240,6 +260,8 @@ def strict_gated_attention_fwd_varlen(
         window=window,
         paged=False,
         tile_mode=mode,
+        hq=hq,
+        hkv=hkv,
     )
 
 
@@ -274,13 +296,15 @@ def strict_gated_attention_fwd_paged(
     window: int | None,
     max_seqlen_q: int | None = None,
     tile_mode: str | None = None,
+    num_q_heads: int = NUM_Q_HEADS,
+    num_kv_heads: int = NUM_KV_HEADS,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Strict gated attention reading K/V from a paged cache (rollout prefill / decode).
 
     Args:
         q, gate_logits: as in :func:`strict_gated_attention_fwd_varlen`; the queries of
             sequence ``i`` are its last ``len_q_i`` positions (decode: ``len_q_i == 1``).
-        k_cache, v_cache: ``(num_pages, 16, 2, 128)`` bf16.
+        k_cache, v_cache: ``(num_pages, 16, H_KV, 128)`` bf16 (``H_KV = 2`` at TP1).
         block_table: ``(B, max_pages)`` int32 physical page per logical page; ``-1`` marks a
             page that was never allocated or was evicted. Evicted pages are never read: the
             kernel masks every key at position ``<= q_pos - window`` before it touches the
@@ -288,16 +312,18 @@ def strict_gated_attention_fwd_paged(
         seq_lens: ``(B,)`` int32 total keys per sequence including the new tokens, which the
             caller has already written to the cache.
         window: ``None`` (global) or ``2048`` (local).
+        num_q_heads, num_kv_heads: per-rank head counts (``SUPPORTED_HEAD_GEOMETRIES``).
 
     Returns:
         ``(y, o, lse)`` exactly as the varlen path, bitwise.
     """
-    num_seqs = _validate_common(q, gate_logits, cu_seqlens_q, window)
+    hq, hkv = check_head_geometry(num_q_heads, num_kv_heads)
+    num_seqs = _validate_common(q, gate_logits, cu_seqlens_q, window, hq)
     for name, t in (("k_cache", k_cache), ("v_cache", v_cache)):
         _check(t.dtype == torch.bfloat16, f"{name} must be bf16")
         _check(
-            t.dim() == 4 and tuple(t.shape[1:]) == (PAGE_SIZE, NUM_KV_HEADS, HEAD_DIM),
-            f"{name} must be (num_pages, {PAGE_SIZE}, {NUM_KV_HEADS}, {HEAD_DIM}), "
+            t.dim() == 4 and tuple(t.shape[1:]) == (PAGE_SIZE, hkv, HEAD_DIM),
+            f"{name} must be (num_pages, {PAGE_SIZE}, {hkv}, {HEAD_DIM}), "
             f"got {tuple(t.shape)}",
         )
         _check(t.is_contiguous() and t.device == q.device, f"{name} layout/device")
@@ -333,6 +359,8 @@ def strict_gated_attention_fwd_paged(
         window=window,
         paged=True,
         tile_mode=mode,
+        hq=hq,
+        hkv=hkv,
     )
 
 
@@ -462,7 +490,13 @@ def trace() -> dict[str, Any]:
             "o = div_rn(acc, l) fp32 -> bf16",
             "y = (o_bf16->fp32) * sigmoid(g->fp32) fp32 -> bf16 (elementwise over 4096)",
         ],
-        "gqa": "q head h reads kv head h // 16",
+        "gqa": "q head h reads kv head h // 16 (rank-local: h_local // (H_Q // H_KV))",
+        "head_geometries": [list(g) for g in SUPPORTED_HEAD_GEOMETRIES],
+        "head_tile_rows": (
+            "BLOCK_M=16 rows hold one GQA group: 16 at TP1/TP2, 8 at TP4, 4 at TP8; unused "
+            "rows masked (never stored)"
+        ),
+        "gate_sigmoid": "sigmoid_rn: div_rn(1, 1 + tl.exp(-g)) fp32 (shared with the backward)",
         "tile_config": {
             "BLOCK_N": BLOCK_N,
             "token_tile": {"BLOCK_M": BLOCK_M_TOKEN, "num_warps": NUM_WARPS_TOKEN},
@@ -484,6 +518,8 @@ __all__ = [
     "HEAD_TILE_MAX_Q",
     "SLIDING_WINDOW",
     "SOFTMAX_SCALE",
+    "SUPPORTED_HEAD_GEOMETRIES",
+    "check_head_geometry",
     "forward_fp32",
     "gated_attention_forward_fp32",
     "paged_query_positions",

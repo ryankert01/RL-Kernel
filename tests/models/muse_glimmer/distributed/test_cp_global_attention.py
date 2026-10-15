@@ -145,6 +145,6 @@ def test_cp_global_backward_is_bitwise_against_cp1(cp, tmp_path):
     if harness.visible_gpus() < cp:
         pytest.skip(f"requires {cp} CUDA GPUs")
     records = harness.spawn_and_collect(
-        cp, harness.backward_parity_worker, tmp_path, harness.LENGTHS, None
+        cp, harness.backward_parity_worker, tmp_path, harness.BACKWARD_LENGTHS, None
     )
     harness.assert_all_equal(records)
