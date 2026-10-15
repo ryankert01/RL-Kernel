@@ -394,7 +394,9 @@ class StrictRolloutEngine:
         folder = write_peft_adapter(state_dict, root / sha256[:16])
         self._native_lora_dir = str(folder)
         self._lora_int_id = getattr(self, "_lora_int_id", 0) + 1
-        self._native_lora = LoRARequest(f"museglimmer-{sha256[:12]}", self._lora_int_id, str(folder))
+        self._native_lora = LoRARequest(
+            f"museglimmer-{sha256[:12]}", self._lora_int_id, str(folder)
+        )
 
     # ------------------------------------------------------------------------------------------
     def provenance(self) -> dict[str, Any]:

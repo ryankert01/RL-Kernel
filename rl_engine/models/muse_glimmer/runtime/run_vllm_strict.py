@@ -470,8 +470,14 @@ def main(argv: list[str] | None = None) -> int:
         "mode": "strict" if strict else "native",
         "tp": args.tp,
         "commit": _git_head(),
-        "command": " ".join([os.path.basename(sys.executable), "-m", __spec__.name if __spec__
-                             else "run_vllm_strict", *(argv if argv is not None else sys.argv[1:])]),
+        "command": " ".join(
+            [
+                os.path.basename(sys.executable),
+                "-m",
+                __spec__.name if __spec__ else "run_vllm_strict",
+                *(argv if argv is not None else sys.argv[1:]),
+            ]
+        ),
         "env": _env_record(),
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
@@ -500,7 +506,9 @@ def main(argv: list[str] | None = None) -> int:
         else "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)"
     )
     try:
-        ids, prompts = load_prompts(args.prompt_file, tokenizer, args.chat_template, args.xrt_filter)
+        ids, prompts = load_prompts(
+            args.prompt_file, tokenizer, args.chat_template, args.xrt_filter
+        )
         result["prompt_ids"] = ids
         result["prompt_token_ids"] = prompts
         temperatures = [float(t) for t in args.temperatures.split(",") if t.strip()]

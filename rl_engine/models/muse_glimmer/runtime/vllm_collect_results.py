@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 RL-Kernel Contributors
 
-"""Collect the ``run_vllm_strict.py`` outputs into ``reports/muse_glimmer_poc/data/vllm_runtime.json``.
+"""Collect ``run_vllm_strict.py`` outputs into ``reports/muse_glimmer_poc/data/vllm_runtime.json``.
 
 Usage::
 
@@ -204,7 +204,7 @@ def collect(
     result: dict[str, Any] = {
         "row": "vllm_runtime_adapter",
         "schema": "muse_glimmer_vllm_runtime_results_v1",
-        "commits_measured": sorted({r.get("commit") for r in runs if r.get("commit")}),
+        "commits_measured": sorted({r.get("commit") for r in runs + bench_runs if r.get("commit")}),
         "env": next((r["env"] for r in runs if r.get("env")), {}),
         "commands": [r["command"] for r in runs + bench_runs],
         "runs": [
@@ -278,9 +278,8 @@ def collect(
         )
     for ref_path in references or []:
         ref = _load(ref_path)
-        label = "".join(
-            c for c in ref.get("backend", ref_path.name).split("mode=")[-1] if c.isalnum() or c == "_"
-        )
+        raw_label = ref.get("backend", ref_path.name).split("mode=")[-1]
+        label = "".join(c for c in raw_label if c.isalnum() or c == "_")
         xrt[f"reference_chain_{label}"] = {
             k: v for k, v in _xrt_summary(ref).items() if k != "logprobs_per_sequence"
         }

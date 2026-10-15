@@ -189,7 +189,8 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
     bf = torch.bfloat16
 
     def rnd(*shape):
-        return torch.randn(*shape, generator=g, device="cpu", dtype=torch.float32).to(device=device, dtype=bf)
+        cpu = torch.randn(*shape, generator=g, device="cpu", dtype=torch.float32)
+        return cpu.to(device=device, dtype=bf)
 
     def expect(cond: bool, message: str) -> None:
         if not cond:
@@ -210,7 +211,10 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         expect(p.shape == (4, 256) and p.dtype == torch.float32, "det_gemm_partial")
 
     def probe_tree(ops: StrictOps) -> None:
-        parts = [torch.randn(3, generator=g, device="cpu", dtype=torch.float32).to(device) for _ in range(8)]
+        parts = [
+            torch.randn(3, generator=g, device="cpu", dtype=torch.float32).to(device)
+            for _ in range(8)
+        ]
         expect(ops.combine_tree(parts).shape == (3,), "combine_tree")
 
     def probe_norms(ops: StrictOps) -> None:
