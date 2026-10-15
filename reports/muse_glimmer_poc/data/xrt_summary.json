@@ -1,0 +1,4488 @@
+{
+ "schema": "muse_glimmer_xrt_summary_v1",
+ "n_scored_tokens": 933,
+ "files": {
+  "megatron native tp1": {
+   "file": "xrt_megatron_native_tp1.json",
+   "runtime": "megatron_bridge",
+   "mode": "native",
+   "tp": 1,
+   "backend": "megatron_bridge_te_native",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "0da5d51c65551193a720005128e2c1941531993ad3f4beac3eea3419af7db788"
+  },
+  "megatron native tp2": {
+   "file": "xrt_megatron_native_tp2.json",
+   "runtime": "megatron_bridge",
+   "mode": "native",
+   "tp": 2,
+   "backend": "megatron_bridge_te_native",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "e0d17a3a800bf4b7037c3b3d0645cad9442f8cbd04ee649dee4127e05364a9d0"
+  },
+  "megatron strict tp1": {
+   "file": "xrt_megatron_strict_tp1.json",
+   "runtime": "megatron_bridge",
+   "mode": "strict",
+   "tp": 1,
+   "backend": "triton_strict",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+  },
+  "megatron strict tp2": {
+   "file": "xrt_megatron_strict_tp2.json",
+   "runtime": "megatron_bridge",
+   "mode": "strict",
+   "tp": 2,
+   "backend": "triton_strict",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+  },
+  "reference golden": {
+   "file": "xrt_reference_golden.json",
+   "runtime": "reference",
+   "mode": "train",
+   "tp": 1,
+   "backend": "golden",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "55f82df9b671536b693a8624c2e4b694292afab66c74075e86351cd559574f99"
+  },
+  "reference hf bf16": {
+   "file": "xrt_reference_hf_bf16.json",
+   "runtime": "hf",
+   "mode": "native_bf16",
+   "tp": 1,
+   "backend": "transformers_sdpa",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "270e68f58c939b53e06e5736ae380c34c6a4e1c8ca564d5f9f6179b41373f588"
+  },
+  "reference triton": {
+   "file": "xrt_reference_triton.json",
+   "runtime": "reference",
+   "mode": "train",
+   "tp": 1,
+   "backend": "triton",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+  },
+  "vllm native lora tp1": {
+   "file": "xrt_vllm_native_lora_tp1.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "native",
+   "tp": 1,
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "strict_group": null,
+   "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "n_tokens": 933,
+   "sha256": "1fd0f57d1b55074777f1ad1bb6354c54c984893fb5b912143765adb828b72827"
+  },
+  "vllm native tp1": {
+   "file": "xrt_vllm_native_tp1.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "native",
+   "tp": 1,
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "5ca8acdd645307f7f8dfa3342ee1bb2be587ee1d8f772cad1d43c9e962bd5823"
+  },
+  "vllm native tp2": {
+   "file": "xrt_vllm_native_tp2.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "native",
+   "tp": 2,
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "strict_group": null,
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "9007ba93778a94daa19ef2c8171a5fc3eba0fbe1d6dcad85c536bb32217a25f2"
+  },
+  "vllm strict lora tp1": {
+   "file": "xrt_vllm_strict_lora_tp1.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 1,
+   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "n_tokens": 933,
+   "sha256": "c61000bb77f772221a27f5068fb090f1818e997dce823e052d3caa6703a26b54"
+  },
+  "vllm strict lora tp2": {
+   "file": "xrt_vllm_strict_lora_tp2.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 2,
+   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "n_tokens": 933,
+   "sha256": "c61000bb77f772221a27f5068fb090f1818e997dce823e052d3caa6703a26b54"
+  },
+  "vllm strict tp1": {
+   "file": "xrt_vllm_strict_tp1.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 1,
+   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+  },
+  "vllm strict tp2": {
+   "file": "xrt_vllm_strict_tp2.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 2,
+   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+  }
+ },
+ "strict_labels": [
+  "megatron strict tp1",
+  "megatron strict tp2",
+  "reference triton",
+  "vllm strict tp1",
+  "vllm strict tp2",
+  "vllm strict lora tp1",
+  "vllm strict lora tp2"
+ ],
+ "strict_groups": {
+  "base": [
+   "megatron strict tp1",
+   "megatron strict tp2",
+   "reference triton",
+   "vllm strict tp1",
+   "vllm strict tp2"
+  ],
+  "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5": [
+   "vllm strict lora tp1",
+   "vllm strict lora tp2"
+  ]
+ },
+ "strict_all_equal": true,
+ "matrix": {
+  "megatron native tp1": {
+   "megatron native tp1": 0,
+   "megatron native tp2": 927,
+   "megatron strict tp1": 932,
+   "megatron strict tp2": 932,
+   "reference golden": 932,
+   "reference hf bf16": 930,
+   "reference triton": 932,
+   "vllm native lora tp1": 930,
+   "vllm native tp1": 922,
+   "vllm native tp2": 930,
+   "vllm strict lora tp1": 932,
+   "vllm strict lora tp2": 932,
+   "vllm strict tp1": 932,
+   "vllm strict tp2": 932
+  },
+  "megatron native tp2": {
+   "megatron native tp1": 927,
+   "megatron native tp2": 0,
+   "megatron strict tp1": 933,
+   "megatron strict tp2": 933,
+   "reference golden": 933,
+   "reference hf bf16": 926,
+   "reference triton": 933,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 926,
+   "vllm native tp2": 929,
+   "vllm strict lora tp1": 933,
+   "vllm strict lora tp2": 933,
+   "vllm strict tp1": 933,
+   "vllm strict tp2": 933
+  },
+  "megatron strict tp1": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "reference golden": 901,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 924,
+   "vllm strict lora tp2": 924,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0
+  },
+  "megatron strict tp2": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "reference golden": 901,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 924,
+   "vllm strict lora tp2": 924,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0
+  },
+  "reference golden": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 901,
+   "megatron strict tp2": 901,
+   "reference golden": 0,
+   "reference hf bf16": 933,
+   "reference triton": 901,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 916,
+   "vllm strict lora tp2": 916,
+   "vllm strict tp1": 901,
+   "vllm strict tp2": 901
+  },
+  "reference hf bf16": {
+   "megatron native tp1": 930,
+   "megatron native tp2": 926,
+   "megatron strict tp1": 933,
+   "megatron strict tp2": 933,
+   "reference golden": 933,
+   "reference hf bf16": 0,
+   "reference triton": 933,
+   "vllm native lora tp1": 932,
+   "vllm native tp1": 925,
+   "vllm native tp2": 922,
+   "vllm strict lora tp1": 933,
+   "vllm strict lora tp2": 933,
+   "vllm strict tp1": 933,
+   "vllm strict tp2": 933
+  },
+  "reference triton": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "reference golden": 901,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 924,
+   "vllm strict lora tp2": 924,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0
+  },
+  "vllm native lora tp1": {
+   "megatron native tp1": 930,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 933,
+   "megatron strict tp2": 933,
+   "reference golden": 933,
+   "reference hf bf16": 932,
+   "reference triton": 933,
+   "vllm native lora tp1": 0,
+   "vllm native tp1": 931,
+   "vllm native tp2": 930,
+   "vllm strict lora tp1": 933,
+   "vllm strict lora tp2": 933,
+   "vllm strict tp1": 933,
+   "vllm strict tp2": 933
+  },
+  "vllm native tp1": {
+   "megatron native tp1": 922,
+   "megatron native tp2": 926,
+   "megatron strict tp1": 933,
+   "megatron strict tp2": 933,
+   "reference golden": 933,
+   "reference hf bf16": 925,
+   "reference triton": 933,
+   "vllm native lora tp1": 931,
+   "vllm native tp1": 0,
+   "vllm native tp2": 921,
+   "vllm strict lora tp1": 933,
+   "vllm strict lora tp2": 933,
+   "vllm strict tp1": 933,
+   "vllm strict tp2": 933
+  },
+  "vllm native tp2": {
+   "megatron native tp1": 930,
+   "megatron native tp2": 929,
+   "megatron strict tp1": 933,
+   "megatron strict tp2": 933,
+   "reference golden": 933,
+   "reference hf bf16": 922,
+   "reference triton": 933,
+   "vllm native lora tp1": 930,
+   "vllm native tp1": 921,
+   "vllm native tp2": 0,
+   "vllm strict lora tp1": 933,
+   "vllm strict lora tp2": 933,
+   "vllm strict tp1": 933,
+   "vllm strict tp2": 933
+  },
+  "vllm strict lora tp1": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 924,
+   "megatron strict tp2": 924,
+   "reference golden": 916,
+   "reference hf bf16": 933,
+   "reference triton": 924,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 0,
+   "vllm strict lora tp2": 0,
+   "vllm strict tp1": 924,
+   "vllm strict tp2": 924
+  },
+  "vllm strict lora tp2": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 924,
+   "megatron strict tp2": 924,
+   "reference golden": 916,
+   "reference hf bf16": 933,
+   "reference triton": 924,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 0,
+   "vllm strict lora tp2": 0,
+   "vllm strict tp1": 924,
+   "vllm strict tp2": 924
+  },
+  "vllm strict tp1": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "reference golden": 901,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 924,
+   "vllm strict lora tp2": 924,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0
+  },
+  "vllm strict tp2": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "reference golden": 901,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 924,
+   "vllm strict lora tp2": 924,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0
+  }
+ },
+ "max_abs": {
+  "megatron native tp1": {
+   "megatron native tp1": 0.0,
+   "megatron native tp2": 0.37395429611206055,
+   "megatron strict tp1": 0.3140144348144531,
+   "megatron strict tp2": 0.3140144348144531,
+   "reference golden": 0.30080318450927734,
+   "reference hf bf16": 0.4769010543823242,
+   "reference triton": 0.3140144348144531,
+   "vllm native lora tp1": 1.1677207946777344,
+   "vllm native tp1": 0.3125,
+   "vllm native tp2": 0.290648877620697,
+   "vllm strict lora tp1": 1.1216411590576172,
+   "vllm strict lora tp2": 1.1216411590576172,
+   "vllm strict tp1": 0.3140144348144531,
+   "vllm strict tp2": 0.3140144348144531
+  },
+  "megatron native tp2": {
+   "megatron native tp1": 0.37395429611206055,
+   "megatron native tp2": 0.0,
+   "megatron strict tp1": 0.28242063522338867,
+   "megatron strict tp2": 0.28242063522338867,
+   "reference golden": 0.29044532775878906,
+   "reference hf bf16": 0.42457008361816406,
+   "reference triton": 0.28242063522338867,
+   "vllm native lora tp1": 1.1445980072021484,
+   "vllm native tp1": 0.3045315742492676,
+   "vllm native tp2": 0.24958372116088867,
+   "vllm strict lora tp1": 1.0985183715820312,
+   "vllm strict lora tp2": 1.0985183715820312,
+   "vllm strict tp1": 0.28242063522338867,
+   "vllm strict tp2": 0.28242063522338867
+  },
+  "megatron strict tp1": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "vllm native lora tp1": 1.1228961944580078,
+   "vllm native tp1": 0.19246435165405273,
+   "vllm native tp2": 0.21176385879516602,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0
+  },
+  "megatron strict tp2": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "vllm native lora tp1": 1.1228961944580078,
+   "vllm native tp1": 0.19246435165405273,
+   "vllm native tp2": 0.21176385879516602,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0
+  },
+  "reference golden": {
+   "megatron native tp1": 0.30080318450927734,
+   "megatron native tp2": 0.29044532775878906,
+   "megatron strict tp1": 0.21625804901123047,
+   "megatron strict tp2": 0.21625804901123047,
+   "reference golden": 0.0,
+   "reference hf bf16": 0.2458171844482422,
+   "reference triton": 0.21625804901123047,
+   "vllm native lora tp1": 1.0560073852539062,
+   "vllm native tp1": 0.29241371154785156,
+   "vllm native tp2": 0.25500059127807617,
+   "vllm strict lora tp1": 1.009927749633789,
+   "vllm strict lora tp2": 1.009927749633789,
+   "vllm strict tp1": 0.21625804901123047,
+   "vllm strict tp2": 0.21625804901123047
+  },
+  "reference hf bf16": {
+   "megatron native tp1": 0.4769010543823242,
+   "megatron native tp2": 0.42457008361816406,
+   "megatron strict tp1": 0.39235591888427734,
+   "megatron strict tp2": 0.39235591888427734,
+   "reference golden": 0.2458171844482422,
+   "reference hf bf16": 0.0,
+   "reference triton": 0.39235591888427734,
+   "vllm native lora tp1": 1.1291141510009766,
+   "vllm native tp1": 0.3546104431152344,
+   "vllm native tp2": 0.3827390670776367,
+   "vllm strict lora tp1": 1.0830345153808594,
+   "vllm strict lora tp2": 1.0830345153808594,
+   "vllm strict tp1": 0.39235591888427734,
+   "vllm strict tp2": 0.39235591888427734
+  },
+  "reference triton": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "vllm native lora tp1": 1.1228961944580078,
+   "vllm native tp1": 0.19246435165405273,
+   "vllm native tp2": 0.21176385879516602,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0
+  },
+  "vllm native lora tp1": {
+   "megatron native tp1": 1.1677207946777344,
+   "megatron native tp2": 1.1445980072021484,
+   "megatron strict tp1": 1.1228961944580078,
+   "megatron strict tp2": 1.1228961944580078,
+   "reference golden": 1.0560073852539062,
+   "reference hf bf16": 1.1291141510009766,
+   "reference triton": 1.1228961944580078,
+   "vllm native lora tp1": 0.0,
+   "vllm native tp1": 1.1288795471191406,
+   "vllm native tp2": 1.1209526062011719,
+   "vllm strict lora tp1": 0.2954893112182617,
+   "vllm strict lora tp2": 0.2954893112182617,
+   "vllm strict tp1": 1.1228961944580078,
+   "vllm strict tp2": 1.1228961944580078
+  },
+  "vllm native tp1": {
+   "megatron native tp1": 0.3125,
+   "megatron native tp2": 0.3045315742492676,
+   "megatron strict tp1": 0.19246435165405273,
+   "megatron strict tp2": 0.19246435165405273,
+   "reference golden": 0.29241371154785156,
+   "reference hf bf16": 0.3546104431152344,
+   "reference triton": 0.19246435165405273,
+   "vllm native lora tp1": 1.1288795471191406,
+   "vllm native tp1": 0.0,
+   "vllm native tp2": 0.2495102882385254,
+   "vllm strict lora tp1": 1.0827999114990234,
+   "vllm strict lora tp2": 1.0827999114990234,
+   "vllm strict tp1": 0.19246435165405273,
+   "vllm strict tp2": 0.19246435165405273
+  },
+  "vllm native tp2": {
+   "megatron native tp1": 0.290648877620697,
+   "megatron native tp2": 0.24958372116088867,
+   "megatron strict tp1": 0.21176385879516602,
+   "megatron strict tp2": 0.21176385879516602,
+   "reference golden": 0.25500059127807617,
+   "reference hf bf16": 0.3827390670776367,
+   "reference triton": 0.21176385879516602,
+   "vllm native lora tp1": 1.1209526062011719,
+   "vllm native tp1": 0.2495102882385254,
+   "vllm native tp2": 0.0,
+   "vllm strict lora tp1": 1.0748729705810547,
+   "vllm strict lora tp2": 1.0748729705810547,
+   "vllm strict tp1": 0.21176385879516602,
+   "vllm strict tp2": 0.21176385879516602
+  },
+  "vllm strict lora tp1": {
+   "megatron native tp1": 1.1216411590576172,
+   "megatron native tp2": 1.0985183715820312,
+   "megatron strict tp1": 1.0768165588378906,
+   "megatron strict tp2": 1.0768165588378906,
+   "reference golden": 1.009927749633789,
+   "reference hf bf16": 1.0830345153808594,
+   "reference triton": 1.0768165588378906,
+   "vllm native lora tp1": 0.2954893112182617,
+   "vllm native tp1": 1.0827999114990234,
+   "vllm native tp2": 1.0748729705810547,
+   "vllm strict lora tp1": 0.0,
+   "vllm strict lora tp2": 0.0,
+   "vllm strict tp1": 1.0768165588378906,
+   "vllm strict tp2": 1.0768165588378906
+  },
+  "vllm strict lora tp2": {
+   "megatron native tp1": 1.1216411590576172,
+   "megatron native tp2": 1.0985183715820312,
+   "megatron strict tp1": 1.0768165588378906,
+   "megatron strict tp2": 1.0768165588378906,
+   "reference golden": 1.009927749633789,
+   "reference hf bf16": 1.0830345153808594,
+   "reference triton": 1.0768165588378906,
+   "vllm native lora tp1": 0.2954893112182617,
+   "vllm native tp1": 1.0827999114990234,
+   "vllm native tp2": 1.0748729705810547,
+   "vllm strict lora tp1": 0.0,
+   "vllm strict lora tp2": 0.0,
+   "vllm strict tp1": 1.0768165588378906,
+   "vllm strict tp2": 1.0768165588378906
+  },
+  "vllm strict tp1": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "vllm native lora tp1": 1.1228961944580078,
+   "vllm native tp1": 0.19246435165405273,
+   "vllm native tp2": 0.21176385879516602,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0
+  },
+  "vllm strict tp2": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "vllm native lora tp1": 1.1228961944580078,
+   "vllm native tp1": 0.19246435165405273,
+   "vllm native tp2": 0.21176385879516602,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0
+  }
+ },
+ "per_sequence": {
+  "megatron native tp1 | megatron native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 1,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 176,
+    "first": 1,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | megatron strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | megatron strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 1,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 147,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | reference triton": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 127,
+    "first": 1,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 1,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 173,
+    "first": 1,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | megatron strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | megatron strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 1,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 127,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | reference triton": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 1,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 1,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 86,
+    "first": 1,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 1,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 1,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 44,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 144,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 167,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 44,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 144,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 167,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | reference triton": {
+   "gsm8k_test_0": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 44,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 144,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 167,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 145,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 169,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 145,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 169,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 44,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 144,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 167,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 44,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 144,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 167,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | reference triton": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 1,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 1,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 147,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 1,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 1,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 86,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 176,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 177,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 87,
+    "first": 1,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
+    "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 1,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 38,
+    "first": 1,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 154,
+    "first": 1,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 175,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp2 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp2 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp2 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp2 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp1 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp1 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp2 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp2 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 126,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 174,
+    "first": 0,
+    "of": 178
+   }
+  }
+ },
+ "example_token": {
+  "sequence": "gsm8k_long_window",
+  "index": 0
+ },
+ "example": [
+  {
+   "label": "megatron strict tp1",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "megatron strict tp2",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "reference triton",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "vllm strict lora tp1",
+   "hex": "0xc2065292",
+   "value": -33.58063507080078,
+   "strict": true
+  },
+  {
+   "label": "vllm strict lora tp2",
+   "hex": "0xc2065292",
+   "value": -33.58063507080078,
+   "strict": true
+  },
+  {
+   "label": "vllm strict tp1",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "vllm strict tp2",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "megatron native tp1",
+   "hex": "0xc2078000",
+   "value": -33.875,
+   "strict": false
+  },
+  {
+   "label": "megatron native tp2",
+   "hex": "0xc2078000",
+   "value": -33.875,
+   "strict": false
+  },
+  {
+   "label": "reference golden",
+   "hex": "0xc2075b25",
+   "value": -33.83900833129883,
+   "strict": false
+  },
+  {
+   "label": "reference hf bf16",
+   "hex": "0xc2074000",
+   "value": -33.8125,
+   "strict": false
+  },
+  {
+   "label": "vllm native lora tp1",
+   "hex": "0xc206c000",
+   "value": -33.6875,
+   "strict": false
+  },
+  {
+   "label": "vllm native tp1",
+   "hex": "0xc2078000",
+   "value": -33.875,
+   "strict": false
+  },
+  {
+   "label": "vllm native tp2",
+   "hex": "0xc2070000",
+   "value": -33.75,
+   "strict": false
+  }
+ ],
+ "problems": []
+}
