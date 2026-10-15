@@ -49,7 +49,7 @@ def compare_xrt(a: dict, b: dict) -> dict[str, Any]:
 
     by_id = {s["id"]: s["logprobs_hex"] for s in b["sequences"]}
     total = mismatched = 0
-    max_abs = 0.0
+    max_abs = sum_abs = 0.0
     per_seq = []
     for seq in a["sequences"]:
         ha, hb = seq["logprobs_hex"], by_id[seq["id"]]
@@ -69,8 +69,10 @@ def compare_xrt(a: dict, b: dict) -> dict[str, Any]:
         total += len(ha)
         mismatched += count
         max_abs = max(max_abs, max(diffs or [0.0]))
+        sum_abs += sum(diffs)
     return {
         "a": f"{a['mode']} tp{a['tp']}",
+        "mean_abs_diff": sum_abs / total if total else 0.0,
         "b": f"{b['mode']} tp{b['tp']}",
         "tokens": total,
         "mismatched": mismatched,
@@ -102,12 +104,16 @@ def _xrt_summary(doc: dict) -> dict[str, Any]:
 
 def _generate_records(run: dict) -> list[dict[str, Any]]:
     out = []
+    kwargs = (run.get("meta") or {}).get("engine_kwargs") or {}
+    engine_lora = str(kwargs.get("enable_lora", "False")) == "True"
     for gen in run.get("generate", []):
         check = gen.get("decode_vs_prefill") or {}
         out.append(
             {
+                "run": run["_file"],
                 "mode": run["mode"],
                 "tp": run["tp"],
+                "engine_lora_enabled": engine_lora,
                 "lora": None,
                 "temperature": gen["temperature"],
                 "prompts": len(gen["token_ids"]),
@@ -143,8 +149,10 @@ def _generate_records(run: dict) -> list[dict[str, Any]]:
         check = gen.get("decode_vs_prefill") or {}
         out.append(
             {
+                "run": run["_file"],
                 "mode": run["mode"],
                 "tp": run["tp"],
+                "engine_lora_enabled": engine_lora,
                 "lora": lora.get("sha256"),
                 "temperature": gen["temperature"],
                 "prompts": len(gen["token_ids"]),
@@ -270,7 +278,9 @@ def collect(
         )
     for ref_path in references or []:
         ref = _load(ref_path)
-        label = ref.get("backend", ref_path.name).split("mode=")[-1]
+        label = "".join(
+            c for c in ref.get("backend", ref_path.name).split("mode=")[-1] if c.isalnum() or c == "_"
+        )
         xrt[f"reference_chain_{label}"] = {
             k: v for k, v in _xrt_summary(ref).items() if k != "logprobs_per_sequence"
         }
