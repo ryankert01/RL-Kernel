@@ -737,13 +737,14 @@ class FaultyMockTrainer(MockTrainer):
     """``MockTrainer`` with one injected fault, for the trainer-bridge failure tests.
 
     ``fault`` is ``"exit"`` (the process dies with exit code 17, like a segfaulting rank),
-    ``"hang"`` (the call never returns), ``"raise"`` (a Python exception) or ``"build"`` (the
-    constructor raises). ``fault_op`` names the method that misbehaves on its
+    ``"hang"`` (the call never returns), ``"raise"`` (a Python exception), ``"build"`` (the
+    constructor raises) or ``"bad_hash"`` (``export_lora`` reports a hash that does not match
+    its tensors). ``fault_op`` names the method that misbehaves on its
     ``fault_after + 1``-th call; ``fault_rank`` restricts the fault to one torchrun rank (``RANK``
     environment variable; ``None`` = every rank).
     """
 
-    FAULTS = ("exit", "hang", "raise", "build")
+    FAULTS = ("exit", "hang", "raise", "build", "bad_hash")
 
     def __init__(
         self,
@@ -783,6 +784,8 @@ class FaultyMockTrainer(MockTrainer):
                 time.sleep(3600.0)
         if self.fault == "raise":
             raise RuntimeError(f"injected fault in {op}")
+        if self.fault == "bad_hash":
+            self._lie_about_hash = True
 
     def token_logprobs(
         self, token_ids: list[list[int]], completion_start: list[int]
@@ -795,5 +798,9 @@ class FaultyMockTrainer(MockTrainer):
         return super().step(loss)
 
     def export_lora(self) -> tuple[dict[str, torch.Tensor], str]:
+        self._lie_about_hash = False
         self._maybe_fault("export_lora")
-        return super().export_lora()
+        state_dict, sha = super().export_lora()
+        if self._lie_about_hash:
+            sha = "0" * 64
+        return state_dict, sha

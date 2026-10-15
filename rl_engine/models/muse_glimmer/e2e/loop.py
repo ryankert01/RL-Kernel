@@ -12,8 +12,15 @@ Mode strings are ``<train>/<rollout>`` with each side ``strict`` or ``native`` (
 step-k comparison is between two engines holding byte-identical weights; the update of step k is
 visible to the rollout of step k+1 (on-policy, one optimizer step per batch).
 
-No VIME, no Ray: a single process drives two engine objects; GPU placement is the engines' job
-(``gpu_ids``), the orchestrator never touches CUDA.
+No VIME, no Ray: one orchestrator process drives two engine objects. The rollout lives in this
+process (vLLM env); with ``trainer_bridge`` the trainer is a :class:`bridge.RemoteTrainer` whose
+server runs in the Megatron env (``trainer_server.py``). The orchestrator never touches CUDA.
+
+Timeline: every step records the wall seconds of the phases in :data:`timeline.PHASE_ORDER`
+(``steps.jsonl["timeline"]``), the RemoteTrainer call stats (RTT vs server compute, bytes), and
+``summary.json["timeline"]`` holds the per-phase series for plotting. ``profile_step`` captures
+``torch.profiler`` top-ops tables of that step's rollout (orchestrator process) and of the
+trainer scoring + train step (on the trainer server when bridged, else in-process).
 """
 
 from __future__ import annotations
@@ -21,7 +28,6 @@ from __future__ import annotations
 import csv
 import json
 import random
-import time
 import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -48,6 +54,7 @@ from rl_engine.models.muse_glimmer.e2e.grpo import (
     reward_stats,
 )
 from rl_engine.models.muse_glimmer.e2e.sync import export_lora_verified, transfer_lora
+from rl_engine.models.muse_glimmer.e2e.timeline import PhaseClock, profiled, summarize_timeline
 
 MODES = ("native/native", "strict/native", "native/strict", "strict/strict")
 
@@ -89,6 +96,16 @@ class LoopConfig:
     data_dir: str = "~/data/gsm8k"
     split: str = "train"
     limit_examples: int | None = None
+    # Cross-environment trainer bridge (run_poc_grpo builds the RemoteTrainer from these).
+    trainer_bridge: bool = False
+    trainer_python: str = "~/envs/megatron/bin/python"
+    trainer_launcher: str = "process"
+    trainer_factory: str | None = None
+    trainer_timeout_s: float = 3600.0
+    trainer_startup_timeout_s: float = 3600.0
+    mock_trainer_device: str = "cpu"
+    # Profiling: capture torch.profiler top-ops tables for this step (None = off).
+    profile_step: int | None = None
 
     @property
     def train_strict(self) -> bool:
@@ -139,6 +156,13 @@ CSV_COLUMNS = [
     "train_step_time_s",
     "sync_time_s",
     "step_time_s",
+    "reward_time_s",
+    "drift_time_s",
+    "recheck_time_s",
+    "sidecar_time_s",
+    "lora_export_time_s",
+    "lora_transfer_time_s",
+    "rollout_tokens_per_s",
 ]
 
 
@@ -218,6 +242,8 @@ def _step_record(
     timings: dict[str, float],
     advantages: torch.Tensor,
     samples_per_prompt: int,
+    timeline: dict[str, Any] | None = None,
+    bridge_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     lengths = [len(c) for c in flat["completions"]]
     record: dict[str, Any] = {
@@ -235,6 +261,8 @@ def _step_record(
         "rollout_decode_vs_prefill": rollout_internal.to_dict() if rollout_internal else None,
         "sync": sync,
         "timings": timings,
+        "timeline": timeline or {},
+        "bridge_calls": bridge_calls,
     }
     record.update(reward_stats(flat["rewards"], samples_per_prompt))
     return record
@@ -281,6 +309,13 @@ def _csv_row(record: dict[str, Any]) -> dict[str, Any]:
         "train_step_time_s": timings["train_step_s"],
         "sync_time_s": timings["sync_s"],
         "step_time_s": timings["step_s"],
+        "reward_time_s": timings.get("reward_s", ""),
+        "drift_time_s": timings.get("drift_s", ""),
+        "recheck_time_s": timings.get("recheck_s", ""),
+        "sidecar_time_s": timings.get("sidecar_s", ""),
+        "lora_export_time_s": timings.get("lora_export_s", ""),
+        "lora_transfer_time_s": timings.get("lora_transfer_s", ""),
+        "rollout_tokens_per_s": (record.get("timeline") or {}).get("rollout_tokens_per_s", ""),
     }
 
 
@@ -308,6 +343,8 @@ def _summarize(
     status: str,
     error: str | None,
     initial_sync: dict[str, Any],
+    profiles: list[dict[str, Any]] | None = None,
+    initial_bridge_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     first_drift = None
     total_tokens = 0
@@ -366,6 +403,9 @@ def _summarize(
             "transport": initial_sync["transport"],
         },
         "timings_mean_s": timings,
+        "timeline": summarize_timeline(records) if records else None,
+        "profiles": profiles or [],
+        "bridge_initial_calls": initial_bridge_calls,
         "formulas": {
             "bitwise_mismatch_count": "tokens whose 4 fp32 bytes differ (train vs rollout)",
             "max_abs_diff": "max |train - rollout| in fp64 over active completion tokens",
@@ -385,6 +425,7 @@ def _summarize(
             "lora_packages": "lora/step{n:04d}.pt (only with sync_via_file)",
             "provenance": "provenance.json",
             "config": "config.json",
+            "profiles": "profile/*.json (top-ops tables, only with profile_step)",
         },
     }
 
@@ -485,6 +526,23 @@ def write_readme(run_dir: Path, summary: dict[str, Any]) -> Path:
     return path
 
 
+def _drain_bridge_calls(trainer: Any) -> list[dict[str, Any]] | None:
+    """RemoteTrainer call stats since the last drain (``None`` for an in-process trainer)."""
+
+    drain = getattr(trainer, "drain_call_stats", None)
+    return drain() if callable(drain) else None
+
+
+def _engine_profile(engine: Any, action: str, enabled: bool) -> None:
+    """Call ``engine.start_profile()`` / ``stop_profile()`` when the engine offers them."""
+
+    if not enabled:
+        return
+    hook = getattr(engine, f"{action}_profile", None)
+    if callable(hook):
+        hook()
+
+
 def run_loop(
     cfg: LoopConfig,
     task: Task,
@@ -505,6 +563,8 @@ def run_loop(
     task_description = task.describe()
 
     lora_dir = run_dir / "lora"
+    profile_dir = run_dir / "profile"
+    profiles: list[dict[str, Any]] = []
     package = export_lora_verified(trainer, step=0)
     initial_sync = transfer_lora(
         package, rollout, via_file=(lora_dir / "step0000.pt") if cfg.sync_via_file else None
@@ -514,6 +574,7 @@ def run_loop(
         "trainer_start": trainer.provenance(),
     }
     _write_json(run_dir / "provenance.json", provenance)
+    initial_bridge_calls = _drain_bridge_calls(trainer)
     emit(
         f"initial sync ok: lora {initial_sync['exported_sha256'][:12]} "
         f"via {initial_sync['transport']}"
@@ -531,80 +592,139 @@ def run_loop(
         writer.writeheader()
         try:
             for step in range(cfg.steps):
-                step_start = time.perf_counter()
+                clock = PhaseClock()
                 prompts = task.sample(rng, cfg.prompts_per_step)
+                profile_now = cfg.profile_step is not None and step == cfg.profile_step
+                remote_profile = profile_now and callable(getattr(trainer, "arm_profile", None))
+                if remote_profile:
+                    trainer.arm_profile(profile_dir, f"step{step:04d}")  # type: ignore[attr-defined]
 
-                t0 = time.perf_counter()
-                groups = coerce_samples(
-                    rollout.generate(
-                        [p.token_ids for p in prompts],
-                        n=samples_per_prompt,
-                        max_tokens=cfg.max_tokens,
-                        temperature=cfg.temperature,
-                    )
-                )
-                rollout_s = time.perf_counter() - t0
-                flat = _flatten_rollout(prompts, groups, task, samples_per_prompt)
+                with clock.phase("rollout_generate"), profiled(
+                    profile_now,
+                    out_path=profile_dir / f"orchestrator_step{step:04d}_rollout_generate.json",
+                    label="orchestrator.rollout.generate",
+                ) as prof_rollout:
+                    _engine_profile(rollout, "start", profile_now)
+                    try:
+                        groups = coerce_samples(
+                            rollout.generate(
+                                [p.token_ids for p in prompts],
+                                n=samples_per_prompt,
+                                max_tokens=cfg.max_tokens,
+                                temperature=cfg.temperature,
+                            )
+                        )
+                    finally:
+                        _engine_profile(rollout, "stop", profile_now)
+                with clock.phase("reward"):
+                    flat = _flatten_rollout(prompts, groups, task, samples_per_prompt)
 
-                t0 = time.perf_counter()
-                train_logps = trainer.token_logprobs(flat["sequences"], flat["starts"])
-                train_logp_s = time.perf_counter() - t0
+                local_profile = profile_now and not remote_profile
+                with clock.phase("trainer_logprobs"), profiled(
+                    local_profile,
+                    out_path=profile_dir / f"orchestrator_step{step:04d}_trainer_logprobs.json",
+                    label="orchestrator.trainer.token_logprobs",
+                ) as prof_logp:
+                    train_logps = trainer.token_logprobs(flat["sequences"], flat["starts"])
                 _check_train_logps(train_logps, flat["sequences"], flat["starts"])
 
-                train_cpu = [t.detach().to("cpu", torch.float32) for t in train_logps]
-                drift = compare_logprobs(train_cpu, flat["rollout_logps"])
+                with clock.phase("drift_metrics"):
+                    train_cpu = [t.detach().to("cpu", torch.float32) for t in train_logps]
+                    drift = compare_logprobs(train_cpu, flat["rollout_logps"])
                 rollout_internal = None
                 prefill_logps = None
-                if cfg.recheck_rollout_logprobs:
-                    prefill = rollout.logprobs(flat["sequences"], flat["starts"])
-                    prefill_logps = [as_fp32_logprobs(v, label="rollout-prefill") for v in prefill]
-                    rollout_internal = compare_logprobs(prefill_logps, flat["rollout_logps"])
-                write_sidecar(
-                    run_dir / "mismatch-sidecars" / f"step{step:04d}.pt",
-                    step=step,
-                    token_ids=flat["sequences"],
-                    completion_start=flat["starts"],
-                    train_logprobs=train_cpu,
-                    rollout_logprobs=flat["rollout_logps"],
-                    metrics=drift,
-                    provenance={"mode": cfg.mode, "lora_sha256": package.sha256},
-                    extra={
-                        "rewards": flat["rewards"],
-                        "finish_reasons": flat["finish"],
-                        "rollout_prefill_log_probs": prefill_logps,
-                        "rollout_decode_vs_prefill": (
-                            rollout_internal.to_dict() if rollout_internal else None
+                with clock.phase("rollout_recheck"):
+                    if cfg.recheck_rollout_logprobs:
+                        prefill = rollout.logprobs(flat["sequences"], flat["starts"])
+                        prefill_logps = [
+                            as_fp32_logprobs(v, label="rollout-prefill") for v in prefill
+                        ]
+                        rollout_internal = compare_logprobs(prefill_logps, flat["rollout_logps"])
+                with clock.phase("sidecar"):
+                    write_sidecar(
+                        run_dir / "mismatch-sidecars" / f"step{step:04d}.pt",
+                        step=step,
+                        token_ids=flat["sequences"],
+                        completion_start=flat["starts"],
+                        train_logprobs=train_cpu,
+                        rollout_logprobs=flat["rollout_logps"],
+                        metrics=drift,
+                        provenance={"mode": cfg.mode, "lora_sha256": package.sha256},
+                        extra={
+                            "rewards": flat["rewards"],
+                            "finish_reasons": flat["finish"],
+                            "rollout_prefill_log_probs": prefill_logps,
+                            "rollout_decode_vs_prefill": (
+                                rollout_internal.to_dict() if rollout_internal else None
+                            ),
+                        },
+                    )
+
+                with clock.phase("grpo_loss"):
+                    advantages = group_normalized_advantages(flat["rewards"], samples_per_prompt)
+                    loss_out = grpo_token_loss(
+                        train_logps,
+                        flat["rollout_logps"],
+                        advantages,
+                        clip_eps=cfg.clip_eps,
+                        kl_coef=cfg.kl_coef,
+                    )
+                with clock.phase("backward_step"), profiled(
+                    local_profile,
+                    out_path=profile_dir / f"orchestrator_step{step:04d}_trainer_step.json",
+                    label="orchestrator.trainer.step",
+                ) as prof_step:
+                    step_info = trainer.step(loss_out.loss)
+
+                with clock.phase("lora_export"):
+                    package = export_lora_verified(trainer, step=step + 1)
+                with clock.phase("lora_transfer_load"):
+                    sync = transfer_lora(
+                        package,
+                        rollout,
+                        via_file=(
+                            (lora_dir / f"step{step + 1:04d}.pt") if cfg.sync_via_file else None
                         ),
-                    },
-                )
+                    )
 
-                advantages = group_normalized_advantages(flat["rewards"], samples_per_prompt)
-                loss_out = grpo_token_loss(
-                    train_logps,
-                    flat["rollout_logps"],
-                    advantages,
-                    clip_eps=cfg.clip_eps,
-                    kl_coef=cfg.kl_coef,
-                )
-                t0 = time.perf_counter()
-                step_info = trainer.step(loss_out.loss)
-                train_step_s = time.perf_counter() - t0
-
-                t0 = time.perf_counter()
-                package = export_lora_verified(trainer, step=step + 1)
-                sync = transfer_lora(
-                    package,
-                    rollout,
-                    via_file=(lora_dir / f"step{step + 1:04d}.pt") if cfg.sync_via_file else None,
-                )
-                sync_s = time.perf_counter() - t0
-
+                bridge_calls = _drain_bridge_calls(trainer)
+                if profile_now:
+                    entry = {
+                        "step": step,
+                        "orchestrator_rollout_generate": prof_rollout,
+                        "orchestrator_trainer_logprobs": prof_logp or None,
+                        "orchestrator_trainer_step": prof_step or None,
+                        "trainer_server": [
+                            {"op": c["op"], **(c.get("server") or {}).get("profile", {})}
+                            for c in bridge_calls or []
+                            if (c.get("server") or {}).get("profile")
+                        ],
+                    }
+                    profiles.append(entry)
+                phases = clock.as_dict()
+                tokens = int(sum(len(c) for c in flat["completions"]))
+                rollout_s = phases["rollout_generate"]
                 timings = {
                     "rollout_s": rollout_s,
-                    "train_logp_s": train_logp_s,
-                    "train_step_s": train_step_s,
-                    "sync_s": sync_s,
-                    "step_s": time.perf_counter() - step_start,
+                    "train_logp_s": phases["trainer_logprobs"],
+                    "train_step_s": phases["backward_step"],
+                    "sync_s": phases["lora_export"] + phases["lora_transfer_load"],
+                    "step_s": clock.elapsed(),
+                    "reward_s": phases["reward"],
+                    "drift_s": phases["drift_metrics"],
+                    "recheck_s": phases["rollout_recheck"],
+                    "sidecar_s": phases["sidecar"],
+                    "lora_export_s": phases["lora_export"],
+                    "lora_transfer_s": phases["lora_transfer_load"],
+                }
+                timeline = {
+                    "profiled": profile_now,  # profiler overhead inflates this step's times
+                    "phases_s": phases,
+                    "tokens_generated": tokens,
+                    "rollout_tokens_per_s": (tokens / rollout_s) if rollout_s > 0 else None,
+                    "lora_bytes": int(
+                        sum(t.numel() * t.element_size() for t in package.state_dict.values())
+                    ),
                 }
                 record = _step_record(
                     step=step,
@@ -617,6 +737,8 @@ def run_loop(
                     timings=timings,
                     advantages=advantages,
                     samples_per_prompt=samples_per_prompt,
+                    timeline=timeline,
+                    bridge_calls=bridge_calls,
                 )
                 records.append(record)
                 steps_file.write(json.dumps(record, default=_json_default) + "\n")
@@ -643,6 +765,8 @@ def run_loop(
                 status=status,
                 error=error,
                 initial_sync=initial_sync,
+                profiles=profiles,
+                initial_bridge_calls=initial_bridge_calls,
             )
             _write_json(run_dir / "summary.json", summary)
             write_readme(run_dir, summary)

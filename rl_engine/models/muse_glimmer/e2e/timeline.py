@@ -242,6 +242,9 @@ def summarize_timeline(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "schema": TIMELINE_SCHEMA,
         "phase_order": phases + ["other"],
         "steps": [int(r["step"]) for r in records],
+        "profiled_steps": [
+            int(r["step"]) for r in records if r.get("timeline", {}).get("profiled")
+        ],
         "step_s": step_s,
         "phases_s": per_step,
         "mean_s": {name: _mean(series) for name, series in per_step.items()},

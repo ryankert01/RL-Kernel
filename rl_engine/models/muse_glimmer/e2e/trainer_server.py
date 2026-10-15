@@ -226,9 +226,9 @@ class TrainerServer:
         logprobs = self.last_logprobs
         if logprobs is None:
             raise RuntimeError("step without a preceding token_logprobs on this server")
+        self.last_logprobs = None  # consumed by this attempt, success or not
         surrogate = surrogate_loss(logprobs, list(args["grads"]))
         info = self.trainer.step(surrogate)
-        self.last_logprobs = None
         if self.rank != 0:
             return None
         return {"info": to_wire(info or {}), "surrogate_value": float(surrogate.detach().item())}

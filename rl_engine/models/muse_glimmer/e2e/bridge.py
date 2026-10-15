@@ -638,6 +638,8 @@ class RemoteTrainer:
         lps = self._last_lps
         if lps is None:
             raise RuntimeError("call token_logprobs before step (one step per scoring call)")
+        # A step attempt consumes the scored logprobs on both sides, whether or not it succeeds.
+        self._last_lps = None
         for lp in lps:
             lp.grad = None
         t0 = time.perf_counter()
@@ -649,7 +651,6 @@ class RemoteTrainer:
         ]
         loss_value = float(loss.detach().item())
         result, stats = self._call("step", {"grads": grads, "loss": loss_value})
-        self._last_lps = None
         info = dict(result.get("info") or {})
         if "loss" in info:
             info["server_reported_loss"] = info["loss"]  # the surrogate's value, not the loss
