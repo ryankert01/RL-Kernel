@@ -1,5 +1,39 @@
 # REPORT — RFC #501 row `swiglu_ffn` (contract O6 + O3)
 
+> **Review follow-up (2026-10-15, GEMM correctness row, branch `worktree-wf_7b064961-36f-4`).**
+> Six review findings on this op (swiglu_ffn:1–6) were reproduced and fixed; the original report
+> below is kept and statements that are no longer true are marked **[superseded]**. Raw numbers:
+> `reports/muse_glimmer_poc/data/kernels_gemm.json`.
+
+## Review follow-up: findings, fixes, evidence
+
+| id | verdict | evidence before | fix | test (fails before, passes after) |
+|---|---|---|---|---|
+| swiglu_ffn:1 | **confirmed, fixed** | default-GEMM backward with trainable weights raised `ValueError: reduction length 64 is not a multiple of 256 ... forward GEMM` for every T % 256 != 0 (T = 1, 64, 255, 300, 4001 measured) | the three dW GEMMs pass `ragged_k=True`: the declared token rule of `fast_det_gemm` (T_pad = roundup(T, 256), 8 chunks of T_pad/8, rows >= T masked); every T >= 1 works | `test_g4_default_gemm_backward_any_token_count[1,64,255,300]` (repeat, fp32 reference, dW == dW of zero-padded tokens, adapter twin bitwise), `test_g4_default_gemm_backward_real_shape_ragged_tokens` (T=300 at H=6656/F=19968) |
+| swiglu_ffn:2 | **confirmed, fixed** | `trace()["tile_config"]["gemm"]` was the 3-key stub `{op, impl, kernel}` | `_FastDetGemm.trace()` returns `det_gemm.trace()` (all shape classes, BLOCK_M/N/K, warps, stages, chunk rules, runtime) | `test_g5_default_gemm_trace_carries_launch_constants` |
+| swiglu_ffn:3 | **confirmed, fixed** | `TritonDetGemmAdapter` silently used one chunk for K % 8 != 0 | raises `ValueError` unless `ragged_k=True`, which applies the same ragged rule as `fast_det_gemm` (bitwise equal, below) | `test_adapter_gemm_accuracy_invariance_and_strides`, `test_adapter_and_fast_gemm_are_bitwise_twins[36,256,300,512,4001,6656]` |
+| swiglu_ffn:4 | **confirmed, fixed** | with `ops.det_gemm` blocked, `default_gemm()` silently returned `TritonDetGemmAdapter` (subprocess printed `SILENT TritonDetGemmAdapter`) | `det_gemm` imported at module level, no fallback; the adapter is explicit-only | `test_default_gemm_has_no_silent_fallback` (subprocess) |
+| swiglu_ffn:5 | **confirmed (coverage gap), fixed** | G2 at the real shape pinned the adapter | G2 parametrised over (adapter, default) with T = 1 / 16 (decode16), 64 (decode64), 65 (prefill) slices and gathered rows; adapter == default bitwise at T = 256 | `test_g2_ffn_batch_invariance_real_shape[adapter/default]` (passes before too: invariance held, it was untested) |
+| swiglu_ffn:6 | **confirmed, fixed** | `_FastDetGemm` called `.contiguous()` on both operands: 3 transposed 266 MB weight copies + 2 activation copies per layer backward | operands passed as strided views (the kernel reads them through strides); bits identical | `test_fast_gemm_shim_passes_strided_views_without_copies` (data_ptr/stride pass-through + bitwise vs contiguous) |
+
+**Bits.** Forward: unchanged (same kernel, same launch for K = 6656 / 19968). Backward at the
+real shape: dx unchanged; dW changes only where the GEMM kernel fix (det_gemm:1) applies, i.e.
+32 < T <= 512 tokens, and T % 256 != 0 is new (it used to raise). The explicit adapter's dW at
+T % 256 != 0 now follows the same ragged rule (it used T/8-wide chunks or a single chunk).
+With both fixes, the adapter and `fast_det_gemm` are bitwise twins for every K tested (36, 256,
+300, 512, 4001, 6656; fp32 and bf16 out) and for the whole FFN forward + backward at T = 1, 64,
+255, 300 (H=256, F=512) and the forward at the real shape.
+
+**Performance (A100, base 6a61f6e -> 87cba55, median ms, default GEMM, real shape):**
+
+| pass | T | before | after | note |
+|---|---|---|---|---|
+| forward | 1 / 16 / 64 | 0.668 / 0.605 / 0.751 | 0.685 / 0.634 / 0.769 | launch-bound, within node noise |
+| forward | 256 / 1024 / 4096 | 1.82 / 6.93 / 26.42 | 1.84 / 6.97 / 26.46 | unchanged (123.5 TFLOP/s at 4096) |
+| fwd+bwd | 64 / 300 / 4001 | ValueError | 5.04 / 11.76 / 78.14 | swiglu_ffn:1 |
+| fwd+bwd | 256 | 12.20 | 7.67 | no transposed copies (0.064 -> 0.052 GiB peak) |
+| fwd+bwd | 4096 | 87.93 (111 TFLOP/s) | 79.28 (124 TFLOP/s) | no transposed copies (1.02 -> 0.81 GiB peak) |
+
 Branch `worktree-agent-ad5c4d3b6ebfb920f`, based on `feat/museglimmer-arch-fingerprint` (e2f4e64,
 the POC scaffold with the contract/manifest; `main` is **not** an ancestor of that branch, so the
 integrator should merge this branch into the scaffold branch, not into `main`).
@@ -26,7 +60,8 @@ Files:
   correctness vs fp64 at T=64 (max abs 1.1e-2, mean 1.7e-3 on |y|~0.5) and one forward with the real
   layer-0 MLP weights (shapes/dtypes confirmed; max abs 1.8e-2 vs fp64, *lower* than HF-style bf16
   cuBLAS at 2.4e-2).
-- Default GEMM (`TritonDetGemmAdapter`): the repo's fixed-order kernel driven with bf16 operands,
+- **[superseded: the default is now `fast_det_gemm`, no fallback; the adapter is explicit-only]**
+  Default GEMM (`TritonDetGemmAdapter`): the repo's fixed-order kernel driven with bf16 operands,
   fp32 accumulation, 8 canonical K-chunks summed in the fixed tree, one rounding; 91–109 TFLOP/s on
   A100 — already above the contract's 80 TFLOP/s note. It auto-switches to the sibling's
   `rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm` when that module is importable (it did
@@ -81,15 +116,16 @@ tile_config={swiglu: kernel_trace(), gemm: gemm.trace()}}`; it is stable and JSO
 
 ## Contract deviations
 
-1. **GEMM intra-chunk order is implementation-defined.** The contract pins the 8-chunk tree but not the
-   order inside a chunk (BLOCK_K / MMA sequence). The adapter and the sibling's fast kernel will
-   therefore not be bit-identical to each other; each is internally batch-invariant and repeatable.
-   Everything built on this row must pin the GEMM via `trace()` — which it does.
+1. **[superseded]** ~~GEMM intra-chunk order is implementation-defined ... the adapter and the
+   sibling's fast kernel will not be bit-identical.~~ Measured after the review fixes: both run the
+   same ascending k16 MMA chain from +0 per chunk and the same fp32 tree, and are **bitwise equal**
+   (`test_adapter_and_fast_gemm_are_bitwise_twins`, FFN fwd/bwd twin checks).
 2. **The 8-chunk tree is applied to all GEMMs** (gate, up, down, and all five backward GEMMs), not
    only the row-parallel ones named in O3. The `gemm` callable has no row-parallel flag and the fast
    kernel chunks always; cost is nil (gate GEMM 11.49 → 11.55 ms) or negative (down 15.30 → 10.06 ms).
-3. **dW GEMMs chunk over K=T**, so T must be a multiple of 8 for the contract tree; otherwise the
-   adapter falls back to a single chunk (still deterministic, but "out of contract" as O3 says).
+3. **[superseded]** ~~dW GEMMs chunk over K=T, so T must be a multiple of 8 ... the adapter falls
+   back to a single chunk.~~ dW GEMMs use the declared ragged token rule (T_pad = roundup(T, 256),
+   8 chunks of T_pad/8, rows >= T masked) on both GEMMs; any T >= 1; no silent single-chunk path.
 4. **dx = fp32 sum of the two dX partials, one rounding.** The contract is silent; plain autograd
    would add two bf16 tensors. Flagged for the RFC text.
 5. **Golden FFN uses fp64 `torch.matmul`** (not fixed-order); fp64 ordering noise (~1e-16) is five
@@ -194,11 +230,10 @@ Node mapping for `operator_trace` (suffixes of layer nodes covered by this row):
 `mlp_gate_proj`, `up_proj` → the two gemm calls, `swiglu` → `swiglu`, `down_proj` → the row-parallel
 gemm call; all four are one `swiglu_ffn(...)` call per layer.
 
-When `rl_engine/models/muse_glimmer/ops/det_gemm.py` lands, nothing changes here: `default_gemm()`
-imports `fast_det_gemm` and wraps it in `_FastDetGemm`, which hands it **contiguous** operands.
-If `fast_det_gemm` accepts strided operands, drop the two `.contiguous()` calls in
-`_FastDetGemm.__call__` to avoid a 266 MB transposed weight copy per backward GEMM. Then rerun
-`tests/models/muse_glimmer/test_swiglu_ffn.py` (the `default_gemm()` tests pick up the new kernel).
+**[superseded]** `default_gemm()` is `fast_det_gemm` (no fallback) and `_FastDetGemm` passes the
+strided views as they are (the `.contiguous()` calls are gone). A pluggable `gemm` must accept
+`ragged_k=` (the dW calls pass `ragged_k=True`); raw `fast_det_gemm` (what the strict reference
+model passes) does.
 
 Marker used: `pytest.mark.ws1` (already declared in `pyproject.toml`).
 
@@ -210,18 +245,17 @@ Marker used: `pytest.mark.ws1` (already declared in `pyproject.toml`).
   for a dW GEMM; the fast kernel removes this.
 - Triton compiles one variant per divisibility class of (M, N, K, strides): ~1 s each on first use
   (a dozen in the test run); the shared `~/.triton` cache absorbs it afterwards.
-- Not validated against the sibling's `fast_det_gemm` (absent in this worktree). Bits will change
-  when it is plugged in (deviation 1); the gates do not depend on the GEMM's bits.
-- The backward does not call `rl_engine.ops.autograd.backward_runtime.record_backward`; add it if the
-  integrator wants runtime provenance for this row like `det_gemm` has.
+- **[resolved]** Validated against the sibling's `fast_det_gemm`: bitwise twins (see follow-up).
+- **[resolved]** The backward now calls `record_backward("swiglu_ffn", ...)`.
 
 ## RFC feedback (what the `swiglu_ffn` row text should say)
 
 1. Spell out the GEMM arithmetic class once ("bf16 operands, fp32 accumulation, one rounding at the
    declared cast; the K-chunk tree is pinned, the intra-chunk order is pinned per kernel in
    `trace()`") and say the 8-chunk tree applies to **all** GEMMs of the FFN, forward and backward,
-   including the K=T weight-gradient GEMMs — which makes "T is a multiple of 8" a requirement the
-   trainer must meet (pad micro-batches).
+   including the K=T weight-gradient GEMMs. **[updated]** Do not require padded micro-batches:
+   declare the ragged token rule (T_pad = roundup(T, 256), 8 chunks, masked rows) as the dW chunk
+   rule of O3 so every T works and both runtimes agree on it.
 2. State the dx rule: the two input-gradient partials (through W_gate and W_up) are summed in fp32
    and rounded once.
 3. Give the VJP formula explicitly — `dg = (dh*u) * (s*(1+g*(1-s)))`, `du = dh * silu(g)` with

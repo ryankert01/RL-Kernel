@@ -1,5 +1,40 @@
 # REPORT — `lm_head_softcap_logprob` (WS1) + single-GPU core of `vocab_parallel_softcap_logp` (WS2)
 
+> **Review follow-up (2026-10-15, GEMM correctness row, branch `worktree-wf_7b064961-36f-4`).**
+> Eight review findings on this op (lm_head_softcap_logprob:1–8) were checked; seven are fixed,
+> one (lm_head:5) needs a contract edit only. The original report below is kept; stale statements
+> are marked **[stale]**. Raw numbers: `reports/muse_glimmer_poc/data/kernels_gemm.json`.
+
+## Review follow-up: findings, fixes, evidence
+
+| id | verdict | evidence before | fix | test (fails before, passes after) |
+|---|---|---|---|---|
+| lm_head:1 | **confirmed, fixed** | profiler, one no-grad forward (T=32): 2 `cudaStreamSynchronize` + 2 `aten::_local_scalar_dense` (the target range check ran twice) | validated once per call (1 sync); `validate_targets=False` performs **0** syncs and a target outside `[0, V)` yields `logp = NaN` on the device (never a silent `-logZ`); valid rows bitwise unchanged | `test_host_syncs_and_device_side_target_rule` (dispatch-mode count == 1; sync-debug "error" mode raises nothing without validation; NaN rows; TP sim) |
+| lm_head:2 | **confirmed, fixed** | T % 256 != 0 sent dW through the legacy fp32-promoted kernel (sequential K, no tree): dW(T) != dW(same tokens zero-padded to 256/512) for T = 40, 255, 300; fwd+bwd at T=4001 took 975.6 ms vs 455.0 ms at T=4096 | dW = `gemm(dz_t^T, h, ragged_k=True)`: the declared token rule of `fast_det_gemm`; no legacy branch; no transposed copies | `test_dw_uses_declared_ragged_token_rule[40,255,256,300]` |
+| lm_head:3 | **confirmed, fixed** | `reduction_order.gemm` said "K walked in block order", no GEMM tile constants | `trace()["gemm"]` = `det_gemm.trace(out_dtype=fp32)` (all shape classes, BLOCK_M/N/K, warps, stages, chunk rules, runtime); real reduction order incl. the dW/dh rules; an explicit non-default backend is named as such | `test_trace_is_complete_and_stable` |
+| lm_head:4 | **confirmed, fixed** | with `ops.det_gemm` blocked the module silently resolved the legacy GEMM (subprocess printed `SILENT ..._triton_gemm_fp32`) | `det_gemm` imported eagerly, failure propagates; `legacy_det_gemm_fp32` only as an explicit `gemm=` | `test_default_gemm_backend_and_no_silent_fallback` (subprocess) |
+| lm_head:5 | **confirmed, contract edit needed** | O7 backward names no cast for dẑ; the code (and `trace()["casts"]["dz"]`) casts fp32 -> bf16 once, as R1's bf16 MMA operands require | none in code; proposed O7 text: "dẑ (fp32) -> bf16 once (round-to-nearest-even), then dh = det_gemm(dẑ, W_lm) and dW_lm = det_gemm(dẑᵀ, h)" | — |
+| lm_head:6 | **confirmed, fixed** | every test T sent dW through the legacy fallback; no backend assertion | small geometry H=256 so the default fast path runs everywhere; backend assertion; real-shape backward at T=256 and T=300 through the fast dW path (repeat `torch.equal`, allclose vs fp32 autograd: dh 2.4e-4 / 1.7e-4 abs at max 4.4e-2 / 4.0e-2, dW 1.1e-2 / 7.2e-3 at max 2.24 / 1.92) | `test_real_shape_backward_fast_path[256,300]`, `test_dw_uses_declared_ragged_token_rule` |
+| lm_head:7 | **confirmed, fixed** | report claimed legacy numbers / "untested switch" and "5e7 samples" | this section; the tanh test samples (1<<22)+(1<<20)+7 = **5,242,887** values (not 5e7) | — |
+| lm_head:8 | **confirmed (nit), fixed by documentation** | fp32 golden uses `torch.mv` (cuBLAS gemv) | docstring + `trace()["golden"]`: the fp64 mode is THE R4 golden, fp32 mode is a tolerance convenience | — |
+
+Also changed: `dh_t = gemm(dz_t, W_t^T, ragged_k=True)` — dh reduces over the tile's vocabulary
+rows (an input-gradient reduction); a tile that is not a multiple of 256 (tiny reference configs,
+tile 128) uses det_gemm's declared masked-tail dA rule instead of silently switching kernels.
+The real tile (25344 = 99 x 256) is unaffected.
+
+**Bits.** Forward (logits, logp) unchanged at every T (K = H = 6656, same launch; verified by the
+bit ledger in the JSON). Backward: dW changes for T % 256 != 0 (legacy -> declared tree rule)
+and for 32 < T <= 512 (GEMM fix det_gemm:1); dh unchanged at the real geometry.
+
+**Performance (A100, base 6a61f6e -> 87cba55, fwd+bwd):** T=4096 455.0 -> 407.1 ms (no
+transposed copies), T=4001 975.6 -> 405.6 ms (2.4x, no legacy dW), T=300 103.2 -> 60.8 ms,
+T=256 59.3 -> 43.6 ms; forward unchanged (95.7 -> 95.9 ms at T=4096 = 115 TFLOP/s; decode T=1
+GPU kernel time 2.39 ms per call before and after, wall time is launch/sync-bound and varies
+2.9–3.6 ms run to run on the shared node). The real-weights
+forward at T=16 now reports 2 MiB peak extra memory (the 323 MiB below was the legacy GEMM's
+transposed weight copy).
+
 Contract: `docs/contracts/muse-glimmer-30b-strict-contract.md` O7 (+ O3 tree, R1–R6).
 Trace nodes: `lm_head`, `logit_softcap`, `logprob`. RFC #501 rows `lm_head_softcap_logprob`,
 `vocab_parallel_softcap_logp`.
@@ -15,11 +50,11 @@ Trace nodes: `lm_head`, `logit_softcap`, `logprob`. RFC #501 rows `lm_head_softc
 | Padded columns excluded | PASS — garbage in pad rows changes no bit; a target in `[V, Vp)` raises |
 | G4 backward | PASS — repeat `torch.equal` (dh, dw, small and real shape); vs fp32 autograd dh 1.4e-2 of max 3.9 (0.36 %), dw 3.5e-3 of max 1.18 (0.3 %) — bf16 rounding; pad rows of dW exactly 0; dh row batch invariant |
 | G5 trace() | PASS — stable, JSON-serialisable, carries tree / tile / cast / gemm backend |
-| tanh convention (O7) | `libdevice.tanh` is **bitwise equal to `torch.tanh`** fp32 on 5e7 samples; the fused soft-cap kernel is `torch.equal` to the torch golden soft cap |
+| tanh convention (O7) | `libdevice.tanh` is **bitwise equal to `torch.tanh`** fp32 on the shipped test's 5,242,887 samples (**[stale]**: "5e7" overstated the shipped test); the fused soft-cap kernel is `torch.equal` to the torch golden soft cap |
 | Real weights | `lm_head.weight` (202048×6656 bf16) + `norm.weight` loaded from the pinned checkpoint, forward at T=16 finite, ≤0, batch invariant; 323 MiB peak extra memory |
-| Benchmark T=4096 | strict fwd 668 ms vs native 69 ms (9.7×), fwd+bwd 2659 ms vs 183 ms (14.6×); strict peak 718 MiB vs native 9474 MiB. GEMM is the legacy fp32-promoted `det_gemm` (16.5 TFLOP/s) — `fast_det_gemm` is the fix |
+| Benchmark T=4096 | **[stale — legacy GEMM era]** strict fwd 668 ms vs native 69 ms (9.7×), fwd+bwd 2659 ms vs 183 ms (14.6×). Current (fast_det_gemm): fwd 95.9 ms, fwd+bwd 407.1 ms (see follow-up) |
 
-15/15 tests pass. The op is model-scoped (`rl_engine/models/muse_glimmer/{ops,triton}`), nothing
+**[stale]** 15/15 tests pass — now 23 tests (see the follow-up and `kernels_gemm.json`). The op is model-scoped (`rl_engine/models/muse_glimmer/{ops,triton}`), nothing
 shared was edited.
 
 ## Design
@@ -203,11 +238,9 @@ tile); the backward's second GEMM pass (recompute of `z_t`) is the price of not 
    sub-tree sums and need the same rank tree (= `tp_canonical_tree`).
 
 ## Open issues
-- `fast_det_gemm` / `canonical_tree.combine_tree` did not exist in any branch while this was
-  written; the automatic switch is untested against the real sibling implementation (the adapter
-  passes contiguous `(M,K)`/`(N,K)` operands, `out_dtype=torch.float32`). If `combine_tree`'s
-  signature is not `combine_tree(partials: Sequence[Tensor]) -> Tensor`, change
-  `_combine_tree_sum` (one line).
+- **[stale, resolved]** ~~`fast_det_gemm` / `canonical_tree.combine_tree` did not exist ... the
+  automatic switch is untested~~: the default is `fast_det_gemm` (eager import, no switch),
+  `combine_tree` is imported directly, and the fast path is tested at small and real shapes.
 - Backward recomputes the 8 logits tiles (a second LM-head GEMM). Storing `dz` or the logits is a
   memory/time trade-off left to the trainer integration.
 - No `ignore_index`; inactive tokens are the caller's mask (as elsewhere in the repo).

@@ -10,11 +10,16 @@ Parity gates use ``torch.equal``.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import torch
 
+from rl_engine.models.muse_glimmer.ops import det_gemm as dg
+from rl_engine.models.muse_glimmer.ops import swiglu_ffn as sf
 from rl_engine.models.muse_glimmer.ops.swiglu_ffn import (
     TritonDetGemmAdapter,
     default_gemm,
@@ -115,6 +120,41 @@ def test_g5_trace_is_emitted_and_stable():
     assert ffn["tile_config"]["gemm"]["tile_config"]["k_chunks"] == 8
     assert ffn["tile_config"]["swiglu"]["BLOCK_F"] == 1024
     assert "((0+1)+(2+3))+((4+5)+(6+7))" in ffn["reduction_order"]
+    assert "roundup(T, 256)" in ffn["dw_chunk_rule"]
+
+
+def test_g5_default_gemm_trace_carries_launch_constants():
+    """The shipped path records det_gemm's R6 launch constants (finding swiglu_ffn:2)."""
+
+    gemm_trace = trace()["tile_config"]["gemm"]
+    assert gemm_trace["op"] == "muse_glimmer.fast_det_gemm"
+    assert set(gemm_trace["tile_config"]) == {"decode16", "decode64", "prefill"}
+    for cfg in gemm_trace["tile_config"].values():
+        assert {"block_m", "block_n", "block_k", "num_warps", "num_stages"} <= set(cfg)
+    assert gemm_trace["allow_tf32"] is False and gemm_trace["k_chunks"] == 8
+    assert "roundup(M, 256)" in gemm_trace["dw_chunk_rule"]
+
+
+def test_default_gemm_has_no_silent_fallback():
+    """An import failure of det_gemm propagates instead of installing the adapter (swiglu_ffn:4).
+
+    Runs in a subprocess (CPU only) with the det_gemm module blocked in ``sys.modules``.
+    """
+
+    code = (
+        "import sys; sys.modules['rl_engine.models.muse_glimmer.ops.det_gemm'] = None\n"
+        "try:\n"
+        "    from rl_engine.models.muse_glimmer.ops import swiglu_ffn as sf\n"
+        "    g = sf.default_gemm()\n"
+        "    print('SILENT', type(g).__name__)\n"
+        "except ImportError as exc:\n"
+        "    print('RAISED', type(exc).__name__)\n"
+    )
+    env = dict(os.environ, PYTHONPATH=str(REPO))
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=300
+    )
+    assert "RAISED" in out.stdout, out.stdout + out.stderr
 
 
 def test_ffn_shape_validation():
@@ -185,11 +225,15 @@ def test_g2_swiglu_batch_invariance_real_width():
 
 
 @requires_cuda
-def test_g2_ffn_batch_invariance_real_shape():
+@pytest.mark.parametrize("which", ["adapter", "default"])
+def test_g2_ffn_batch_invariance_real_shape(which):
+    """Both GEMMs, every det_gemm shape class (T=1/16 decode16, 64 decode64, 65 prefill) vs
+    T=4096 (finding swiglu_ffn:5), plus gathered rows."""
+
     rows = 4096
     x = _randn((rows, H), seed=30)
     w_gate, w_up, w_down = _ffn_weights(H, F, seed=31)
-    gemm = TritonDetGemmAdapter()
+    gemm = TritonDetGemmAdapter() if which == "adapter" else default_gemm()
     with torch.no_grad():
         full = swiglu_ffn(x, w_gate, w_up, w_down, gemm=gemm)
         assert torch.equal(full, swiglu_ffn(x, w_gate, w_up, w_down, gemm=gemm))
@@ -198,8 +242,12 @@ def test_g2_ffn_batch_invariance_real_shape():
             assert torch.equal(one[0], full[i])
         idx = torch.tensor([4095, 1, 2048, 0], device="cuda")
         assert torch.equal(swiglu_ffn(x[idx], w_gate, w_up, w_down, gemm=gemm), full[idx])
-        idx16 = torch.arange(37, 37 + 16, device="cuda")
-        assert torch.equal(swiglu_ffn(x[idx16], w_gate, w_up, w_down, gemm=gemm), full[idx16])
+        for start, count in ((37, 16), (100, 64), (2000, 65)):
+            sl = slice(start, start + count)
+            assert torch.equal(swiglu_ffn(x[sl], w_gate, w_up, w_down, gemm=gemm), full[sl])
+        if which == "default":  # the twin kernels agree bitwise at the real shape
+            other = swiglu_ffn(x[:256], w_gate, w_up, w_down, gemm=TritonDetGemmAdapter())
+            assert torch.equal(other, full[:256])
 
 
 # --- default GEMM adapter -------------------------------------------------------------------
@@ -223,13 +271,56 @@ def test_adapter_gemm_accuracy_invariance_and_strides():
     a_t = _randn((256, 100), seed=42).t()
     w_t = _randn((256, 96), seed=43, scale=256**-0.5).t()
     assert torch.equal(gemm(a_t, w_t), gemm(a_t.contiguous(), w_t.contiguous()))
-    # K % 8 != 0 is out of contract but must still compute (single chunk).
+    # K % 8 != 0 is out of contract: fail closed (finding swiglu_ffn:3) ...
     a36 = _randn((9, 36), seed=44)
     w36 = _randn((5, 36), seed=45)
+    with pytest.raises(ValueError, match="not a multiple of 8"):
+        gemm(a36, w36)
+    # ... unless the caller opts into the declared ragged token rule.
     torch.testing.assert_close(
-        gemm(a36, w36, out_dtype=torch.float32).double(), a36.double() @ w36.double().t(),
-        atol=1e-4, rtol=1e-4,
+        gemm(a36, w36, out_dtype=torch.float32, ragged_k=True).double(),
+        a36.double() @ w36.double().t(), atol=1e-4, rtol=1e-4,
     )
+
+
+@requires_cuda
+@pytest.mark.parametrize("k_size", [36, 256, 300, 512, 4001, 6656])
+def test_adapter_and_fast_gemm_are_bitwise_twins(k_size):
+    """The explicit adapter and fast_det_gemm implement the same declared tree: bitwise equal
+    for the plain rule (K % 256 == 0) and for the ragged token rule (any K)."""
+
+    a = _randn((80, k_size), seed=46)
+    w = _randn((192, k_size), seed=47, scale=k_size**-0.5)
+    adapter, fast = TritonDetGemmAdapter(), default_gemm()
+    for out_dtype in (torch.float32, torch.bfloat16):
+        ragged = adapter(a, w, out_dtype=out_dtype, ragged_k=True)
+        assert torch.equal(ragged, fast(a, w, out_dtype=out_dtype, ragged_k=True))
+        if k_size % 256 == 0:
+            assert torch.equal(adapter(a, w, out_dtype=out_dtype), ragged)
+            assert torch.equal(fast(a, w, out_dtype=out_dtype), ragged)
+
+
+@requires_cuda
+def test_fast_gemm_shim_passes_strided_views_without_copies():
+    """_FastDetGemm hands the transposed backward views to the kernel as they are (finding
+    swiglu_ffn:6): no 266 MB transposed weight copy, same bits as contiguous operands."""
+
+    seen = []
+
+    def spy(a, w, **kw):
+        seen.append((a.data_ptr(), a.stride(), w.data_ptr(), w.stride()))
+        return dg.fast_det_gemm(a, w, **kw)
+
+    shim = sf._FastDetGemm(spy)
+    dy = _randn((300, 256), seed=48)
+    h = _randn((300, 512), seed=49)
+    w_down = _randn((256, 512), seed=50, scale=512**-0.5)
+    dw = shim(dy.t(), h.t(), ragged_k=True)
+    dh = shim(dy, w_down.t())
+    assert seen[0] == (dy.data_ptr(), dy.t().stride(), h.data_ptr(), h.t().stride())
+    assert seen[1][2:] == (w_down.data_ptr(), w_down.t().stride())
+    assert torch.equal(dw, dg.fast_det_gemm(dy.t().contiguous(), h.t().contiguous(), ragged_k=True))
+    assert torch.equal(dh, dg.fast_det_gemm(dy, w_down.t().contiguous()))
 
 
 # --- FFN forward correctness ---------------------------------------------------------------
@@ -332,6 +423,57 @@ def test_g4_ffn_backward_small_repeat_and_reference(shape):
     # Frozen weights (LoRA-style): only dx is produced, bitwise equal to the full-backward dx.
     _, frozen = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=gemm, weight_grads=False)
     assert torch.equal(frozen[0], grads[0]) and all(g is None for g in frozen[1:])
+
+
+@requires_cuda
+@pytest.mark.parametrize("tokens", [1, 64, 255, 300])
+def test_g4_default_gemm_backward_any_token_count(tokens):
+    """Default (fast) GEMM backward with trainable weights works for any T (finding
+    swiglu_ffn:1; before: ValueError for T % 256 != 0), is repeatable, matches the fp32
+    reference, and its dW equals dW of the same tokens zero-padded to the next multiple of 256
+    (the declared ragged token rule) bitwise."""
+
+    hidden, ffn = 256, 512
+    x = _randn((tokens, hidden), seed=85)
+    w_gate, w_up, w_down = _ffn_weights(hidden, ffn, seed=86)
+    dy = _randn((tokens, hidden), seed=87, scale=tokens**-0.5)
+    gemm = default_gemm()
+    y, grads = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=gemm)
+    y2, grads2 = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=gemm)
+    assert torch.equal(y, y2)
+    for got, again in zip(grads, grads2, strict=True):
+        assert got.dtype == torch.bfloat16 and torch.equal(got, again)
+    _, refs = _ffn_grads_fp32_reference(x, w_gate, w_up, w_down, dy)
+    atol, rtol = _tol("gradient_accuracy", "reduction", "bfloat16")
+    for name, got, ref in zip(("dx", "dw_gate", "dw_up", "dw_down"), grads, refs, strict=True):
+        torch.testing.assert_close(got.float(), ref, atol=atol, rtol=rtol, msg=name)
+    t_pad = -(-tokens // 256) * 256
+    x_pad = torch.zeros(t_pad, hidden, device="cuda", dtype=torch.bfloat16)
+    dy_pad = torch.zeros_like(x_pad)
+    x_pad[:tokens], dy_pad[:tokens] = x, dy
+    _, grads_pad = _ffn_grads(x_pad, w_gate, w_up, w_down, dy_pad, gemm=gemm)
+    assert torch.equal(grads_pad[0][:tokens], grads[0])
+    for got, padded in zip(grads[1:], grads_pad[1:], strict=True):
+        assert torch.equal(got, padded)
+    # The explicit adapter twin follows the same ragged rule: identical bits.
+    _, grads_ad = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=TritonDetGemmAdapter())
+    for got, twin in zip(grads, grads_ad, strict=True):
+        assert torch.equal(got, twin)
+
+
+@requires_cuda
+def test_g4_default_gemm_backward_real_shape_ragged_tokens():
+    """Real shape (H=6656, F=19968) with a ragged micro-batch T=300: runs, repeatable, finite."""
+
+    tokens = 300
+    x = _randn((tokens, H), seed=93)
+    w_gate, w_up, w_down = _ffn_weights(H, F, seed=94)
+    dy = _randn((tokens, H), seed=95, scale=tokens**-0.5)
+    y, grads = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=default_gemm())
+    y2, grads2 = _ffn_grads(x, w_gate, w_up, w_down, dy, gemm=default_gemm())
+    assert torch.equal(y, y2)
+    for got, again in zip(grads, grads2, strict=True):
+        assert torch.isfinite(got).all() and torch.equal(got, again)
 
 
 @requires_cuda

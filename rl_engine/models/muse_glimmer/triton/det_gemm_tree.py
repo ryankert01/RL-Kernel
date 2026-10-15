@@ -11,16 +11,27 @@ Reduction order (the arithmetic contract)
 -----------------------------------------
 * K is split into ``NUM_CHUNKS`` (8 canonically) consecutive chunks of ``CHUNK_LEN = K_pad / 8``
   columns; chunk ``c`` covers ``[c * CHUNK_LEN, (c + 1) * CHUNK_LEN)``.
-* Inside a chunk the fp32 accumulator is advanced by ``tl.dot(a, b, acc, allow_tf32=False)`` over
-  ``BLOCK_K`` columns at a time in ascending k.  On sm80+ this is a dependent chain of bf16
-  ``mma.sync.m16n8k16`` instructions (fp32 accumulate) in ascending k; the chain does not depend
-  on BLOCK_M, BLOCK_N, num_warps, num_stages or BLOCK_K (BLOCK_K only changes how many k16 steps
-  one loop iteration issues), so these are performance-only constants.  The bf16 x bf16 products
-  are exact in fp32.
+* Inside a chunk the fp32 accumulator starts at +0 and is advanced by
+  ``tl.dot(a, b, acc, allow_tf32=False)`` over ``BLOCK_K`` columns at a time in ascending k.  On
+  sm80+ this is a dependent chain of bf16 ``mma.sync.m16n8k16`` instructions (fp32 accumulate)
+  in ascending k; the chain does not depend on BLOCK_M, BLOCK_N, num_warps, num_stages or BLOCK_K
+  (BLOCK_K only changes how many k16 steps one loop iteration issues) PROVIDED every chunk loop
+  runs at least two iterations (``ITERS = CHUNK_LEN / BLOCK_K >= 2``, see below).  The
+  bf16 x bf16 products are exact in fp32.
 * The chunk partials are combined in registers as fp32 IEEE adds in the fixed tree
   ``((0+1)+(2+3))+((4+5)+(6+7))`` with at most four live accumulators
   (``s0123, s45, acc6, acc7`` while chunk 7 is being accumulated).
 * The root is rounded ONCE to the output dtype (bf16 round-to-nearest-even, or stored as fp32).
+
+Why ``ITERS >= 2`` is part of the arithmetic (review finding det_gemm:1, reproduced on Triton
+3.7.1): when a chunk is a single ``BLOCK_K`` step, MLIR folds the 1-trip loop and Triton's TTIR
+combine pass rewrites ``dot(a1, b1, 0) + acc0`` into ``dot(a1, b1, acc0)``: the tree add
+``s01 = acc0 + acc1`` disappears and chunk 1 is MMA-accumulated on top of chunk 0 (likewise
+s23/s45/s67), so the kernel no longer implements the declared tree (K=256/512: ~50 % of the
+outputs differ from the tree in the last bits).  ``plan_chunks`` therefore halves BLOCK_K until
+``ITERS >= 2`` (BLOCK_K = 16 for 32-wide chunks, 32 for 64-wide chunks), the kernel asserts it
+statically, and :func:`tree_gemm` verifies once per compiled variant that the TTGIR still holds
+exactly ``NUM_CHUNKS - 1`` fp32 tree adds (fail closed: :class:`TreeIRError`).
 
 Cast points: inputs are bf16 (no cast), accumulation fp32, one rounding at the store.
 
@@ -30,11 +41,17 @@ up to a multiple of 256, ``CHUNK_LEN = K_pad / 8`` and loads beyond K are masked
 empty chunk partials are exact zeros and ``x + 0 == x`` leaves the tree bits unchanged.  This is
 the chunk rule for dW (reduction over the M tokens): repeatable, not batch-invariant (dW depends
 on every token anyway).  For the forward and dA GEMMs of the model every reduction length
-(6656, 4096, 19968, 256, 202752) is a multiple of 256, so no padding is used there.
+(6656, 4096, 19968, 256, 202752, 25344) is a multiple of 256, so no padding is used there.
+
+Device: the launch is pinned to the operands' CUDA device (``torch.cuda.device(a.device)``), so a
+call on tensors that do not live on the current device launches on the right context/stream.
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
+import re
 from dataclasses import asdict, dataclass
 
 import torch
@@ -42,9 +59,19 @@ import triton
 import triton.language as tl
 
 CANONICAL_K_CHUNKS = 8
-# Smallest BLOCK_K we ever use; K_pad must be a multiple of NUM_CHUNKS * MIN_BLOCK_K.
+# Alignment unit of a chunk: K_pad must be a multiple of NUM_CHUNKS * MIN_BLOCK_K (8 x 32 = 256).
 MIN_BLOCK_K = 32
+# Smallest BLOCK_K the kernel may use (one bf16 mma.sync k16 step); lets a 32-wide chunk still run
+# ITERS = 2 loop iterations (module docstring).
+MIN_MMA_BLOCK_K = 16
+MIN_ITERS = 2
 _SUPPORTED_CHUNK_COUNTS = (1, 2, 4, 8)
+# Explicit opt-out of the compiled-IR tree check (recorded in trace()); never set in production.
+IR_GUARD_ENV = "RL_KERNEL_MUSE_GLIMMER_SKIP_TREE_IR_GUARD"
+
+
+class TreeIRError(RuntimeError):
+    """The compiled kernel does not contain the declared fp32 tree adds (fail closed)."""
 
 
 @dataclass(frozen=True)
@@ -72,7 +99,8 @@ class ChunkPlan:
 
 
 # Pinned per shape class (A100-80GB, Triton 3.7.1; picked from an offline sweep recorded in
-# REPORT_det_gemm.md).  Tile constants never change the bits -- see module docstring.
+# REPORT_det_gemm.md).  Tile constants do not change the bits as long as ITERS >= 2 (module doc);
+# ``block_k`` is the preferred value, ``plan_chunks`` lowers it for short chunks.
 PREFILL_CONFIG = TileConfig(block_m=64, block_n=128, block_k=64, num_warps=8, num_stages=3)
 DECODE64_CONFIG = TileConfig(block_m=32, block_n=64, block_k=64, num_warps=4, num_stages=4)
 DECODE16_CONFIG = TileConfig(block_m=16, block_n=64, block_k=64, num_warps=4, num_stages=4)
@@ -103,7 +131,13 @@ def plan_chunks(
     allow_pad: bool = False,
     block_k: int = 64,
 ) -> ChunkPlan:
-    """Split a reduction of length ``k_size`` into ``num_chunks`` canonical chunks."""
+    """Split a reduction of length ``k_size`` into ``num_chunks`` canonical chunks.
+
+    ``K_pad = roundup(K, num_chunks * 32)``; without ``allow_pad`` a K that needs padding raises
+    (out of contract).  ``block_k`` is the preferred BLOCK_K; it is halved until it divides the
+    chunk length AND the chunk loop runs at least ``MIN_ITERS = 2`` iterations (so no tree add can
+    be folded into the MMA chain; module docstring), never below ``MIN_MMA_BLOCK_K = 16``.
+    """
 
     if num_chunks not in _SUPPORTED_CHUNK_COUNTS:
         raise ValueError(f"num_chunks must be one of {_SUPPORTED_CHUNK_COUNTS}, got {num_chunks}")
@@ -116,12 +150,15 @@ def plan_chunks(
     if k_pad != k_size and not allow_pad:
         raise ValueError(
             f"reduction length {k_size} is not a multiple of {unit} "
-            f"({num_chunks} chunks x {MIN_BLOCK_K}); out of contract for the forward GEMM"
+            f"({num_chunks} chunks x {MIN_BLOCK_K}); out of contract for a reduction without the "
+            "declared ragged (token-axis) padding rule"
         )
     chunk_len = k_pad // num_chunks
     effective_block_k = block_k
-    while chunk_len % effective_block_k:
+    while chunk_len % effective_block_k or chunk_len // effective_block_k < MIN_ITERS:
         effective_block_k //= 2
+    if effective_block_k < MIN_MMA_BLOCK_K:  # unreachable: chunk_len >= 32 by construction
+        raise ValueError(f"no BLOCK_K >= {MIN_MMA_BLOCK_K} gives {MIN_ITERS} chunk iterations")
     return ChunkPlan(
         k=k_size,
         k_pad=k_pad,
@@ -212,6 +249,8 @@ def det_gemm_tree_kernel(
     )
     tl.static_assert(CHUNK_LEN % BLOCK_K == 0, "CHUNK_LEN must be a multiple of BLOCK_K")
     ITERS: tl.constexpr = CHUNK_LEN // BLOCK_K
+    # A 1-trip chunk loop lets the compiler fold the tree adds into the MMA chain (det_gemm:1).
+    tl.static_assert(ITERS >= 2, "each chunk must run >= 2 BLOCK_K iterations (tree adds)")
 
     # Grouped rasterisation (L2 reuse of the B operand).  Which program computes which tile has
     # no effect on the arithmetic of the tile.
@@ -338,60 +377,126 @@ def tree_gemm(
     if m_size == 0 or n_size == 0:
         return out
     grid = (triton.cdiv(m_size, cfg.block_m) * triton.cdiv(n_size, cfg.block_n),)
-    compiled = det_gemm_tree_kernel[grid](
-        a,
-        b,
-        out,
-        m_size,
-        n_size,
-        k_size,
-        a.stride(0),
-        a.stride(1),
-        b.stride(0),
-        b.stride(1),
-        out.stride(0),
-        out.stride(1),
-        CHUNK_LEN=plan.chunk_len,
-        NUM_CHUNKS=plan.num_chunks,
-        BLOCK_M=cfg.block_m,
-        BLOCK_N=cfg.block_n,
-        BLOCK_K=plan.block_k,
-        GROUP_M=cfg.group_m,
-        EVEN_M=m_size % cfg.block_m == 0,
-        EVEN_N=n_size % cfg.block_n == 0,
-        MASK_K=plan.masked,
-        num_warps=cfg.num_warps,
-        num_stages=cfg.num_stages,
-    )
-    _LAST_LAUNCH.clear()
-    _LAST_LAUNCH.update(
-        shape=(m_size, n_size, k_size),
-        shape_class=shape_class,
-        config=asdict(cfg),
-        plan=asdict(plan),
-        grid=grid,
-        n_regs=getattr(compiled, "n_regs", None),
-        n_spills=getattr(compiled, "n_spills", None),
-    )
+    # Triton launches on the *current* device/stream: pin it to the operands' device (the context
+    # switch is only paid when the operands do not live on the current device).
+    on_current = a.device.index is None or a.device.index == torch.cuda.current_device()
+    with contextlib.nullcontext() if on_current else torch.cuda.device(a.device):
+        compiled = det_gemm_tree_kernel[grid](
+            a,
+            b,
+            out,
+            m_size,
+            n_size,
+            k_size,
+            a.stride(0),
+            a.stride(1),
+            b.stride(0),
+            b.stride(1),
+            out.stride(0),
+            out.stride(1),
+            CHUNK_LEN=plan.chunk_len,
+            NUM_CHUNKS=plan.num_chunks,
+            BLOCK_M=cfg.block_m,
+            BLOCK_N=cfg.block_n,
+            BLOCK_K=plan.block_k,
+            GROUP_M=cfg.group_m,
+            EVEN_M=m_size % cfg.block_m == 0,
+            EVEN_N=n_size % cfg.block_n == 0,
+            MASK_K=plan.masked,
+            num_warps=cfg.num_warps,
+            num_stages=cfg.num_stages,
+        )
+    _verify_tree_ir(compiled, plan.num_chunks, cfg.block_m, cfg.block_n)
+    # Raw objects only (asdict on every decode call costs ~10 us); converted in last_launch().
+    _LAST_LAUNCH["raw"] = ((m_size, n_size, k_size), shape_class, cfg, plan, grid, compiled)
     return out
+
+
+_VERIFIED_IR: set[str] = set()
+_TREE_ADD_CACHE: dict[tuple[int, int], re.Pattern[str]] = {}
+
+
+def ir_guard_enabled() -> bool:
+    """False only when the explicit opt-out env var is set (recorded in ``trace()``)."""
+
+    return os.environ.get(IR_GUARD_ENV, "").strip().lower() not in ("1", "true", "yes")
+
+
+def count_tree_adds(ttgir: str, block_m: int, block_n: int) -> int:
+    """Number of fp32 ``arith.addf`` on ``(block_m, block_n)`` tensors in a TTGIR listing."""
+
+    pattern = _TREE_ADD_CACHE.get((block_m, block_n))
+    if pattern is None:
+        pattern = re.compile(rf"arith\.addf [^\n]*: tensor<{block_m}x{block_n}xf32")
+        _TREE_ADD_CACHE[(block_m, block_n)] = pattern
+    return len(pattern.findall(ttgir))
+
+
+def _verify_tree_ir(compiled: object, num_chunks: int, block_m: int, block_n: int) -> None:
+    """Fail closed unless the compiled kernel keeps the ``num_chunks - 1`` declared tree adds.
+
+    Checked once per compiled variant (keyed by Triton's kernel hash).  The only fp32 adds of
+    ``(BLOCK_M, BLOCK_N)`` tensors in the kernel are the tree nodes, so a compiler that
+    re-associates the tree (e.g. folds an add into ``tl.dot``'s accumulator, finding
+    det_gemm:1) lowers the count and is rejected instead of silently changing the bits.
+    """
+
+    if not ir_guard_enabled():
+        return
+    key = str(getattr(compiled, "hash", id(compiled)))
+    if key in _VERIFIED_IR:
+        return
+    asm = getattr(compiled, "asm", None)
+    ttgir = asm.get("ttgir") if asm is not None and hasattr(asm, "get") else None
+    if not ttgir:
+        raise TreeIRError(
+            "det_gemm_tree: cannot verify the compiled tree (no TTGIR in the Triton cache; unset "
+            f"TRITON_STORE_BINARY_ONLY, or set {IR_GUARD_ENV}=1 to opt out explicitly)"
+        )
+    found = count_tree_adds(ttgir, block_m, block_n)
+    if found != num_chunks - 1:
+        raise TreeIRError(
+            f"det_gemm_tree: compiled kernel holds {found} fp32 tree adds, expected "
+            f"{num_chunks - 1} for {num_chunks} chunks; the compiler re-associated the canonical "
+            "tree (refusing to produce out-of-contract bits)"
+        )
+    _VERIFIED_IR.add(key)
 
 
 def last_launch() -> dict[str, object]:
     """Launch constants and ptxas register/spill counts of the most recent ``tree_gemm``."""
 
-    return dict(_LAST_LAUNCH)
+    raw = _LAST_LAUNCH.get("raw")
+    if raw is None:
+        return {}
+    shape, shape_class, cfg, plan, grid, compiled = raw
+    return {
+        "shape": shape,
+        "shape_class": shape_class,
+        "config": asdict(cfg),
+        "plan": asdict(plan),
+        "grid": grid,
+        "n_regs": getattr(compiled, "n_regs", None),
+        "n_spills": getattr(compiled, "n_spills", None),
+    }
 
 
 __all__ = [
     "CANONICAL_K_CHUNKS",
     "DECODE16_CONFIG",
     "DECODE64_CONFIG",
+    "IR_GUARD_ENV",
     "MIN_BLOCK_K",
+    "MIN_ITERS",
+    "MIN_MMA_BLOCK_K",
     "PREFILL_CONFIG",
     "SHAPE_CLASSES",
     "ChunkPlan",
     "TileConfig",
+    "TreeIRError",
+    "count_tree_adds",
     "det_gemm_tree_kernel",
+    "ir_guard_enabled",
     "last_launch",
     "plan_chunks",
     "select_config",
