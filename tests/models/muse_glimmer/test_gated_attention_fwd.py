@@ -217,19 +217,44 @@ def test_token_vs_head_tiles_bitwise(window, n):
 
 
 def test_tile_layouts_share_warp_split():
-    """The compiled MMA layouts must split warps along the key axis identically (see kernel doc)."""
+    """The compiled MMA layouts must split warps along the key axis identically (see kernel doc).
+
+    Compiles every variant the strict paths launch before scanning: TOKEN and HEAD tiles at
+    every TP head geometry (32/2, 16/1, 8/1 and 4/1, the last two with masked HEAD-tile rows),
+    varlen and paged, global and local.
+    """
     assert kern.NUM_WARPS_HEAD == kern.NUM_WARPS_TOKEN
-    q, k, v, gate = _inputs(70, seed=3)
-    _one_shot(q, k, v, gate, None, tile_mode="token")
-    _one_shot(q, k, v, gate, None, tile_mode="head")
+    n = 70
+    for hq, hkv in kern.SUPPORTED_HEAD_GEOMETRIES:
+        g = torch.Generator(device=DEV).manual_seed(hq)
+        q = torch.randn(n, hq, D, device=DEV, generator=g).to(torch.bfloat16)
+        k = torch.randn(n, hkv, D, device=DEV, generator=g).to(torch.bfloat16)
+        v = torch.randn(n, hkv, D, device=DEV, generator=g).to(torch.bfloat16)
+        gate = torch.randn(n, hq * D, device=DEV, generator=g).to(torch.bfloat16)
+        cu = _i32([0, n])
+        pos = torch.arange(n, dtype=torch.int32, device=DEV)
+        cache = PagedKVCache(num_pages=8, num_seqs=1, max_pages_per_seq=5, device=DEV,
+                             num_kv_heads=hkv)
+        cache.append(0, k, v)
+        heads = {"num_q_heads": hq, "num_kv_heads": hkv}
+        for window in (None, W):
+            for mode in ("token", "head"):
+                ga.strict_gated_attention_fwd_varlen(
+                    q, k, v, gate, cu, cu, pos, window=window, tile_mode=mode, **heads
+                )
+                ga.strict_gated_attention_fwd_paged(
+                    q, gate, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens,
+                    cu, window=window, tile_mode=mode, **heads,
+                )
     caches = kern._gated_attention_fwd_kernel.device_caches[torch.cuda.current_device()][0]
     splits = set()
     for compiled in caches.values():
         for line in compiled.asm["ttgir"].splitlines():
             if line.strip().startswith("#mma"):
                 splits.add(line.split("warpsPerCTA = ")[1].split("]")[0] + "]")
+    assert len(caches) >= 4 * 2 * 2 * 2, f"only {len(caches)} variants compiled"
     assert len(splits) == 1, f"different warp splits across tile variants: {splits}"
-    print(f"\nMMA warpsPerCTA for all compiled variants: {splits}")
+    print(f"\nMMA warpsPerCTA for all {len(caches)} compiled variants: {splits}")
 
 
 # ------------------------------------------------------------------------------- G2
@@ -608,3 +633,249 @@ def test_rejects_bad_inputs():
         ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, bad_pos, window=None)
     with pytest.raises(ValueError):
         ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=None, tile_mode="x")
+
+
+# ------------------------------------------------------------------------------- fail closed
+# Review wave A2 (gated_attention_fwd:R1-R4): bad packing metadata must raise, never read or
+# write out of bounds, never return unwritten rows. Two mechanisms: host validation with a
+# ValueError when the wrapper syncs anyway (max_seqlen_q=None), and in-kernel checks + a
+# device-side assert (torch._assert_async) on the no-sync path (max_seqlen_q given), which
+# poisons the CUDA context and is therefore tested in a subprocess.
+
+
+def _varlen_case(n=64, seed=1):
+    q, k, v, gate = _inputs(n, seed=seed)
+    return q, k, v, gate, _i32([0, n]), torch.arange(n, dtype=torch.int32, device=DEV)
+
+
+@pytest.mark.parametrize(
+    "cu_q, cu_k, match",
+    [
+        ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+        ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+        ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+        ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+        ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+    ],
+    ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+)
+def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+    q, k, v, gate, _cu, pos = _varlen_case()
+    with pytest.raises(ValueError, match=match):
+        ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, _i32(cu_q), _i32(cu_k), pos, window=None
+        )
+
+
+@LAYER_KINDS
+def test_host_validation_rejects_q_pos_outside_keys(window):
+    q, k, v, gate, cu, pos = _varlen_case()
+    for bad in (pos + 1000, pos - 5, pos.clone().fill_(64)):
+        with pytest.raises(ValueError, match="q_pos"):
+            ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, bad, window=window)
+    # positions need not be contiguous for the forward: any subset of the keys is valid
+    rows = torch.tensor([0, 5, 63, 7], device=DEV)
+    y, _o, _l = ga.strict_gated_attention_fwd_varlen(
+        q[rows].contiguous(), k, v, gate[rows].contiguous(), _i32([0, 4]), cu,
+        rows.to(torch.int32), window=window,
+    )
+    full, _o2, _l2 = ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window)
+    assert torch.equal(y, full[rows])
+
+
+def test_host_validation_paged_seq_lens():
+    q, k, v, gate = _inputs(64, seed=2)
+    cache = _new_cache(64, num_seqs=2)
+    cache.append(0, k, v)
+    cache.append(1, k, v)
+    cu_q = _i32([0, 1, 2])
+    qs, gs = q[-2:].contiguous(), gate[-2:].contiguous()
+    lens = cache.seq_lens.clone()
+    lens[0] = 96  # more keys than the 4 pages of its block-table row hold
+    with pytest.raises(ValueError, match="seq_lens=96"):
+        ga.strict_gated_attention_fwd_paged(
+            qs, gs, cache.k_cache, cache.v_cache, cache.block_table, lens, cu_q, window=None
+        )
+    lens = cache.seq_lens.clone()
+    lens[1] = 0  # fewer keys than queries
+    with pytest.raises(ValueError, match="len_q=1"):
+        ga.strict_gated_attention_fwd_paged(
+            qs, gs, cache.k_cache, cache.v_cache, cache.block_table, lens, cu_q, window=None
+        )
+    with pytest.raises(ValueError, match=r"cu_seqlens_q\[-1\]"):
+        ga.strict_gated_attention_fwd_paged(
+            qs, gs, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens,
+            _i32([0, 1, 3]), window=None,
+        )
+
+
+def test_seq_meta_path_validates_without_sync():
+    """A SequenceMeta is a host-validated packing: no sync, and max_seqlen_q may not undercut it."""
+    from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
+
+    q, k, v, gate, cu, pos = _varlen_case(n=300, seed=3)
+    ref = ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=W)
+    meta = bwd.prepare_sequence_meta(cu, cu, pos, num_k_tokens=k.shape[0])
+    cache = _new_cache(300)
+    cache.append(0, k, v)
+    cu1 = _i32([0, 1])
+    q1, g1 = q[-1:].contiguous(), gate[-1:].contiguous()
+    torch.cuda.synchronize()
+    torch.cuda.set_sync_debug_mode("error")
+    try:
+        got = ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=W, seq_meta=meta
+        )
+        # the hot paths with a host-side max_seqlen_q do not sync either
+        got2 = ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=W, max_seqlen_q=300
+        )
+        dec = ga.strict_gated_attention_fwd_paged(
+            q1, g1, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens, cu1,
+            window=W, max_seqlen_q=1,
+        )
+    finally:
+        torch.cuda.set_sync_debug_mode("default")
+    _assert_equal(got, ref, "seq_meta path")
+    _assert_equal(got2, ref, "max_seqlen_q path")
+    _assert_equal(dec, tuple(t[-1:] for t in ref), "paged decode, max_seqlen_q path")
+    with pytest.raises(ValueError, match="below the packing"):
+        ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=W, seq_meta=meta, max_seqlen_q=1
+        )
+    with pytest.raises(ValueError, match="seq_meta"):
+        ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu.clone(), cu, pos, window=W, seq_meta=meta
+        )
+
+
+_CHILD = r'''
+import sys, torch
+from rl_engine.models.muse_glimmer.ops import gated_attention as ga
+from rl_engine.models.muse_glimmer.ops.paged_kv import PagedKVCache
+DEV = torch.device("cuda")
+HQ, HKV, D = 32, 2, 128
+
+def inputs(n, seed):
+    g = torch.Generator(device=DEV).manual_seed(seed)
+    q = (torch.randn(n, HQ, D, device=DEV, generator=g) * 3.87).bfloat16()
+    k = torch.randn(n, HKV, D, device=DEV, generator=g).bfloat16()
+    v = torch.randn(n, HKV, D, device=DEV, generator=g).bfloat16()
+    gate = (torch.randn(n, HQ * D, device=DEV, generator=g) * 2).bfloat16()
+    return q, k, v, gate
+
+def i32(x):
+    return torch.tensor(list(x), dtype=torch.int32, device=DEV)
+
+def cache_of(k, v, num_pages, num_seqs=1, max_pages=None):
+    c = PagedKVCache(num_pages=num_pages, num_seqs=num_seqs,
+                     max_pages_per_seq=max_pages or -(-k.shape[0] // 16), device=DEV)
+    for s in range(num_seqs):
+        c.append(s, k, v)
+    return c
+
+case, window = sys.argv[1], (None if sys.argv[2] == "none" else int(sys.argv[2]))
+n = 40
+q, k, v, gate = inputs(n, 1)
+cu = i32([0, n])
+pos = torch.arange(n, dtype=torch.int32, device=DEV)
+if case == "ok_varlen":
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window, max_seqlen_q=n)
+elif case == "ok_paged":
+    c = cache_of(k, v, 8)
+    ga.strict_gated_attention_fwd_paged(q[-4:].contiguous(), gate[-4:].contiguous(), c.k_cache,
+        c.v_cache, c.block_table, c.seq_lens, i32([0, 4]), window=window, max_seqlen_q=4)
+elif case == "max_seqlen_short_auto":    # review p1: auto -> HEAD tile, rows 1.. never computed
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window, max_seqlen_q=1)
+elif case == "max_seqlen_short_token":   # one 64-row TOKEN tile for a 100-query sequence
+    q, k, v, gate = inputs(100, 2)
+    cu = i32([0, 100])
+    pos = torch.arange(100, dtype=torch.int32, device=DEV)
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window,
+                                         max_seqlen_q=50, tile_mode="token")
+elif case == "max_seqlen_short_head":
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window,
+                                         max_seqlen_q=2, tile_mode="head")
+elif case == "max_seqlen_short_paged":   # review p1b
+    c = cache_of(k, v, 8)
+    ga.strict_gated_attention_fwd_paged(q[-4:].contiguous(), gate[-4:].contiguous(), c.k_cache,
+        c.v_cache, c.block_table, c.seq_lens, i32([0, 4]), window=window, max_seqlen_q=2)
+elif case == "q_end_beyond_rows":        # review p8w: OOB write of y/o/lse
+    ga.strict_gated_attention_fwd_varlen(q[:16], k, v, gate[:16], cu, cu, pos[:16].contiguous(),
+                                         window=window, max_seqlen_q=n)
+elif case == "k_end_beyond_rows":        # review p3: reads past v
+    ga.strict_gated_attention_fwd_varlen(q, k[:24].contiguous(), v[:24].contiguous(), gate, cu,
+                                         i32([0, n]), pos, window=window, max_seqlen_q=n)
+elif case == "q_pos_beyond_keys":        # review p4
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos + 1000, window=window,
+                                         max_seqlen_q=n)
+elif case == "q_pos_negative":
+    ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos - 5, window=window,
+                                         max_seqlen_q=n, tile_mode="head")
+elif case == "page_minus1_visible":      # review p5: -1 under a visible key is not "masked"
+    c = cache_of(k, v, 8)
+    bt = c.block_table.clone()
+    bt[0, 1] = -1                        # keys 16..31, visible to the query at 39
+    ga.strict_gated_attention_fwd_paged(q[-1:].contiguous(), gate[-1:].contiguous(), c.k_cache,
+        c.v_cache, bt, c.seq_lens, i32([0, 1]), window=window, max_seqlen_q=1)
+elif case == "page_out_of_range":        # review p7: OOB read of the cache
+    c = cache_of(k, v, 4)
+    bt = c.block_table.clone()
+    bt[0, 1] = 1000
+    ga.strict_gated_attention_fwd_paged(q[-1:].contiguous(), gate[-1:].contiguous(), c.k_cache,
+        c.v_cache, bt, c.seq_lens, i32([0, 1]), window=window, max_seqlen_q=1)
+elif case == "seq_lens_beyond_table":    # review p6: would read the next row of the table
+    c = cache_of(k, v, 16, num_seqs=2, max_pages=3)
+    lens = c.seq_lens.clone()
+    lens[0] = 64
+    ga.strict_gated_attention_fwd_paged(q[-2:].contiguous(), gate[-2:].contiguous(), c.k_cache,
+        c.v_cache, c.block_table, lens, i32([0, 1, 2]), window=window, max_seqlen_q=1)
+elif case == "seq_lens_below_len_q":
+    c = cache_of(k, v, 8)
+    lens = c.seq_lens.clone()
+    lens[0] = 2
+    ga.strict_gated_attention_fwd_paged(q[-4:].contiguous(), gate[-4:].contiguous(), c.k_cache,
+        c.v_cache, c.block_table, lens, i32([0, 4]), window=window, max_seqlen_q=4)
+else:
+    raise SystemExit(f"unknown case {case}")
+torch.cuda.synchronize()
+print("CHILD-OK")
+'''
+
+_BAD_CASES = [
+    "max_seqlen_short_auto", "max_seqlen_short_token", "max_seqlen_short_head",
+    "max_seqlen_short_paged",
+    "q_end_beyond_rows", "k_end_beyond_rows", "q_pos_beyond_keys", "q_pos_negative",
+    "page_minus1_visible", "page_out_of_range", "seq_lens_beyond_table", "seq_lens_below_len_q",
+]
+
+
+def _run_child(case: str, window) -> tuple[int, str]:
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = str(Path(__file__).resolve().parents[3])
+    env = dict(os.environ)
+    env["PYTHONPATH"] = repo + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(
+        [sys.executable, "-c", _CHILD, case, "none" if window is None else str(window)],
+        capture_output=True, text=True, env=env, timeout=600,
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+@pytest.mark.parametrize("case", _BAD_CASES)
+def test_device_checks_fail_closed(case):
+    """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+    window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+    code, out = _run_child(case, window)
+    assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+    assert "strict gated attention: invalid metadata" in out, out[-2000:]
+
+
+@pytest.mark.parametrize("case", ["ok_varlen", "ok_paged"])
+def test_device_checks_control(case):
+    code, out = _run_child(case, W)
+    assert code == 0 and "CHILD-OK" in out, out[-2000:]
