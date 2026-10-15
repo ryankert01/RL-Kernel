@@ -111,11 +111,20 @@ def test_g1_forward_correctness_muse_shape(name):
     assert torch.equal(y32.to(BF16), y16)
 
 
-def test_g1_forward_fp32_golden_is_fp64():
-    a, w = _operands(8, 32, 256, seed=3)
-    expected = (a.double() @ w.double().t()).float()
-    assert torch.equal(dg.forward_fp32(a, w), expected)
-    assert torch.equal(dg.forward_fp32(a, w.t().contiguous(), w_kn=True), expected)
+def test_g1_forward_fp32_golden_vs_explicit_fp64_loop():
+    """The golden against an independent fixed-order fp64 loop over k (finding det_gemm:7)."""
+
+    a, w = _operands(5, 7, 256, seed=3)
+    acc = torch.zeros(5, 7, dtype=torch.float64, device=DEV)
+    a64, w64 = a.double(), w.double()
+    for k in range(256):  # ascending k, one fp64 multiply-add per step (bf16 products are exact)
+        acc = acc + a64[:, k : k + 1] * w64[:, k][None, :]
+    golden = dg.forward_fp32(a, w)
+    # fp64 accumulation-order noise (~1e-16 relative) vanishes in the fp32 rounding.
+    torch.testing.assert_close(golden.double(), acc, atol=1e-6, rtol=1e-6)
+    assert torch.equal(dg.forward_fp32(a, w.t().contiguous(), w_kn=True), golden)
+    # And the strict kernel is within the fp32 reduction tolerance of the independent loop.
+    _assert_close(dg.fast_det_gemm(a, w, out_dtype=FP32), acc.float(), _FWD_TOL["float32"], "fp32")
 
 
 # --------------------------------------------------------------------------------------- G2 ---
@@ -176,16 +185,135 @@ _TILE_VARIANTS = [
 ]
 
 
+@pytest.mark.parametrize("k_size", [256, 512, 6656], ids=lambda k: f"K{k}")
 @pytest.mark.parametrize(
     "cfg", _TILE_VARIANTS, ids=lambda c: f"{c.block_m}x{c.block_n}x{c.block_k}w{c.num_warps}"
 )
-def test_g2_tile_constants_do_not_change_bits(cfg):
-    """Tile constants are performance-only: the MMA chain per chunk and the tree are fixed."""
+def test_g2_tile_constants_do_not_change_bits(cfg, k_size):
+    """Tile constants are performance-only, incl. the short-chunk shapes (K=256/512) where the
+    preferred BLOCK_K equals the chunk length (finding det_gemm:1)."""
 
-    a, w = _operands(256, 4096, 6656, seed=7)
+    a, w = _operands(256, 1024 if k_size < 6656 else 4096, k_size, seed=7)
     pinned = dg.fast_det_gemm(a, w, out_dtype=FP32)
     variant = kt.tree_gemm(a, w.t(), out_dtype=FP32, config=cfg)
+    assert kt.last_launch()["plan"]["chunk_len"] // kt.last_launch()["plan"]["block_k"] >= 2
     assert torch.equal(pinned, variant)
+    assert torch.equal(pinned, _leaf_tree(a, w.t()))
+
+
+# ------------------------------------------------- det_gemm:1 kernel == declared 8-leaf tree ---
+
+
+def _leaf_tree(a: torch.Tensor, b_kn: torch.Tensor, num_chunks: int = 8) -> torch.Tensor:
+    """The declared tree evaluated outside the kernel: one single-chunk launch per chunk (no
+    in-kernel adds to re-associate) and the canonical ``combine_tree`` in torch fp32."""
+
+    chunk = a.size(1) // num_chunks
+    leaves = [
+        kt.tree_gemm(
+            a[:, c * chunk : (c + 1) * chunk],
+            b_kn[c * chunk : (c + 1) * chunk],
+            out_dtype=FP32,
+            num_chunks=1,
+        )
+        for c in range(num_chunks)
+    ]
+    return combine_tree(leaves)
+
+
+@pytest.mark.parametrize("m_size", [1, 16, 64, 256], ids=lambda m: f"M{m}")
+@pytest.mark.parametrize("k_size", [256, 512, 768, 1024, 4096, 6656], ids=lambda k: f"K{k}")
+def test_kernel_equals_declared_tree(k_size, m_size):
+    """fast_det_gemm == combine_tree(8 single-chunk leaves) bitwise, every shape class and every
+    chunk length incl. 32 and 64 (before the fix K=256/512 differed in ~50 % of the outputs)."""
+
+    a, w = _operands(m_size, 384, k_size, seed=21)
+    full = dg.fast_det_gemm(a, w, out_dtype=FP32)
+    plan = kt.last_launch()["plan"]
+    assert plan["chunk_len"] // plan["block_k"] >= kt.MIN_ITERS
+    assert torch.equal(full, _leaf_tree(a, w.t()))
+    # TP sub-trees (NUM_CHUNKS = 2 and 4 launches) are nodes of the same tree.
+    chunk = k_size // 8
+    for count in (2, 4):
+        node = kt.tree_gemm(a[:, : count * chunk], w[:, : count * chunk].t(), out_dtype=FP32,
+                            num_chunks=count)
+        assert torch.equal(node, _leaf_tree(a[:, : count * chunk], w[:, : count * chunk].t(),
+                                            num_chunks=count))
+
+
+@pytest.mark.parametrize("m_size", [1, 64, 4096], ids=lambda m: f"M{m}")
+def test_da_reduce_n256_equals_declared_tree(m_size):
+    """dA of k_proj / v_proj reduces over N=256 (32-wide chunks): kernel == tree bitwise."""
+
+    torch.manual_seed(22)
+    w = _rand(256, 6656, scale=0.02)
+    a = _rand(m_size, 6656).requires_grad_(True)
+    gy = _rand(m_size, 256)
+    dg.fast_det_gemm(a, w).backward(gy)
+    expected = _leaf_tree(gy, w).to(BF16)
+    assert torch.equal(a.grad, expected)
+
+
+@pytest.mark.parametrize("tokens", [16, 255, 256, 300, 512, 4001], ids=lambda t: f"T{t}")
+def test_dw_ragged_rule_equals_declared_tree(tokens):
+    """dW reduces over T tokens with T_pad = roundup(T, 256): kernel == tree over zero-padded
+    leaves bitwise (before the fix T in (128, 512] differed: 1-iteration chunks)."""
+
+    torch.manual_seed(23)
+    a = _rand(tokens, 1024)
+    w = _rand(384, 1024, scale=0.02).requires_grad_(True)
+    gy = _rand(tokens, 384)
+    dg.fast_det_gemm(a, w).backward(gy)
+    t_pad = -(-tokens // 256) * 256
+    gy_pad = torch.zeros(t_pad, 384, device=DEV, dtype=BF16)
+    a_pad = torch.zeros(t_pad, 1024, device=DEV, dtype=BF16)
+    gy_pad[:tokens], a_pad[:tokens] = gy, a
+    assert torch.equal(w.grad, _leaf_tree(gy_pad.t(), a_pad).to(BF16))
+
+
+def test_tree_ir_guard():
+    """The compiled TTGIR holds exactly NUM_CHUNKS-1 fp32 tree adds; a re-associated kernel is
+    rejected (fail closed) and a 1-iteration chunk cannot even be compiled."""
+
+    a, w = _operands(64, 256, 512, seed=24)
+    kt._VERIFIED_IR.clear()
+    dg.fast_det_gemm(a, w)  # verifies the variant it compiled
+    assert len(kt._VERIFIED_IR) == 1
+
+    class _Folded:  # what the ITERS == 1 compile looked like: 3 adds left of the 7
+        hash = "fake-folded-variant"
+        asm = {
+            "ttgir": "\n".join(
+                f"%s{i} = arith.addf %x, %y : tensor<64x128xf32, #mma>" for i in range(3)
+            )
+        }
+
+    with pytest.raises(kt.TreeIRError, match="3 fp32 tree adds, expected 7"):
+        kt._verify_tree_ir(_Folded(), 8, 64, 128)
+    with pytest.raises(kt.TreeIRError, match="cannot verify"):
+        kt._verify_tree_ir(type("NoIR", (), {"hash": "x", "asm": {}})(), 8, 64, 128)
+    # ITERS == 1 is rejected by the kernel's static assert.
+    out = torch.empty(64, 256, device=DEV, dtype=BF16)
+    with pytest.raises(Exception, match="ITERS|static_assert|iterations"):
+        kt.det_gemm_tree_kernel[(4,)](
+            a, w.t(), out, 64, 256, 512, a.stride(0), a.stride(1), w.t().stride(0),
+            w.t().stride(1), out.stride(0), out.stride(1), CHUNK_LEN=64, NUM_CHUNKS=8,
+            BLOCK_M=64, BLOCK_N=64, BLOCK_K=64, GROUP_M=8, EVEN_M=True, EVEN_N=True,
+            MASK_K=False, num_warps=4, num_stages=3,
+        )  # fmt: skip
+
+
+@pytest.mark.skipif(torch.cuda.device_count() < 2, reason="needs two visible GPUs")
+def test_launch_follows_operand_device():
+    """Operands on a non-current device launch on their own device (finding det_gemm:6)."""
+
+    a, w = _operands(64, 256, 512, seed=25)
+    ref = dg.fast_det_gemm(a, w)
+    a1, w1 = a.to("cuda:1"), w.to("cuda:1")
+    with torch.cuda.device(0):
+        y1 = dg.fast_det_gemm(a1, w1)
+    torch.cuda.synchronize(1)
+    assert y1.device == a1.device and torch.equal(y1.cpu(), ref.cpu())
 
 
 def test_g2_weight_layout_kn_is_bitwise():
@@ -364,7 +492,136 @@ def test_g4_dw_ragged_rule_equals_zero_padded_tokens():
     w2 = w.clone().requires_grad_(True)
     dg.fast_det_gemm(a_pad, w2).backward(g_pad)
     assert torch.equal(w1.grad, w2.grad)
-    assert kt.plan_chunks(16, allow_pad=True) == kt.ChunkPlan(16, 256, 8, 32, 32, True)
+    assert kt.plan_chunks(16, allow_pad=True) == kt.ChunkPlan(16, 256, 8, 32, 16, True)
+
+
+def test_ragged_k_forward_opt_in():
+    """ragged_k=True is the declared token-axis rule: equal to explicit zero padding to 256."""
+
+    a, w = _operands(16, 128, 300, seed=26)
+    with pytest.raises(ValueError, match="not a multiple of 256"):
+        dg.fast_det_gemm(a, w)
+    y = dg.fast_det_gemm(a, w, out_dtype=FP32, ragged_k=True)
+    a_pad = torch.zeros(16, 512, device=DEV, dtype=BF16)
+    w_pad = torch.zeros(128, 512, device=DEV, dtype=BF16)
+    a_pad[:, :300], w_pad[:, :300] = a, w
+    assert torch.equal(y, dg.fast_det_gemm(a_pad, w_pad, out_dtype=FP32))
+    # K % 256 == 0: ragged_k changes nothing.
+    a2, w2 = _operands(16, 128, 512, seed=27)
+    assert torch.equal(dg.fast_det_gemm(a2, w2, ragged_k=True), dg.fast_det_gemm(a2, w2))
+
+
+# --------------------------------------------- det_gemm:2 TP-capable autograd (simulated) ---
+
+
+class _SimulatedAllGather:
+    """Single-GPU stand-in for a rank-ordered all-gather: the other ranks' fp32 partials were
+    computed beforehand; this rank's slot is filled with the LIVE partial its backward/forward
+    hands over (checked bitwise against the precomputed one).  Transport only, no arithmetic."""
+
+    def __init__(self, partials: list[torch.Tensor], rank: int) -> None:
+        self.partials, self.rank, self.calls = partials, rank, 0
+
+    def all_gather(self, x: torch.Tensor) -> torch.Tensor:
+        self.calls += 1
+        assert torch.equal(x[0], self.partials[self.rank])
+        slots = [x[0] if r == self.rank else p for r, p in enumerate(self.partials)]
+        return torch.stack(slots)
+
+
+_COLUMN_SHAPES = {"q_proj": (4096, 6656), "k_proj": (256, 6656), "mlp_gate": (19968, 6656)}
+_ROW_SHAPES = {"o_proj": (6656, 4096), "down_proj": (6656, 19968)}
+
+
+@pytest.mark.parametrize("tp_size", [2, 4, 8])
+@pytest.mark.parametrize("name", list(_COLUMN_SHAPES))
+def test_column_parallel_autograd_tp_equals_tp1(name, tp_size):
+    """Column-parallel shards: forward, dA (canonical tree over ranks) and dW equal TP1 bitwise."""
+
+    n_size, k_size = _COLUMN_SHAPES[name]
+    m_size = 96
+    a, w = _operands(m_size, n_size, k_size, seed=30)
+    gy = _rand(m_size, n_size)
+    a1 = a.clone().requires_grad_(True)
+    w1 = w.clone().requires_grad_(True)
+    y1 = dg.fast_det_gemm(a1, w1)
+    y1.backward(gy)
+    n_local = n_size // tp_size
+    rows = [slice(r * n_local, (r + 1) * n_local) for r in range(tp_size)]
+    partials = [dg.column_parallel_da_partial(gy[:, s], w[s], tp_size) for s in rows]
+    for rank, s in enumerate(rows):
+        gather = _SimulatedAllGather(partials, rank)
+        a_r = a.clone().requires_grad_(True)
+        w_r = w[s].clone().requires_grad_(True)
+        y_r = dg.column_parallel_fast_det_gemm(
+            a_r, w_r, tp_size=tp_size, da_reduce=dg.tree_reduce_over_ranks(gather)
+        )
+        y_r.backward(gy[:, s])
+        assert gather.calls == 1
+        assert torch.equal(y_r, y1[:, s]), f"{name} TP{tp_size} rank {rank}: forward"
+        assert torch.equal(a_r.grad, a1.grad), f"{name} TP{tp_size} rank {rank}: dA"
+        assert torch.equal(w_r.grad, w1.grad[s]), f"{name} TP{tp_size} rank {rank}: dW"
+
+
+def test_column_parallel_naive_rank_local_backward_is_not_tp1():
+    """Negative control (the det_gemm:2 failure): every rank running the plain autograd GEMM on
+    its shard (8 chunks over N_local, bf16) and summing the bf16 dA does not reproduce TP1."""
+
+    n_size, k_size = _COLUMN_SHAPES["q_proj"]
+    a, w = _operands(64, n_size, k_size, seed=31)
+    gy = _rand(64, n_size)
+    a1 = a.clone().requires_grad_(True)
+    dg.fast_det_gemm(a1, w).backward(gy)
+    naive = torch.zeros_like(a, dtype=FP32)
+    for s in (slice(0, n_size // 2), slice(n_size // 2, n_size)):
+        a_r = a.clone().requires_grad_(True)
+        dg.fast_det_gemm(a_r, w[s]).backward(gy[:, s])
+        naive += a_r.grad.float()
+    assert not torch.equal(naive.to(BF16), a1.grad)
+
+
+def test_column_parallel_requires_reduce_and_aligned_shards():
+    a, w = _operands(8, 512, 256, seed=32)
+    y = dg.column_parallel_fast_det_gemm(a.requires_grad_(True), w[:256], tp_size=2)
+    with pytest.raises(ValueError, match="needs a reduce callable"):
+        y.backward(torch.ones_like(y))
+    with pytest.raises(ValueError, match="multiple of"):
+        dg.column_parallel_da_partial(_rand(8, 96), _rand(96, 256), 2)
+    with pytest.raises(ValueError, match="tp_size"):
+        dg.column_parallel_fast_det_gemm(a, w, tp_size=3)
+
+
+@pytest.mark.parametrize("tp_size", [1, 2, 4, 8])
+@pytest.mark.parametrize("name", list(_ROW_SHAPES))
+def test_row_parallel_autograd_tp_equals_tp1(name, tp_size):
+    """Row-parallel shards: forward (fp32 partials -> canonical tree -> bf16), dA and dW == TP1."""
+
+    n_size, k_size = _ROW_SHAPES[name]
+    m_size = 96
+    a, w = _operands(m_size, n_size, k_size, seed=33)
+    gy = _rand(m_size, n_size)
+    a1 = a.clone().requires_grad_(True)
+    w1 = w.clone().requires_grad_(True)
+    y1 = dg.fast_det_gemm(a1, w1)
+    y1.backward(gy)
+    k_local = k_size // tp_size
+    cols = [slice(r * k_local, (r + 1) * k_local) for r in range(tp_size)]
+    partials = [
+        dg.fast_det_gemm_partial(a[:, s], w[:, s], rank_chunk_ids(tp_size, r))
+        for r, s in enumerate(cols)
+    ]
+    for rank, s in enumerate(cols):
+        gather = _SimulatedAllGather(partials, rank)
+        a_r = a[:, s].clone().requires_grad_(True)
+        w_r = w[:, s].clone().requires_grad_(True)
+        y_r = dg.row_parallel_fast_det_gemm(
+            a_r, w_r, tp_size=tp_size,
+            y_reduce=dg.tree_reduce_over_ranks(gather) if tp_size > 1 else None,
+        )
+        y_r.backward(gy)
+        assert torch.equal(y_r, y1), f"{name} TP{tp_size} rank {rank}: forward"
+        assert torch.equal(a_r.grad, a1.grad[:, s]), f"{name} TP{tp_size} rank {rank}: dA"
+        assert torch.equal(w_r.grad, w1.grad[:, s]), f"{name} TP{tp_size} rank {rank}: dW"
 
 
 def test_g4_fp32_output_path_backward():
@@ -410,6 +667,15 @@ def test_g5_trace_is_emitted_and_stable():
     assert launch["shape_class"] == "prefill"
     assert launch["config"] == dg.trace(4096)["tile_config"]["prefill"]
     assert launch["plan"]["block_k"] == 64 and launch["n_spills"] is not None
+    # Provenance travels with the callable (det_gemm:3) and is complete (det_gemm:4/5).
+    assert getattr(dg.fast_det_gemm, "trace")() == dg.trace()
+    tr = dg.trace()
+    assert tr["runtime"]["device_capability"] == list(torch.cuda.get_device_capability())
+    assert tr["runtime"]["triton"] and tr["min_chunk_iters"] == 2
+    assert "dY -> bf16" in tr["grad_cast"] and "roundup(M, 256)" in tr["dw_chunk_rule"]
+    assert "ragged_k" in tr["k_rule"] and tr["tree_ir_guard"].startswith("enabled")
+    assert dg.trace(k_chunks=4)["k_chunks"] == 4
+    assert "sub-tree of 4 chunks" in dg.trace(k_chunks=4)["reduction_order"]
 
 
 # -------------------------------------------------------------------------------- contract ---
@@ -432,6 +698,9 @@ def test_contract_rejects_out_of_contract_inputs():
     with pytest.raises(ValueError):
         kt.plan_chunks(500)
     assert kt.plan_chunks(6656) == kt.ChunkPlan(6656, 6656, 8, 832, 64, False)
-    assert kt.plan_chunks(256) == kt.ChunkPlan(256, 256, 8, 32, 32, False)
+    # Every chunk loop runs >= 2 iterations: 32-wide chunks use BLOCK_K 16, 64-wide use 32.
+    assert kt.plan_chunks(256) == kt.ChunkPlan(256, 256, 8, 32, 16, False)
+    assert kt.plan_chunks(512) == kt.ChunkPlan(512, 512, 8, 64, 32, False)
+    assert kt.plan_chunks(1024).block_k == 64 and kt.plan_chunks(768).block_k == 32
     assert kt.plan_chunks(19968).block_k == 64 and kt.plan_chunks(4096).block_k == 64
-    assert kt.plan_chunks(202752).block_k == 64
+    assert kt.plan_chunks(202752).block_k == 64 and kt.plan_chunks(25344).block_k == 32

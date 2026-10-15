@@ -3,8 +3,10 @@
 
 """Gates G1/G2/G4/G5 (and the WS2 tile/TP parity) for ``lm_head_softcap_logprob`` (O7).
 
-Small geometry: H=64, V=1900 padded to Vp=2048 = 8 tiles x 256 (148 padded columns in the
-last tile).  Real geometry: H=6656, V=202048 padded to 202752 = 8 x 25344.
+Small geometry: H=256, V=1900 padded to Vp=2048 = 8 tiles x 256 (148 padded columns in the
+last tile); H and the tile are multiples of 256 so the default ``fast_det_gemm`` path runs (a
+K % 256 != 0 reduction now fails closed instead of silently using the legacy kernel).  Real
+geometry: H=6656, V=202048 padded to 202752 = 8 x 25344.
 
 Tolerances: parity gates are ``torch.equal``.  The forward-accuracy gate uses the ws1.json
 ``logprob`` bfloat16 row (``atol=0.06``, read from the read-only profile) because the strict
@@ -21,6 +23,8 @@ import json
 import math
 import os
 import random
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -38,7 +42,7 @@ WS1_JSON = REPO / "rl_engine" / "contracts" / "profiles" / "precision" / "ws1.js
 TIGHT_ATOL = 2e-3
 GRAD_RTOL = 2e-2
 
-SMALL_H = 64
+SMALL_H = 256
 SMALL_V = 1900
 SMALL_VP = 2048  # 8 tiles x 256; 148 padded columns in tile 7
 MULT = op.OUTPUT_MULTIPLIER
@@ -181,6 +185,39 @@ def test_trace_is_complete_and_stable():
     assert first["constants"]["output_multiplier"] == pytest.approx(0.19611613513818404)
     assert first["constants"]["final_logit_softcapping"] == 20.0
     json.dumps(first)  # serialisable provenance
+    # GEMM provenance (finding lm_head_softcap_logprob:3): real order + R6 launch constants.
+    order = first["reduction_order"]["gemm"]
+    assert "8 canonical chunks" in order and "block order" not in order
+    assert "ragged_k=True" in order and "roundup(T, 256)" in order
+    gemm = first["gemm"]
+    assert gemm["op"] == "muse_glimmer.fast_det_gemm" and gemm["dtype_out"] == "float32"
+    assert set(gemm["tile_config"]) == {"decode16", "decode64", "prefill"}
+    for cfg in gemm["tile_config"].values():
+        assert {"block_m", "block_n", "block_k", "num_warps", "num_stages"} <= set(cfg)
+    legacy = op.trace(gemm=op.legacy_det_gemm_fp32)
+    assert "explicit non-default backend" in legacy["reduction_order"]["gemm"]
+
+
+@pytest.mark.unit
+def test_default_gemm_backend_and_no_silent_fallback():
+    """The default is fast_det_gemm; a broken det_gemm import propagates (finding
+    lm_head_softcap_logprob:4) instead of silently selecting the legacy kernel."""
+
+    assert op.gemm_backend_name() == "fast_det_gemm"
+    assert op.resolve_gemm() is op.resolve_gemm(None)
+    code = (
+        "import sys; sys.modules['rl_engine.models.muse_glimmer.ops.det_gemm'] = None\n"
+        "try:\n"
+        "    from rl_engine.models.muse_glimmer.ops import lm_head_softcap_logprob as m\n"
+        "    print('SILENT', m.gemm_backend_name())\n"
+        "except ImportError as exc:\n"
+        "    print('RAISED', type(exc).__name__)\n"
+    )
+    env = dict(os.environ, PYTHONPATH=str(REPO))
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=300
+    )
+    assert "RAISED" in out.stdout, out.stdout + out.stderr
 
 
 # --------------------------------------------------------------------------------------
@@ -336,6 +373,133 @@ def test_g4_backward_matches_fp32_autograd_and_is_deterministic():
     hh = h[:1].clone().requires_grad_(True)
     _strict(hh, w_padded, targets[:1]).backward(dlogp[:1])
     assert torch.equal(hh.grad, dh_a[:1])
+
+
+def _count_scalar_reads(fn) -> int:
+    """Device->host scalar reads (``aten::_local_scalar_dense``, i.e. ``bool()``/``item()``) that
+    ``fn`` performs; each one is a stream synchronisation."""
+
+    from torch.utils._python_dispatch import TorchDispatchMode
+
+    class _Counter(TorchDispatchMode):
+        count = 0
+
+        def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+            if "_local_scalar_dense" in str(func):
+                type(self).count += 1
+            return func(*args, **(kwargs or {}))
+
+    with _Counter():
+        fn()
+    return _Counter.count
+
+
+def _no_sync(fn) -> None:
+    """Run ``fn`` with torch's sync debug mode set to error: any host sync raises."""
+
+    torch.cuda.synchronize()
+    torch.cuda.set_sync_debug_mode("error")
+    try:
+        fn()
+    finally:
+        torch.cuda.set_sync_debug_mode("default")
+
+
+@requires_cuda
+@pytest.mark.ws1
+def test_host_syncs_and_device_side_target_rule():
+    """One host sync per validated call (was two), none with validate_targets=False; an invalid
+    target then yields NaN on the device instead of a silent -logZ (finding
+    lm_head_softcap_logprob:1)."""
+
+    h, w_padded, targets = _small_inputs(32, seed=40, device="cuda")
+    with torch.no_grad():
+        ref = _strict(h, w_padded, targets)  # warm-up / compile
+        assert _count_scalar_reads(lambda: _strict(h, w_padded, targets)) == 1
+        unchecked = []
+        _no_sync(lambda: unchecked.append(_strict(h, w_padded, targets, validate_targets=False)))
+        assert torch.equal(unchecked[0], ref)
+        with pytest.raises(RuntimeError):  # the validated path does sync (control)
+            _no_sync(lambda: _strict(h, w_padded, targets))
+        bad = targets.clone()
+        bad[[3, 7, 9]] = torch.tensor([SMALL_V, -100, SMALL_VP + 5], device="cuda")
+        out = _strict(h, w_padded, bad, validate_targets=False)
+        assert torch.isnan(out[[3, 7, 9]]).all()
+        keep = torch.ones(32, dtype=torch.bool, device="cuda")
+        keep[[3, 7, 9]] = False
+        assert torch.equal(out[keep], ref[keep])
+        tp = op.simulate_tp_logprob(h, w_padded, targets, tp=4, vocab_size=SMALL_V)
+        assert torch.equal(tp, ref)
+
+
+@requires_cuda
+@pytest.mark.ws1
+@pytest.mark.parametrize("tokens", [40, 255, 256, 300])
+def test_dw_uses_declared_ragged_token_rule(tokens):
+    """dW reduces over T with the fast_det_gemm ragged rule for EVERY T (finding
+    lm_head_softcap_logprob:2; before: T % 256 != 0 silently switched to the legacy kernel):
+    dW(T) == dW of the same tokens zero-padded to roundup(T, 256) with zero upstream gradient."""
+
+    h, w_padded, targets = _small_inputs(tokens, seed=41, device="cuda")
+    gen = torch.Generator(device="cuda").manual_seed(4)
+    dlogp = torch.randn(tokens, device="cuda", generator=gen)
+    hh = h.clone().requires_grad_(True)
+    ww = w_padded.clone().requires_grad_(True)
+    _strict(hh, ww, targets).backward(dlogp)
+    t_pad = -(-tokens // 256) * 256
+    h_pad = torch.zeros(t_pad, SMALL_H, device="cuda", dtype=torch.bfloat16)
+    h_pad[:tokens] = h
+    t_full = torch.zeros(t_pad, dtype=torch.int64, device="cuda")
+    t_full[:tokens] = targets
+    d_pad = torch.zeros(t_pad, device="cuda")
+    d_pad[:tokens] = dlogp
+    hp = h_pad.requires_grad_(True)
+    wp = w_padded.clone().requires_grad_(True)
+    _strict(hp, wp, t_full).backward(d_pad)
+    assert torch.equal(ww.grad, wp.grad)
+    assert torch.equal(hh.grad, hp.grad[:tokens])
+
+
+@requires_cuda
+@pytest.mark.ws1
+@pytest.mark.parametrize("tokens", [256, 300])
+def test_real_shape_backward_fast_path(tokens):
+    """Real geometry backward through the fast dW path (finding lm_head_softcap_logprob:6):
+    default backend, repeat torch.equal, allclose vs fp32 autograd, padded dW rows zero."""
+
+    assert op.gemm_backend_name() == "fast_det_gemm"
+    device = "cuda"
+    g = torch.Generator(device=device).manual_seed(42)
+    w = (torch.randn(op.VOCAB_SIZE, op.HIDDEN_SIZE, device=device, generator=g) * 0.02).to(
+        torch.bfloat16
+    )
+    w_padded = op.pad_lm_head_weight(w)
+    del w
+    h = torch.randn(tokens, op.HIDDEN_SIZE, device=device, generator=g).to(torch.bfloat16)
+    targets = torch.randint(0, op.VOCAB_SIZE, (tokens,), device=device, generator=g)
+    dlogp = torch.randn(tokens, device=device, generator=g)
+
+    def run():
+        hh = h.clone().requires_grad_(True)
+        ww = w_padded.clone().requires_grad_(True)
+        op.lm_head_softcap_logprob(hh, ww, targets).backward(dlogp)
+        return hh.grad, ww.grad
+
+    dh_a, dw_a = run()
+    dh_b, dw_b = run()
+    assert torch.equal(dh_a, dh_b) and torch.equal(dw_a, dw_b)
+    assert torch.count_nonzero(dw_a[op.VOCAB_SIZE :]) == 0
+    del dh_b, dw_b
+    hr = h.float().requires_grad_(True)
+    wr = w_padded[: op.VOCAB_SIZE].float().requires_grad_(True)
+    ref = _torch_reference_fp32(hr, wr, targets, vocab_size=op.VOCAB_SIZE)
+    ref.backward(dlogp)
+    for name, ours, theirs in (("dh", dh_a, hr.grad), ("dw", dw_a[: op.VOCAB_SIZE], wr.grad)):
+        scale = theirs.abs().max().item()
+        err = (ours.float() - theirs).abs().max().item()
+        print(f"\nreal T={tokens} {name}: max|ours - fp32 autograd| = {err:.3e} "
+              f"(max|ref| {scale:.3e})")
+        torch.testing.assert_close(ours.float(), theirs, rtol=GRAD_RTOL, atol=GRAD_RTOL * scale)
 
 
 @requires_cuda

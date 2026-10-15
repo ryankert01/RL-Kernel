@@ -211,7 +211,7 @@ class TritonDetGemmAdapter:
         if a.stride(1) == 0 or w.stride(1) == 0:
             raise ValueError("TritonDetGemmAdapter rejects broadcast (zero-stride) operands.")
         if out_dtype not in (torch.bfloat16, torch.float32):
-            raise TypeError(f"TritonDetGemmAdapter out_dtype must be bf16 or fp32, got {out_dtype}.")
+            raise TypeError(f"TritonDetGemmAdapter out_dtype must be bf16/fp32, got {out_dtype}.")
         if m_size == 0 or n_size == 0:
             return torch.zeros((m_size, n_size), dtype=out_dtype, device=a.device)
         if k_size == 0:
