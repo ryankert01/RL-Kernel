@@ -347,38 +347,20 @@ def fused_post_norm_residual_pre_norm(
 # --------------------------------------------------------------------------------------------
 # O4 qk-norm + scaled RoPE
 # --------------------------------------------------------------------------------------------
-_ROPE_TABLES: dict[tuple[float, int, str], tuple[torch.Tensor, torch.Tensor]] = {}
-
-
-def _build_rope_table(
-    n_pos: int, *, theta: float, dim: int, device: torch.device
-) -> tuple[torch.Tensor, torch.Tensor]:
-    inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
-    pos = torch.arange(n_pos, dtype=torch.float32, device=device)
-    freqs = pos[:, None] * inv_freq[None, :]
-    emb = torch.cat((freqs, freqs), dim=-1)
-    return emb.cos(), emb.sin()
-
-
 def rope_table(
     positions: torch.Tensor, *, theta: float, dim: int, device: torch.device | str
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """O4 table: cos/sin fp32 ``(T, dim)`` of ``p * theta^(-2i/dim)`` for absolute positions.
 
-    Built once per (theta, dim, device) by a fixed fp32 torch-CUDA function (elementwise, so the
-    row of position ``p`` is identical no matter how large the cached table is) and gathered.
+    Delegates to THE builder, :func:`rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table`:
+    rows of the canonical table built once per (CUDA device, theta, dim) by the fixed fp32
+    torch-CUDA function, so the golden and the Triton backends (and the runtimes) read the same
+    cached object. Non-CUDA devices and positions outside ``[0, 131072)`` raise (fail closed:
+    a CPU build differs in ~19 % of the elements).
     """
-    dev = torch.device(device)
-    key = (float(theta), int(dim), str(dev))
-    need = int(positions.max().item()) + 1 if positions.numel() else 1
-    cached = _ROPE_TABLES.get(key)
-    if cached is None or cached[0].shape[0] < need:
-        n_pos = max(4096, 1 << (need - 1).bit_length())
-        cached = _build_rope_table(n_pos, theta=float(theta), dim=int(dim), device=dev)
-        _ROPE_TABLES[key] = cached
-    cos, sin = cached
-    idx = positions.to(device=dev, dtype=torch.long)
-    return cos.index_select(0, idx), sin.index_select(0, idx)
+    from rl_engine.models.muse_glimmer.ops.qknorm_rope import rope_table as _canonical_rows
+
+    return _canonical_rows(positions, theta=float(theta), dim=int(dim), device=device)
 
 
 def _rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -394,9 +376,21 @@ def qknorm_scaled_rope(
     *,
     eps: float = 1e-5,
     qk_scale: float = 3.87,
+    local: bool | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """O4: per-head weightless rmsnorm (pow -0.5) in fp32; q *= qk_scale; rotate_half RoPE in
-    fp32 over all channels when cos/sin are given (local layers); → bf16 once."""
+    fp32 over all channels when cos/sin are given (local layers); → bf16 once.
+
+    ``local=True/False`` states the layer kind explicitly and must agree with ``cos``/``sin``
+    (a local layer needs the table, a global layer must not get one; mismatch → ValueError).
+    ``local=None`` keeps the legacy implicit form (``cos is None`` → NoPE)."""
+    if (cos is None) != (sin is None):
+        raise ValueError("cos and sin must both be given (local layer) or both None (global)")
+    if local is not None and bool(local) != (cos is not None):
+        raise ValueError(
+            f"local={local} but cos/sin are {'None' if cos is None else 'given'}: a local "
+            "(RoPE) layer needs the table rows, a global (NoPE) layer must not get them"
+        )
     qf = q.float()
     kf = k.float()
     qh = qf * torch.pow(tree_mean_last(qf * qf) + eps, -0.5)[..., None]

@@ -13,14 +13,19 @@ Per head (fp32 arithmetic, bf16 in / bf16 out, ONE rounding at the end)::
     -> bf16
 
 Public interface (imported by the reference-model and attention agents)
-    ``rope_table(positions, *, theta, dim, device) -> (cos, sin)`` fp32 ``(T, dim)``; THE table
-    definition; CUDA devices only (a CPU build differs in ~19% of the elements)
-    ``canonical_rope_table(device)`` the cached ``(cos, sin)`` for ``arange(131072)`` (one
-    object per device; sha256 pinned in ``CANONICAL_ROPE_TABLE_SHA256``)
-    ``rope_rows(positions)`` rows gathered from the canonical table (bitwise == ``rope_table``)
+    ``rope_table(positions, *, theta, dim, device) -> (cos, sin)`` fp32 ``(T, dim)``: rows of
+    THE table (copies gathered from ``canonical_rope_table``); CUDA devices only (a CPU build
+    differs in ~19% of the elements); positions must lie in ``[0, 131072)``
+    ``canonical_rope_table(device, verify=False)`` the cached ``(cos, sin)`` for
+    ``arange(131072)`` (one object per device, built once by the fixed fp32 torch-CUDA formula;
+    sha256 pinned in ``CANONICAL_ROPE_TABLE_SHA256``; in-place changes are detected; building it
+    during CUDA-graph capture raises - build it at init)
+    ``rope_rows(positions)`` rows gathered from the canonical table (same as ``rope_table``)
     ``qknorm_scaled_rope(q, k, cos, sin, *, eps, qk_scale, local=None)`` strict Triton op,
     bf16 -> bf16 (other dtypes raise), differentiable (deterministic row-local Triton backward);
-    ``local=True/False`` makes the layer kind explicit and is checked against ``cos``/``sin``
+    ``local=True/False`` makes the layer kind explicit and is checked against ``cos``/``sin``;
+    ``local=None`` (legacy, implicit) is counted, warns once, and raises when
+    ``MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1`` or ``require_explicit_layer_kind(True)``
     ``qknorm_scaled_rope_at(q, k, positions, *, local | layer_idx)`` the contract's assembly
     signature ``qknorm_scaled_rope(q, k, pos, local?)``: explicit layer kind, canonical table
     ``layer_is_local(i)`` the frozen schedule (layer i is global iff i % 4 == 3, 52 layers)
@@ -40,7 +45,9 @@ contract gate (G1) nevertheless only requires the ws1 elementwise tolerances.
 from __future__ import annotations
 
 import hashlib
+import os
 import threading
+import warnings
 from typing import Any
 
 import torch
@@ -62,11 +69,14 @@ ROPE_TABLE_POSITIONS = 131072  # max_position_embeddings: rows of the canonical 
 # endian).  Measured on A100 with torch 2.13.0+cu130 (vLLM env) and torch 2.13.0+cu129
 # (Megatron env): identical, so both runtimes build the same table.
 CANONICAL_ROPE_TABLE_SHA256 = "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c"
+# Set to 1 (e.g. by the E2E harness) to make the layer kind mandatory: local=None raises.
+LAYER_KIND_ENV = "MUSEGLIMMER_O4_REQUIRE_LAYER_KIND"
 
 __all__ = [
     "CANONICAL_ROPE_TABLE_SHA256",
     "GLOBAL_LAYER_PERIOD",
     "HEAD_DIM",
+    "LAYER_KIND_ENV",
     "NUM_LAYERS",
     "QK_SCALE",
     "RMS_NORM_EPS",
@@ -75,15 +85,18 @@ __all__ = [
     "QKNormScaledRopeOp",
     "canonical_rope_table",
     "layer_is_local",
+    "layer_kind_required",
     "qknorm_scaled_rope",
     "qknorm_scaled_rope_at",
     "qknorm_scaled_rope_backward_fp32",
     "qknorm_scaled_rope_fp32",
     "qknorm_scaled_rope_fp64",
+    "require_explicit_layer_kind",
     "rope_rows",
     "rope_table",
     "rope_table_fp64",
     "rope_table_sha256",
+    "runtime_provenance",
     "trace",
 ]
 
@@ -128,21 +141,26 @@ def rope_table(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """fp32 ``(cos, sin)`` rows of shape ``(T, dim)`` for absolute ``positions`` (int32|int64).
 
-    Definition (all fp32, on ``device``)::
+    Definition (all fp32, on a CUDA ``device``)::
 
         inv_freq = 1 / theta ** (arange(0, dim, 2) / dim)      # (dim/2,)
         angle    = positions.float()[:, None] * inv_freq[None]  # (T, dim/2), elementwise
         emb      = cat(angle, angle)                             # (T, dim)
         cos, sin = emb.cos(), emb.sin()
 
-    This is the table definition for BOTH runtimes (training and rollout); it is a pure,
-    deterministic and elementwise function of ``positions``, so the row of position ``p`` has
-    the same bits whether it is built alone or as part of ``arange(N)``.  Prefer
-    :func:`canonical_rope_table` / :func:`rope_rows` (built once per device, cached, fingerprint
-    pinned).  Bits are specific to the fp32 ``cos``/``sin``/``pow`` implementation, so the
-    contract fixes the builder to torch-CUDA: a non-CUDA ``device`` raises (fail closed; a CPU
-    build differs from the CUDA build in ~19 % of the elements at T=4096 and flips ~0.1 % of
-    the bf16 q_hat outputs).  Use :func:`rope_table_fp64` for references on any device.
+    This is the table for BOTH runtimes (training and rollout).  The formula is elementwise, so
+    the row of position ``p`` has the same bits whether it is built alone or as part of
+    ``arange(N)``; contract O4 nevertheless asks for ONE table "built once by a fixed fp32
+    torch-CUDA function, cached, identical object on both runtimes", so this function returns
+    copies of the rows of :func:`canonical_rope_table` (built once per device and ``(theta,
+    dim)``, version-checked) instead of building a private table: every caller of the strict
+    builder (the vLLM and Megatron bindings and the reference model bind ``rope_table``) reads
+    the same cached object.  Positions must lie in ``[0, ROPE_TABLE_POSITIONS)`` (else
+    ``ValueError``; one device->host sync for the range check, see :func:`rope_rows`).  Bits are
+    specific to the fp32 ``cos``/``sin``/``pow`` implementation, so the builder is fixed to
+    torch-CUDA: a non-CUDA ``device`` raises (fail closed; a CPU build differs from the CUDA
+    build in ~19 % of the elements at T=4096 and flips ~0.1 % of the bf16 q_hat outputs).  Use
+    :func:`rope_table_fp64` for references on any device.
     """
     dev = torch.device(device)
     if dev.type != "cuda":
@@ -151,11 +169,15 @@ def rope_table(
             f"device {dev}. CPU/other-device builds differ in the last bits (~19% of cos/sin "
             "elements). Build on the CUDA device that runs the kernel (canonical_rope_table)."
         )
-    return _rope_table_in(positions, theta=theta, dim=dim, device=dev, dtype=torch.float32)
+    return rope_rows(positions, device=dev, theta=theta, dim=dim)
 
 
-_CANONICAL_TABLES: dict[tuple[int, float, int], tuple[torch.Tensor, torch.Tensor]] = {}
-_CANONICAL_SHA: dict[tuple[int, float, int], str] = {}
+_TableKey = tuple[int, float, int]
+_CANONICAL_TABLES: dict[_TableKey, tuple[torch.Tensor, torch.Tensor]] = {}
+# (cos._version, sin._version) right after the build: any in-place change bumps them.
+_CANONICAL_VERSIONS: dict[_TableKey, tuple[int, int]] = {}
+# digest memo: key -> (versions the digest was computed at, hex digest)
+_CANONICAL_SHA: dict[_TableKey, tuple[tuple[int, int], str]] = {}
 _CANONICAL_LOCK = threading.Lock()
 
 
@@ -170,6 +192,45 @@ def _cuda_index(device: torch.device | str | int | None) -> int:
     return dev.index if dev.index is not None else torch.cuda.current_device()
 
 
+def _versions(tables: tuple[torch.Tensor, torch.Tensor]) -> tuple[int, int]:
+    return int(tables[0]._version), int(tables[1]._version)
+
+
+def _check_unmodified(key: _TableKey, tables: tuple[torch.Tensor, torch.Tensor]) -> None:
+    """Fail closed if a caller changed the shared table in place (no sync: version counters)."""
+    if _versions(tables) != _CANONICAL_VERSIONS[key]:
+        raise RuntimeError(
+            f"the canonical RoPE table on cuda:{key[0]} (theta={key[1]}, dim={key[2]}) was "
+            "modified in place after it was built (tensor version counter changed); its rows "
+            "no longer follow the O4 formula and train/rollout parity is broken. Callers must "
+            "never write to the canonical_rope_table() tensors."
+        )
+
+
+def _build_canonical(key: _TableKey) -> tuple[torch.Tensor, torch.Tensor]:
+    dev = torch.device("cuda", key[0])
+    if torch.cuda.is_current_stream_capturing():
+        # A build recorded into a CUDA graph is not executed until the first replay: the cache
+        # would hold uninitialised graph-pool memory for every eager caller until then.
+        raise RuntimeError(
+            "the canonical RoPE table must be built before CUDA-graph capture: call "
+            "canonical_rope_table(device, verify=True) once at init (before warm-up/capture)"
+        )
+    # Normal tensors even when the first caller runs under torch.inference_mode() (vLLM): the
+    # version counters (in-place detection) only exist on normal tensors.
+    with torch.inference_mode(False), torch.no_grad():
+        pos = torch.arange(ROPE_TABLE_POSITIONS, device=dev)
+        cos, sin = _rope_table_in(pos, theta=key[1], dim=key[2], device=dev, dtype=torch.float32)
+        return cos.contiguous(), sin.contiguous()
+
+
+def _digest(tables: tuple[torch.Tensor, torch.Tensor]) -> str:
+    h = hashlib.sha256()
+    for t in tables:
+        h.update(t.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes())
+    return h.hexdigest()
+
+
 def canonical_rope_table(
     device: torch.device | str | int | None = None,
     *,
@@ -179,30 +240,40 @@ def canonical_rope_table(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """THE cached fp32 ``(cos, sin)`` for positions ``arange(ROPE_TABLE_POSITIONS)``.
 
-    Built once per ``(cuda index, theta, dim)`` with :func:`rope_table` and returned as the SAME
-    tensor objects on every call (``canonical_rope_table(d)[0] is canonical_rope_table(d)[0]``);
-    callers must not modify them in place.  64 MiB each at the model's dim=128.
-    ``verify=True`` checks the bits against the pinned :data:`CANONICAL_ROPE_TABLE_SHA256`
-    (defined for the model's theta/dim only) and raises on a mismatch - call it once per process
-    in each runtime to prove that both build the same table.
+    Built once per ``(cuda index, theta, dim)`` with the O4 formula and returned as the SAME
+    tensor objects on every call (``canonical_rope_table(d)[0] is canonical_rope_table(d)[0]``).
+    64 MiB each at the model's dim=128.  Fail-closed rules:
+
+    * callers must not modify the tables in place: every call checks the tensors' version
+      counters (no device sync) and raises ``RuntimeError`` if they changed since the build
+      (writes through ``.data`` or foreign aliases bypass the counters; ``verify=True`` still
+      catches those);
+    * the first build must not happen during CUDA-graph capture (``RuntimeError``): runtimes call
+      ``canonical_rope_table(device, verify=True)`` once at init, before warm-up and capture;
+    * ``verify=True`` re-hashes the table (no memo; ~0.3 s) and compares it with the pinned
+      :data:`CANONICAL_ROPE_TABLE_SHA256` (defined for the model's theta/dim only); a mismatch
+      raises - call it once per process in each runtime to prove that both build the same table.
     """
     key = (_cuda_index(device), float(theta), int(dim))
     with _CANONICAL_LOCK:
         tables = _CANONICAL_TABLES.get(key)
         if tables is None:
-            dev = torch.device("cuda", key[0])
-            pos = torch.arange(ROPE_TABLE_POSITIONS, device=dev)
-            cos, sin = rope_table(pos, theta=key[1], dim=key[2], device=dev)
-            tables = (cos.contiguous(), sin.contiguous())
+            tables = _build_canonical(key)
             _CANONICAL_TABLES[key] = tables
+            _CANONICAL_VERSIONS[key] = _versions(tables)
+    _check_unmodified(key, tables)
     if verify:
         if (key[1], key[2]) != (ROPE_THETA, HEAD_DIM):
             raise ValueError("verify=True is only defined for theta=5e5, dim=128")
-        got = rope_table_sha256(key[0])
+        got = _digest(tables)
+        _check_unmodified(key, tables)
+        with _CANONICAL_LOCK:
+            _CANONICAL_SHA[key] = (_versions(tables), got)
         if got != CANONICAL_ROPE_TABLE_SHA256:
             raise RuntimeError(
-                f"canonical RoPE table sha256 {got} != pinned {CANONICAL_ROPE_TABLE_SHA256}: this "
-                "torch/CUDA build computes different cos/sin bits; train/rollout parity is broken"
+                f"canonical RoPE table sha256 {got} != pinned {CANONICAL_ROPE_TABLE_SHA256}: the "
+                "table bits differ from the pinned build (different torch/CUDA math library, or "
+                "the table was overwritten); train/rollout parity is broken"
             )
     return tables
 
@@ -213,18 +284,20 @@ def rope_table_sha256(
     theta: float = ROPE_THETA,
     dim: int = HEAD_DIM,
 ) -> str:
-    """sha256 hex of ``cos.bytes || sin.bytes`` of :func:`canonical_rope_table` (cached).
+    """sha256 hex of ``cos.bytes || sin.bytes`` of :func:`canonical_rope_table` as it is NOW.
 
-    Log it in each runtime's provenance; equal digests == bitwise-identical tables."""
+    Memoised per table and invalidated by the tables' version counters (an in-place change
+    also makes :func:`canonical_rope_table` raise).  Log it in each runtime's provenance;
+    equal digests == bitwise-identical tables."""
     key = (_cuda_index(device), float(theta), int(dim))
-    digest = _CANONICAL_SHA.get(key)
-    if digest is None:
-        cos, sin = canonical_rope_table(key[0], theta=theta, dim=dim)
-        h = hashlib.sha256()
-        for t in (cos, sin):
-            h.update(t.detach().cpu().contiguous().view(torch.uint8).numpy().tobytes())
-        digest = h.hexdigest()
-        _CANONICAL_SHA[key] = digest
+    tables = canonical_rope_table(key[0], theta=theta, dim=dim)
+    versions = _versions(tables)
+    memo = _CANONICAL_SHA.get(key)
+    if memo is not None and memo[0] == versions:
+        return memo[1]
+    digest = _digest(tables)
+    with _CANONICAL_LOCK:
+        _CANONICAL_SHA[key] = (versions, digest)
     return digest
 
 
@@ -238,13 +311,16 @@ def rope_rows(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """fp32 ``(cos, sin)`` rows ``(T, dim)`` for absolute ``positions``, gathered (exact copies,
     ``index_select``) from :func:`canonical_rope_table` on ``device`` (default: the positions'
-    CUDA device, else the current one).  Bitwise equal to ``rope_table(positions)``.
+    CUDA device, else the current one).  Bitwise equal to the O4 formula evaluated at
+    ``positions``; this is what :func:`rope_table` returns.
 
     Positions must be int32/int64, 1-D and inside ``[0, ROPE_TABLE_POSITIONS)``; out-of-range
     positions raise ``ValueError``.  The check costs one device->host sync for CUDA positions;
     it is skipped during CUDA-graph capture or with ``check_range=False`` (hot loops that
     validated the positions once), where ``index_select``'s device-side bounds check still
-    fails loudly (it never clamps).  Hoist one call per forward out of the layer loop."""
+    fails loudly (it never clamps).  The canonical table itself must already exist when this is
+    captured (see :func:`canonical_rope_table`).  Hoist one call per forward out of the layer
+    loop."""
     positions = torch.as_tensor(positions)
     if positions.dim() != 1:
         raise ValueError(f"positions must be 1-D (T,), got shape {tuple(positions.shape)}")
@@ -461,16 +537,60 @@ class _QKNormScaledRopeFunction(torch.autograd.Function):
         return dq, dk, None, None, None, None
 
 
+# Layer-kind bookkeeping (contract O4 "Global layers: no rotation"): which form each call used.
+_LAYER_KIND_CALLS = {"explicit_local": 0, "explicit_global": 0, "implicit_local": 0,
+                     "implicit_global": 0}
+_REQUIRE_LAYER_KIND: bool | None = None  # None: the LAYER_KIND_ENV environment variable decides
+_WARNED_IMPLICIT = False
+
+
+def require_explicit_layer_kind(flag: bool | None = True) -> None:
+    """Process-wide switch for the legacy implicit form ``local=None``.
+
+    ``True``: ``local=None`` raises ``ValueError`` (fail closed; what the E2E harness should
+    use once every call site passes ``local=``); ``False``: allowed (counted, warns once);
+    ``None``: defer to the environment variable ``MUSEGLIMMER_O4_REQUIRE_LAYER_KIND``
+    (``1`` = required), which is the default."""
+    global _REQUIRE_LAYER_KIND
+    _REQUIRE_LAYER_KIND = None if flag is None else bool(flag)
+
+
+def layer_kind_required() -> bool:
+    """True when ``local=None`` is rejected (see :func:`require_explicit_layer_kind`)."""
+    if _REQUIRE_LAYER_KIND is not None:
+        return _REQUIRE_LAYER_KIND
+    return os.environ.get(LAYER_KIND_ENV, "").strip().lower() not in ("", "0", "false", "no")
+
+
 def _check_layer_kind(
     local: bool | None, cos: torch.Tensor | None, sin: torch.Tensor | None
 ) -> None:
-    if local is None:
-        return
+    global _WARNED_IMPLICIT
     has_tables = cos is not None or sin is not None
+    if local is None:
+        if layer_kind_required():
+            raise ValueError(
+                "qknorm_scaled_rope: the layer kind must be explicit (local=True for a "
+                "sliding-window RoPE layer, local=False for a global NoPE layer); local=None is "
+                f"rejected because {LAYER_KIND_ENV}=1 or require_explicit_layer_kind(True)"
+            )
+        _LAYER_KIND_CALLS["implicit_local" if has_tables else "implicit_global"] += 1
+        if not _WARNED_IMPLICIT:
+            _WARNED_IMPLICIT = True
+            warnings.warn(
+                "qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so "
+                "a sliding layer given no table silently runs NoPE. Pass local=True/False "
+                f"(set {LAYER_KIND_ENV}=1 to make it mandatory). Warned once; counted in "
+                "runtime_provenance().",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+        return
     if bool(local) and not has_tables:
         raise ValueError("local=True (sliding-window RoPE layer) needs cos/sin rows; got None")
     if not bool(local) and has_tables:
         raise ValueError("local=False (global NoPE layer) must not be given cos/sin rows")
+    _LAYER_KIND_CALLS["explicit_local" if local else "explicit_global"] += 1
 
 
 def qknorm_scaled_rope(
@@ -489,7 +609,11 @@ def qknorm_scaled_rope(
 
     Layer kind: pass ``local=True`` (sliding layer, RoPE; ``cos``/``sin`` required) or
     ``local=False`` (global NoPE layer; ``cos``/``sin`` must be None) - a mismatch raises.
-    ``local=None`` is the legacy implicit form (``cos is None`` selects NoPE).
+    ``local=None`` is the legacy implicit form (``cos is None`` selects NoPE): it is counted in
+    :func:`runtime_provenance`, warns once per process, and raises ``ValueError`` when
+    ``MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1`` (or :func:`require_explicit_layer_kind`).
+    ``cos``/``sin`` should be rows of :func:`canonical_rope_table` (``rope_rows`` /
+    ``rope_table``); the op cannot tell where a table came from.
     Non-bf16 ``q``/``k`` raise ``TypeError`` (no fallback).
 
     Differentiable w.r.t. ``q`` and ``k`` with a deterministic, batch-invariant Triton backward.
@@ -572,17 +696,22 @@ def trace(HQ: int = 32, HK: int = 2, D: int = HEAD_DIM) -> dict[str, Any]:
                 "angle = float(p)[:,None] * inv_freq[None,:]; emb = cat(angle, angle); "
                 "cos, sin = emb.cos(), emb.sin()  (fp32, torch-CUDA)"
             ),
-            "cache": "canonical_rope_table(device): one (cos, sin) object per CUDA device",
-            "rows": "rope_rows(positions) = index_select of the canonical table (exact copies)",
+            "cache": "canonical_rope_table(device): one (cos, sin) object per CUDA device, "
+                     "built once (not during CUDA-graph capture), in-place changes raise",
+            "rows": "rope_table(positions) = rope_rows(positions) = index_select of the "
+                    "canonical table (exact copies)",
             "positions": ROPE_TABLE_POSITIONS,
-            "sha256": CANONICAL_ROPE_TABLE_SHA256,
+            "sha256_pinned": CANONICAL_ROPE_TABLE_SHA256,
+            "sha256_built": "see runtime_provenance()['rope_table_sha256_built']",
         },
         "layer_selection": (
-            "explicit: local=True (RoPE, cos/sin required) | local=False (NoPE, cos/sin must "
-            "be None), mismatch raises; qknorm_scaled_rope_at requires local or layer_idx; "
-            "schedule: layer i is global iff i % 4 == 3 (52 layers); local=None = legacy "
-            "implicit (cos is None -> NoPE)"
+            "local=True (RoPE, cos/sin required) | local=False (NoPE, cos/sin must be None), "
+            "mismatch raises; qknorm_scaled_rope_at requires local or layer_idx; schedule: "
+            "layer i is global iff i % 4 == 3 (52 layers); local=None = legacy implicit "
+            "(cos is None -> NoPE), counted and warned, rejected when "
+            f"{LAYER_KIND_ENV}=1; which form callers used: runtime_provenance()"
         ),
+        "scope": "describes the op (static); runtime_provenance() reports what this process did",
         "dtype_policy": "q/k bf16 only; fp16/fp32 raise TypeError (no fallback)",
         "tile_config": tile_config(HQ, HK, D),
         "backward": (
@@ -594,6 +723,36 @@ def trace(HQ: int = 32, HK: int = 2, D: int = HEAD_DIM) -> dict[str, Any]:
             "qknorm_scaled_rope_fp32: fixed (2i,2i+1) binary tree over 128 channels, "
             "torch.pow(ms+eps,-0.5), elementwise ops only"
         ),
+    }
+
+
+def runtime_provenance(*, compute_digest: bool = True) -> dict[str, Any]:
+    """What THIS process actually did (measured, not a description of the op):
+
+    ``rope_table_sha256_built``: ``{"cuda:<i>": sha256}`` of every canonical table built in this
+    process at the model's theta/dim (``{}`` if none was built; computed on demand, memoised by
+    version counter; ``compute_digest=False`` reports ``None`` per device instead), plus
+    ``equals_pinned`` per device; ``layer_kind_calls``: how many strict calls used
+    ``local=True``/``False`` and how many used the implicit legacy form;
+    ``layer_kind_required``: whether ``local=None`` is currently rejected."""
+    built: dict[str, str | None] = {}
+    for key in sorted(_CANONICAL_TABLES):
+        if (key[1], key[2]) != (ROPE_THETA, HEAD_DIM):
+            continue
+        built[f"cuda:{key[0]}"] = rope_table_sha256(key[0]) if compute_digest else None
+    return {
+        "op": "qknorm_scaled_rope",
+        "rope_table_sha256_pinned": CANONICAL_ROPE_TABLE_SHA256,
+        "rope_table_sha256_built": built,
+        "rope_table_equals_pinned": {
+            d: (None if h is None else h == CANONICAL_ROPE_TABLE_SHA256) for d, h in built.items()
+        },
+        "other_tables_built": [
+            {"cuda": k[0], "theta": k[1], "dim": k[2]}
+            for k in sorted(_CANONICAL_TABLES) if (k[1], k[2]) != (ROPE_THETA, HEAD_DIM)
+        ],
+        "layer_kind_calls": dict(_LAYER_KIND_CALLS),
+        "layer_kind_required": layer_kind_required(),
     }
 
 

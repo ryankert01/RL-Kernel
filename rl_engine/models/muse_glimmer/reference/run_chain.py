@@ -102,7 +102,11 @@ def _score_main(args: argparse.Namespace, model: MuseGlimmerStrictModel, weights
     pathlib.Path(args.score_out).write_text(json.dumps(scored, indent=1))
     n = sum(s["n_tokens"] for s in scored["sequences"])
     ok = scored["checks"]["all_byte_equal_to_train"]
-    _log(f"wrote {args.score_out}: {n} tokens; {modes} byte-equal to train: {ok}")
+    n_checks = scored["checks"]["n_checks"]
+    _log(f"wrote {args.score_out}: {n} tokens; {n_checks} (mode, sequence) checks of {modes}; "
+         f"byte-equal to train: {ok}")
+    if n_checks == 0:
+        _log("no rollout-form check ran (none requested or every chunking skipped): FAIL")
     return 0 if ok else 1
 
 

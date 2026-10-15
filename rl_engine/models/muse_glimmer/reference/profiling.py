@@ -285,6 +285,7 @@ def attributed_kernel_profile(
     num_layers: int,
     root_cls: str = _ROOT,
     top: int = 12,
+    prepare: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """One extra call under torch.profiler with every region also opened as a record_function
     range. Each GPU kernel (and memcpy/memset) is charged, with its device duration, to the
@@ -294,6 +295,8 @@ def attributed_kernel_profile(
     launch-bound a configuration is."""
     from torch.profiler import ProfilerActivity, profile
 
+    if prepare is not None:
+        prepare()  # per-call state (e.g. a fresh KV cache) outside the profiled region
     torch.cuda.synchronize()
     install(timer)
     timer.reset()
@@ -406,17 +409,42 @@ def measure(
     repeats: int,
     root_cls: str = _ROOT,
     profiler_check: bool = False,
+    profiler_repeats: int = 1,
+    prepare: Callable[[], Any] | None = None,
+    release: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    """Warm up, then ``repeats`` instrumented calls (regions) and ``repeats`` clean calls."""
+    """Warm up, then ``repeats`` clean calls and ``repeats`` instrumented calls (regions), then
+    ``profiler_repeats`` torch.profiler calls (the first keeps every per-class/per-layer field
+    in ``kernel_profile``; all of them are summarised in ``kernel_profile_repeats``).
+
+    ``prepare()`` runs before EVERY call, outside the timed region (per-call state such as a
+    fresh paged KV cache); ``release()`` drops that state after the warm-up, so
+    ``mem_allocated_before_gib`` holds no per-call state and ``activation_peak_gib`` includes
+    exactly one call's state (``prepared_state_gib``, measured around the first clean
+    ``prepare()``) plus its activations."""
     dev = torch.device("cuda")
     install(None)
+
+    def prep() -> None:
+        if prepare is not None:
+            prepare()
+
     for _ in range(warmup):
+        prep()
         fn()
+    if release is not None:
+        release()
     torch.cuda.synchronize()
     mem_before = torch.cuda.memory_allocated(dev)
     torch.cuda.reset_peak_memory_stats(dev)
     clean = []
+    prepared_bytes = None
     for _ in range(repeats):
+        if prepare is not None:
+            before = torch.cuda.memory_allocated(dev)
+            prep()
+            if prepared_bytes is None:
+                prepared_bytes = torch.cuda.memory_allocated(dev) - before
         _, ms = timed_call(fn)
         clean.append(ms)
     peak = torch.cuda.max_memory_allocated(dev)
@@ -424,6 +452,7 @@ def measure(
     install(timer)
     try:
         for _ in range(repeats):
+            prep()
             timer.reset()
             idx = timer.begin(root_cls, "model", None)
             fn()
@@ -441,17 +470,34 @@ def measure(
     out["mem_allocated_before_gib"] = _gib(mem_before)
     out["peak_allocated_gib"] = _gib(peak)
     out["activation_peak_gib"] = _gib(peak - mem_before)
+    out["prepared_state_gib"] = None if prepared_bytes is None else _gib(prepared_bytes)
     if profiler_check:
-        try:
-            out["kernel_profile"] = attributed_kernel_profile(
-                fn, timer, install, num_layers=num_layers, root_cls=root_cls
-            )
-        except Exception as exc:  # the cross-check must never sink the measurement
-            timer.annotate = False
-            install(None)
-            timer._stack.clear()
-            timer._recs = []
-            out["kernel_profile"] = {"error": f"{type(exc).__name__}: {exc}"}
+        reps = []
+        for r in range(max(1, int(profiler_repeats))):
+            try:
+                kp = attributed_kernel_profile(
+                    fn, timer, install, num_layers=num_layers, root_cls=root_cls,
+                    prepare=prepare,
+                )
+            except Exception as exc:  # the cross-check must never sink the measurement
+                timer.annotate = False
+                install(None)
+                timer._stack.clear()
+                timer._recs = []
+                kp = {"error": f"{type(exc).__name__}: {exc}"}
+            if r == 0:
+                out["kernel_profile"] = kp
+            reps.append(kp)
+        ok = [k for k in reps if "error" not in k]
+        out["kernel_profile_repeats"] = {
+            "n": len(reps),
+            "n_ok": len(ok),
+            "gpu_busy_ms": [k["gpu_busy_ms"] for k in ok],
+            "by_kind_class_gpu_ms": [k["by_kind_class_gpu_ms"] for k in ok],
+            "gpu_busy_ms_median": _median([k["gpu_busy_ms"] for k in ok]),
+        }
+    if release is not None:
+        release()
     return out
 
 
@@ -477,6 +523,7 @@ def profile_strict(
     paged_prefill: bool = True,
     batch_invariance: bool = True,
     profiler_check: bool = True,
+    profiler_repeats: int = 3,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """Profile train-forward (varlen) and one-shot paged prefill at each ``prefill_lens`` and
@@ -499,23 +546,29 @@ def profile_strict(
 
         log(f"[strict] train forward T={t}")
         res = measure(train_call, timer, model.set_timer, num_layers=nl, warmup=warmup,
-                      repeats=repeats, profiler_check=profiler_check)
+                      repeats=repeats, profiler_check=profiler_check,
+                      profiler_repeats=profiler_repeats)
         runs.append({"phase": "prefill_train", "T": t, "batch": 1, "context": 0,
                      "tokens": t, **res})
         log(f"  total {res['total_ms_median']:.1f} ms (clean {res['clean_total_ms_median']:.1f})"
             f" peak {res['peak_allocated_gib']:.2f} GiB")
         if paged_prefill:
-            # fresh sessions are allocated up front so the cache zero-fill is not timed
-            sessions = [model.new_session(t)
-                        for _ in range(warmup + 2 * repeats + int(profiler_check))]
+            # one fresh session per call, allocated by prepare() outside the timed region (the
+            # cache zero-fill is not timed) and only one alive at a time (peak = one cache)
+            holder: dict[str, Any] = {}
 
-            def paged_call(ids=ids, targets=targets, sessions=sessions):
-                return model.prefill(sessions.pop(), ids, targets=targets)
+            def prepare(holder=holder, t=t):
+                holder.pop("session", None)
+                holder["session"] = model.new_session(t)
+
+            def paged_call(ids=ids, targets=targets, holder=holder):
+                return model.prefill(holder["session"], ids, targets=targets)
 
             log(f"[strict] paged prefill T={t}")
             res = measure(paged_call, timer, model.set_timer, num_layers=nl, warmup=warmup,
-                          repeats=repeats, profiler_check=profiler_check)
-            del sessions
+                          repeats=repeats, profiler_check=profiler_check,
+                          profiler_repeats=profiler_repeats, prepare=prepare,
+                          release=holder.clear)
             runs.append({"phase": "prefill_paged", "T": t, "batch": 1, "context": 0,
                          "tokens": t, **res})
             log(f"  total {res['total_ms_median']:.1f} ms "
@@ -554,7 +607,8 @@ def profile_strict(
 
             log(f"[strict] decode batch {b} context {decode_context}")
             res = measure(decode_call, timer, model.set_timer, num_layers=nl, warmup=warmup,
-                          repeats=decode_repeats, profiler_check=profiler_check)
+                          repeats=decode_repeats, profiler_check=profiler_check,
+                          profiler_repeats=profiler_repeats)
             runs.append({"phase": "decode", "T": 1, "batch": b, "context": decode_context,
                          "tokens": b, **res})
             log(f"  step {res['total_ms_median']:.2f} ms (clean "
@@ -585,13 +639,15 @@ def decode_batch_invariance(model: Any, cache: Any, bmax: int,
     ])
     perm = [3, 0, bmax - 1, bmax // 2] if bmax >= 4 else list(range(bmax))[::-1]
     sub = model.decode_batch(cache, perm, toks[perm], tgts[perm], commit=False).cpu()
-    eq_full = int(torch.eq(full, single).sum())
-    eq_perm = int(torch.eq(sub, single[perm]).sum())
+    # bit patterns, not float ==: -0.0 vs +0.0 or NaN payloads count as different
+    eq_full = int(torch.eq(full.view(torch.int32), single.view(torch.int32)).sum())
+    eq_perm = int(torch.eq(sub.view(torch.int32), single[perm].view(torch.int32)).sum())
     return {
         "batch": bmax,
         "batch1_vs_batchN_equal": eq_full,
         "permuted_batch4_vs_batch1_equal": eq_perm,
         "permutation": perm,
+        "compare": "fp32 bit patterns (view(int32))",
         "all_equal": eq_full == bmax and eq_perm == len(perm),
         "max_abs_diff": float((full.double() - single.double()).abs().max()),
         "logp_batchN": [float(x) for x in full.tolist()],
@@ -733,6 +789,7 @@ def profile_hf(
     repeats: int = 3,
     decode_repeats: int = 5,
     profiler_check: bool = True,
+    profiler_repeats: int = 3,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
     """The same configurations on HF bf16 (sdpa): forward over T tokens with full logits and
@@ -764,7 +821,8 @@ def profile_hf(
 
             log(f"[hf] forward T={t}")
             res = measure(call, timer, inst.install, num_layers=nl, warmup=warmup,
-                          repeats=repeats, profiler_check=profiler_check)
+                          repeats=repeats, profiler_check=profiler_check,
+                          profiler_repeats=profiler_repeats)
             runs.append({"phase": "prefill_train", "T": t, "batch": 1, "context": 0,
                          "tokens": t, **res})
             log(f"  total {res['total_ms_median']:.1f} ms (clean "
@@ -793,7 +851,8 @@ def profile_hf(
 
             log(f"[hf] decode batch {b} context {decode_context}")
             res = measure(step, timer, inst.install, num_layers=nl, warmup=warmup,
-                          repeats=decode_repeats, profiler_check=profiler_check)
+                          repeats=decode_repeats, profiler_check=profiler_check,
+                          profiler_repeats=profiler_repeats)
             runs.append({"phase": "decode", "T": 1, "batch": b, "context": decode_context,
                          "tokens": b, **res})
             log(f"  step {res['total_ms_median']:.2f} ms (clean "
