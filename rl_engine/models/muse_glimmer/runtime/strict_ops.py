@@ -261,7 +261,7 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
             for tile in range(8)
         ]
         expect(len(stats[0]) == 4 and stats[0][0].shape == (4,), "softcap_tile_stats")
-        m, log_z = ops.combine_tile_stats(stats)
+        m, log_z = ops.combine_tile_stats([(s[0], s[1]) for s in stats])
         expect(m.shape == (4,) and log_z.shape == (4,), "combine_tile_stats")
 
     return {

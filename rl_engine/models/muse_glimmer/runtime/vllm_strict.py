@@ -175,8 +175,13 @@ class StrictBindingState:
         tiles_per_rank = CANONICAL_TP // t
         return {
             "q_heads": [r * heads_per_rank, (r + 1) * heads_per_rank],
-            "kv_heads": [kv_first, kv_first + kv_per_rank],
-            "kv_heads_replicated": replicas > 1,
+            "kv_heads_projected": [kv_first, kv_first + kv_per_rank],
+            "kv_heads_cached": [0, NUM_KV_HEADS],
+            "kv_heads_replicated": True,
+            "attention": (
+                "TP1" if t == 1 else "full 32/2-head attention run redundantly on every rank after an "
+                "exact all-gather of q/k/v/gate (bit-identical to TP1)"
+            ),
             "o_proj_chunks": chunks,
             "down_proj_chunks": chunks,
             "vocab_tiles": [r * tiles_per_rank, (r + 1) * tiles_per_rank],
@@ -511,7 +516,9 @@ def strict_selected_logp(
             (gathered[j, 0], gathered[j, 1], gathered[j, 2], gathered[j, 3] > 0.5)
             for j in range(CANONICAL_TP)
         ]
-        _, log_z = state.ops.combine_tile_stats(stats)
+        # combine_tile_stats consumes (M_t, S_t) pairs in tile order; the target logit is the
+        # single non-zero entry over the tiles (fixed tree, exact).
+        _, log_z = state.ops.combine_tile_stats([(m, s) for m, s, _tl, _in in stats])
         outputs.append(fb.target_logit_from_stats(stats) - log_z)
     if not outputs:
         return hidden.new_empty((0,), dtype=torch.float32)
@@ -648,6 +655,17 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
         )
         if bool(attention.use_rope) != expected_local:
             raise RuntimeError(f"layer {attention.layer_idx}: rope/window schedule mismatch")
+        impl = attention.attn.impl
+        if int(impl.num_heads) != NUM_HEADS or int(impl.num_kv_heads) != NUM_KV_HEADS:
+            raise RuntimeError(
+                f"layer {attention.layer_idx}: vLLM Attention has {impl.num_heads}/"
+                f"{impl.num_kv_heads} heads; strict mode needs the full {NUM_HEADS}/{NUM_KV_HEADS}"
+            )
+        if type(impl).__name__ != "MuseGlimmerStrictAttentionImpl":
+            raise RuntimeError(
+                f"layer {attention.layer_idx}: attention impl is {type(impl).__name__}, not the "
+                "strict backend (select attention_config backend FLASH_ATTN)"
+            )
         layer.mlp._rlk_layer_idx = int(attention.layer_idx)
         setattr(attention.attn, attn_backend.GATE_ATTR, None)
         first_attention = first_attention or attention
@@ -713,12 +731,54 @@ def _patch_lm_head_padding(state: StrictBindingState) -> None:
     )
 
 
+def gather_heads(state: StrictBindingState, local: torch.Tensor, *, replicas: int = 1) -> torch.Tensor:
+    """TP > 1: all-gather a per-rank head shard ``(T, n_local)`` into the full ``(T, n)`` tensor.
+
+    Rank order is head order (column-parallel shards).  ``replicas`` > 1 (KV heads replicated
+    across consecutive ranks) keeps one copy per distinct shard.  Pure data movement: exact.
+    """
+
+    if state.tp_size == 1:
+        return local
+    gathered = all_gather_stack(state, local)  # (tp, T, n_local)
+    ranks = range(0, state.tp_size, replicas)
+    return torch.cat([gathered[r] for r in ranks], dim=-1)
+
+
+def _patch_attention_factory(state: StrictBindingState) -> None:
+    """At TP > 1 build the vLLM ``Attention`` layer with the FULL head set (KV replicated).
+
+    The strict kernel pins 32 query / 2 KV heads, so every rank keeps both KV heads in its own
+    cache and runs the whole attention redundantly on exactly the TP1 inputs (bit-identical).
+    """
+
+    from vllm.model_executor.models import muse_glimmer as mg
+
+    original_attention = mg.Attention
+    if getattr(original_attention, _MARK, False):
+        return
+
+    def attention_factory(num_heads: int, head_size: int, scale: float, num_kv_heads=None, **kwargs):
+        from vllm.distributed import get_tensor_model_parallel_world_size
+
+        tp = int(get_tensor_model_parallel_world_size())
+        if tp > 1 and int(num_heads) * tp == NUM_HEADS and int(head_size) == HEAD_DIM:
+            num_heads, num_kv_heads = NUM_HEADS, NUM_KV_HEADS
+            state.note("TP>1: vLLM Attention layers built with the full 32/2 heads (KV replicated)")
+        return original_attention(num_heads, head_size, scale, num_kv_heads, **kwargs)
+
+    setattr(attention_factory, _MARK, True)
+    mg.Attention = attention_factory
+    state.hooks.append("vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)")
+
+
 def _patch_model(state: StrictBindingState) -> None:
     from vllm.model_executor.models import muse_glimmer as mg
 
     cls = mg.MuseGlimmerForCausalLM
     if hasattr(cls, _MARK):
         return
+    _patch_attention_factory(state)
     original_init = cls.__init__
     original_logits = cls.compute_logits
     original_embed = mg.MuseGlimmerModel.embed_input_ids
@@ -804,8 +864,16 @@ def _patch_model(state: StrictBindingState) -> None:
         v = column_parallel_project(state, hidden_states, w_v, lora.get("v_proj"))
         gate = column_parallel_project(state, hidden_states, w_g, lora.get("gate_proj"))
         tokens = hidden_states.shape[0]
-        q_heads = q.view(tokens, self.num_heads, self.head_dim)
-        k_heads = k.view(tokens, self.num_kv_heads, self.head_dim)
+        if state.tp_size > 1:
+            # KV-replicated attention: exact all-gather of the per-rank head shards so the strict
+            # kernel always runs the full 32/2-head problem on TP1-identical inputs.
+            kv_replicas = max(1, state.tp_size // NUM_KV_HEADS)
+            q = gather_heads(state, q)
+            k = gather_heads(state, k, replicas=kv_replicas)
+            v = gather_heads(state, v, replicas=kv_replicas)
+            gate = gather_heads(state, gate)
+        q_heads = q.view(tokens, NUM_HEADS, HEAD_DIM)
+        k_heads = k.view(tokens, NUM_KV_HEADS, HEAD_DIM)
         if self.use_rope:
             cos, sin = _rope_for(state, positions)
         else:
@@ -818,13 +886,19 @@ def _patch_model(state: StrictBindingState) -> None:
             eps=float(self.qk_norm.eps),
             qk_scale=float(self.scale_query_by),
         )
-        setattr(self.attn, attn_backend.GATE_ATTR, gate)
+        setattr(self.attn, attn_backend.GATE_ATTR, gate.contiguous())
         try:
             attended = self.attn(
-                q_heads.reshape(tokens, self.q_size), k_heads.reshape(tokens, self.kv_size), v
+                q_heads.reshape(tokens, NUM_HEADS * HEAD_DIM),
+                k_heads.reshape(tokens, NUM_KV_HEADS * HEAD_DIM),
+                v,
             )
         finally:
             setattr(self.attn, attn_backend.GATE_ATTR, None)
+        if state.tp_size > 1:
+            # Keep this rank's heads (= the o_proj weight shard's K columns).
+            attended = attended[:, state.tp_rank * self.q_size : (state.tp_rank + 1) * self.q_size]
+            attended = attended.contiguous()
         state.call_counts["attention_forward"] += 1
         return row_parallel_project(state, attended, self.o_proj.weight, lora.get("o_proj"))
 

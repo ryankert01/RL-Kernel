@@ -3,25 +3,28 @@
 
 """vLLM 0.31 attention backend that routes Muse Glimmer decoder attention to the strict op.
 
-The backend subclasses vLLM's ``FlashAttentionBackend`` so that metadata building, the hybrid KV
-cache groups (sliding vs full layers get their own block tables / specs) and the exact
-``reshape_and_cache_flash`` KV write stay native, and only the attention arithmetic is replaced by
-``strict_gated_attention_fwd_paged`` (contract O5).  It is registered as the override of
-``AttentionBackendEnum.FLASH_ATTN``; the strict engine selects it with
-``attention_config={"backend": "FLASH_ATTN"}``.
+The backend subclasses vLLM's ``FlashAttentionBackend`` so that metadata building and the hybrid
+KV-cache groups (sliding vs full layers get their own block tables / specs) stay native, and only
+the attention arithmetic is replaced by ``strict_gated_attention_fwd_paged`` (contract O5).  It is
+registered as the override of ``AttentionBackendEnum.FLASH_ATTN``; the strict engine selects it
+with ``attention_config={"backend": "FLASH_ATTN"}``.
 
 vLLM 0.31 facts this file depends on (RFC notes):
 * ``FlashAttentionImpl.forward(layer, query, key, value, kv_cache, attn_metadata, output,
-  output_scale, output_block_scale)``; the per-layer ``kv_cache`` is logically ``(blocks, kv_heads,
-  block_size, 2 * head_dim)`` with K and V packed along the last dim
-  (``kv_cache.transpose(1, 2).split(head_dim, -1)`` yields the ``(blocks, block_size, kv_heads,
-  head_dim)`` K/V views the strict op consumes; they are strided, not contiguous).
-* ``AttentionBackend.get_kv_cache_shape`` is gone; the layout is described by ``KVCacheLayout``.
-* ``FlashAttentionMetadata`` carries ``block_table``, ``seq_lens``, ``query_start_loc`` and
-  ``num_actual_tokens`` per KV-cache group, so each layer sees the block table of its own group.
-* Sliding-window layers may hold null-block ids for evicted pages; the strict op masks by absolute
-  position and only reads blocks from ``floor(max(0, p - W + 1) / 64)`` on, so an evicted (null,
-  all-zero) page can only be touched where its keys are masked anyway.
+  output_scale, output_block_scale)``; ``AttentionBackend.get_kv_cache_shape`` is gone and the
+  per-layer ``kv_cache`` is logically ``(blocks, kv_heads, block_size, 2 * head_dim)`` with K and V
+  packed along the last dim (``KVCacheLayout``).  The strict op needs separate CONTIGUOUS
+  ``(blocks, 16, 2, 128)`` K and V caches, so this backend reinterprets the layer's (contiguous)
+  buffer as ``(2, blocks, block_size, kv_heads, head_dim)`` and owns the KV write
+  (``do_kv_cache_update`` -> ``reshape_and_cache_flash`` on those views; a pure copy).  Nothing
+  else reads the buffer in strict mode (no prefix caching, no KV connector, no cascade).
+* ``FlashAttentionMetadata`` carries ``block_table``, ``seq_lens``, ``query_start_loc``,
+  ``max_query_len`` and ``num_actual_tokens`` per KV-cache group.  vLLM marks never-allocated or
+  evicted (sliding-window) pages with the null block id ``0``; the strict op wants ``-1``, and
+  masks by absolute position so an evicted page is only ever touched where its keys are masked.
+* The strict kernel pins the full head set (32 query heads, 2 KV heads).  At TP > 1 the installer
+  replicates KV (every rank holds both KV heads and runs the full attention redundantly after an
+  exact all-gather of q/k/v/gate), so this backend always sees 32/2.
 
 The gate pre-activation (contract: gate on the ``input_layernorm`` output, applied inside the
 attention op) travels on a side channel: the patched ``MuseGlimmerAttention.forward`` stores it on
@@ -40,6 +43,7 @@ BACKEND_CLASS_PATH = (
     "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend."
     "MuseGlimmerStrictAttentionBackend"
 )
+PAGE_SIZE = 16
 CALL_COUNTS: Counter[str] = Counter()
 _OPS: Any = None
 
@@ -57,8 +61,33 @@ def _ops() -> Any:
     return _OPS
 
 
+def strict_kv_views(kv_cache: torch.Tensor, head_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Reinterpret a layer's contiguous ``(B, H, N, 2D)`` buffer as contiguous K/V ``(B, N, H, D)``."""
+
+    if kv_cache.dim() != 4:
+        raise RuntimeError(f"unexpected KV cache rank {kv_cache.dim()} (expected (B, H, N, 2D))")
+    blocks, heads, block_size, channels = kv_cache.shape
+    if channels != 2 * head_size:
+        raise RuntimeError(f"KV cache last dim {channels} != 2 * head_size {2 * head_size}")
+    if not kv_cache.is_contiguous():
+        raise RuntimeError(
+            "strict Muse Glimmer attention requires a layer-contiguous KV cache (an L-outermost "
+            "KVCacheLayout); got a strided per-layer buffer"
+        )
+    kv = kv_cache.view(2, blocks, block_size, heads, head_size)
+    return kv[0], kv[1]
+
+
+def strict_block_table(block_table: torch.Tensor) -> torch.Tensor:
+    """vLLM null/absent page id ``0`` -> ``-1`` (the strict op's convention)."""
+
+    table = block_table.to(torch.int32)
+    return torch.where(table == 0, torch.full_like(table, -1), table)
+
+
 def _build_classes() -> tuple[type, type, type]:
     from vllm.v1.attention.backend import AttentionType
+    from vllm.v1.attention.backends import flash_attn as fa_module
     from vllm.v1.attention.backends.flash_attn import (
         FlashAttentionBackend,
         FlashAttentionImpl,
@@ -69,6 +98,30 @@ def _build_classes() -> tuple[type, type, type]:
         """Decoder attention through the strict gated op; encoder (vision) attention stays native."""
 
         supports_dcp = False
+
+        def do_kv_cache_update(
+            self,
+            layer: torch.nn.Module,
+            key: torch.Tensor,
+            value: torch.Tensor,
+            kv_cache: torch.Tensor,
+            slot_mapping: torch.Tensor,
+        ) -> None:
+            if self.attn_type != AttentionType.DECODER:
+                super().do_kv_cache_update(layer, key, value, kv_cache, slot_mapping)
+                return
+            key_cache, value_cache = strict_kv_views(kv_cache, self.head_size)
+            fa_module.reshape_and_cache_flash(
+                key,
+                value,
+                key_cache,
+                value_cache,
+                slot_mapping,
+                self.kv_cache_dtype,
+                layer._k_scale,
+                layer._v_scale,
+            )
+            CALL_COUNTS["kv_cache_write"] += 1
 
         def forward(
             self,
@@ -110,18 +163,30 @@ def _build_classes() -> tuple[type, type, type]:
                     "MuseGlimmerAttention.forward was not patched"
                 )
             num_tokens = int(attn_metadata.num_actual_tokens)
-            # Logical (blocks, kv_heads, block_size, 2*D) -> K/V views (blocks, block_size, kv_heads, D)
-            key_cache, value_cache = kv_cache.transpose(1, 2).split(self.head_size, dim=-1)
+            key_cache, value_cache = strict_kv_views(kv_cache, self.head_size)
+            if key_cache.shape[1] != PAGE_SIZE:
+                raise RuntimeError(
+                    f"strict Muse Glimmer attention requires {PAGE_SIZE}-token pages, got "
+                    f"block_size={key_cache.shape[1]}"
+                )
+            seq_lens = attn_metadata.seq_lens
+            num_reqs = int(seq_lens.shape[0])
+            query_start_loc = attn_metadata.query_start_loc
+            if query_start_loc.shape[0] < num_reqs + 1:
+                raise RuntimeError("attention metadata query_start_loc is shorter than seq_lens")
+            cu_seqlens_q = query_start_loc[: num_reqs + 1]
+            block_table = strict_block_table(attn_metadata.block_table[:num_reqs])
             window = None if self.sliding_window[0] < 0 else int(self.sliding_window[0]) + 1
             y, _o, _lse = _ops().gated_attention_paged(
                 query[:num_tokens],
                 gate[:num_tokens],
                 key_cache,
                 value_cache,
-                attn_metadata.block_table,
-                attn_metadata.seq_lens,
-                attn_metadata.query_start_loc,
+                block_table,
+                seq_lens.to(torch.int32),
+                cu_seqlens_q.to(torch.int32),
                 window=window,
+                max_seqlen_q=int(attn_metadata.max_query_len),
             )
             output[:num_tokens].copy_(y.view(num_tokens, self.num_heads, self.head_size))
             CALL_COUNTS["attention.local" if window is not None else "attention.global"] += 1
@@ -141,6 +206,10 @@ def _build_classes() -> tuple[type, type, type]:
         @staticmethod
         def get_builder_cls() -> type:
             return MuseGlimmerStrictAttentionMetadataBuilder
+
+        @classmethod
+        def get_supported_kernel_block_sizes(cls, kv_cache_spec: Any = None) -> list[Any]:
+            return [PAGE_SIZE]
 
     for cls in (
         MuseGlimmerStrictAttentionImpl,
@@ -181,4 +250,13 @@ def register(ops: Any) -> str:
     return f"vllm.v1.attention.backends.registry.FLASH_ATTN->{BACKEND_CLASS_PATH}"
 
 
-__all__ = ["BACKEND_CLASS_PATH", "CALL_COUNTS", "GATE_ATTR", "bind_ops", "register"]
+__all__ = [
+    "BACKEND_CLASS_PATH",
+    "CALL_COUNTS",
+    "GATE_ATTR",
+    "PAGE_SIZE",
+    "bind_ops",
+    "register",
+    "strict_block_table",
+    "strict_kv_views",
+]

@@ -278,13 +278,15 @@ def fused_post_norm_residual_pre_norm(
 def rope_table(
     positions: torch.Tensor, *, theta: float, dim: int, device: torch.device | str
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """fp32 ``cos(p * theta^(-2i/dim))`` and ``sin`` tables of shape ``(T, dim // 2)``."""
+    """fp32 ``cos(p * theta^(-2i/dim))`` / ``sin`` tables of shape ``(T, dim)`` (angle repeated
+    for both halves, the sibling ``rope_table`` layout)."""
 
     pos = positions.to(device=device, dtype=torch.float32)
     exponent = torch.arange(0, dim, 2, device=device, dtype=torch.float32) / float(dim)
     inv_freq = 1.0 / torch.pow(torch.tensor(float(theta), device=device), exponent)
     freqs = pos[:, None] * inv_freq[None, :]
-    return torch.cos(freqs), torch.sin(freqs)
+    emb = torch.cat((freqs, freqs), dim=-1)
+    return torch.cos(emb), torch.sin(emb)
 
 
 def _qk_norm(xf: torch.Tensor, eps: float) -> torch.Tensor:
@@ -294,8 +296,9 @@ def _qk_norm(xf: torch.Tensor, eps: float) -> torch.Tensor:
 def _rotate(xf: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
     half = xf.shape[-1] // 2
     x1, x2 = xf[..., :half], xf[..., half:]
-    c = cos.unsqueeze(1)
-    s = sin.unsqueeze(1)
+    # Tables are (T, dim) with identical halves; rotate_half only needs the first half.
+    c = cos[:, :half].unsqueeze(1)
+    s = sin[:, :half].unsqueeze(1)
     return torch.cat((x1 * c - x2 * s, x2 * c + x1 * s), dim=-1)
 
 
@@ -423,7 +426,9 @@ def gated_attention_fwd_paged(
             continue
         length = int(lens[b])
         npages = -(-length // page)
-        ids = block_table[b, :npages].to(torch.long)
+        # ``-1`` (strict convention) / ``0`` (vLLM null block) mark absent or evicted pages; both
+        # read the all-zero null page, whose keys are masked anyway.
+        ids = block_table[b, :npages].to(torch.long).clamp(min=0)
         keys = k_cache[ids].reshape(npages * page, nkv, d)[:length]
         vals = v_cache[ids].reshape(npages * page, nkv, d)[:length]
         q_pos = torch.arange(length - lq, length, device=q.device, dtype=torch.int64)
