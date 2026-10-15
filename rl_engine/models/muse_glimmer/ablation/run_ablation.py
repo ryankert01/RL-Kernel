@@ -432,8 +432,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "schema": "muse_glimmer_ablation_v1",
         "status": status,
         "commit": commits[0] if len(commits) == 1 else commits,
-        "env": {p["part"] + ("" if i == 0 else f"_{i}"): p["env"]
-                for i, p in enumerate(parts)},
+        "env": {f"{p['part']}@gpu{p['env'].get('gpu_lease')}": p["env"] for p in parts},
         "commands": args.command or [" ".join(p["argv"]) for p in parts],
         "tokens": hf["tokens"],
         "metric_definitions": {
