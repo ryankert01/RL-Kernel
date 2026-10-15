@@ -259,3 +259,115 @@ def test_triton_backend_requires_sibling_ops_or_allow_partial():
         ops = resolve_ops("triton", allow_partial=True)
         assert ops.golden_nodes()  # substitutions are recorded, never silent
     assert ops.backend == "triton"
+
+
+# -------------------------------------------------------------------------------------------
+# batched decode (contract G2 at the model level), profiling regions, xrt scoring
+# -------------------------------------------------------------------------------------------
+def _fill_batch_cache(model, prompts, completions):
+    from rl_engine.models.muse_glimmer.reference.strict_model import Session
+
+    total = max(int(p.numel() + c.numel()) for p, c in zip(prompts, completions))
+    cache = model.new_batch_cache(total + 2, len(prompts))
+    first = []
+    for b, (p, c) in enumerate(zip(prompts, completions)):
+        tgt = torch.cat([p[1:], c[:1]])
+        first.append(model.prefill(Session(cache=cache, seq=b), p, targets=tgt)[-1:].cpu())
+    return cache, first
+
+
+def test_decode_batch_matches_single_sequence_decode_bitwise(tiny_model):
+    vocab = tiny_model.cfg.vocab_size
+    lens = [30, 57, 130, 3]  # 130 > window 100: local layers evict pages
+    prompts = [_tokens(n, vocab, seed=40 + i) for i, n in enumerate(lens)]
+    completions = [_tokens(4, vocab, seed=60 + i) for i in range(len(lens))]
+    refs = [tiny_model.logprobs(p, c, mode="decode").cpu() for p, c in zip(prompts, completions)]
+    cache, first = _fill_batch_cache(tiny_model, prompts, completions)
+    got = [[f] for f in first]
+    seqs = list(range(len(lens)))
+    for j in range(3):
+        toks = [int(c[j]) for c in completions]
+        tgts = [int(c[j + 1]) for c in completions]
+        # replay the step at batch 1 and in a permuted sub-batch, then commit it at full batch
+        single = [tiny_model.decode_batch(cache, [b], [toks[b]], [tgts[b]], commit=False).cpu()
+                  for b in seqs]
+        perm = [2, 0, 3]
+        sub = tiny_model.decode_batch(cache, perm, [toks[b] for b in perm],
+                                      [tgts[b] for b in perm], commit=False).cpu()
+        full = tiny_model.decode_batch(cache, seqs, toks, tgts, commit=True).cpu()
+        assert torch.equal(full, torch.cat(single))
+        assert torch.equal(sub, full[perm])
+        for b in seqs:
+            got[b].append(full[b : b + 1])
+    for b in seqs:
+        assert torch.equal(torch.cat(got[b]), refs[b]), f"sequence {b}"
+    assert [cache.seq_len(b) for b in seqs] == [n + 3 for n in lens]
+    assert cache.evictions > 0
+
+
+def test_region_timer_classes_sum_to_root_and_keep_bits(tiny_model):
+    from rl_engine.models.muse_glimmer.reference.profiling import (
+        CLASSES,
+        RegionTimer,
+        combine_repeats,
+        summarize_regions,
+    )
+
+    ids = _tokens(150, tiny_model.cfg.vocab_size, seed=31).to(DEVICE)
+    targets = torch.cat([ids[1:], torch.full((1,), -1, device=DEVICE)])
+    with torch.no_grad():
+        plain = tiny_model.forward_train(ids, targets)["logp"]
+    timer = RegionTimer()
+    tiny_model.set_timer(timer)
+    try:
+        with torch.no_grad(), timer.region("forward", "model"):
+            timed = tiny_model.forward_train(ids, targets)["logp"]
+    finally:
+        tiny_model.set_timer(None)
+    assert torch.equal(plain.view(torch.int32), timed.view(torch.int32))  # bitwise, NaN incl.
+    nl = tiny_model.cfg.num_hidden_layers
+    summary = summarize_regions(timer.resolve(), nl)
+    combined = combine_repeats([summary], nl)
+    assert abs(combined["sum_of_classes_ms"] - summary["total_ms"]) <= 1e-3 * summary["total_ms"]
+    by_kind = summary["by_kind_ms"]
+    for cls in ("qkvg_gemm", "qknorm_rope", "attention", "o_gemm", "norm", "ffn_gemm"):
+        assert by_kind["local"][cls] > 0 and by_kind["global"][cls] > 0, cls
+    assert by_kind["model"]["lm_head_gemm"] > 0 and by_kind["model"]["embedding"] > 0
+    assert set(combined["by_class_ms"]) == set(CLASSES)
+    assert all(len(v) == nl for v in summary["per_layer_ms"].values())
+
+
+def test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree(tiny_model, tmp_path):
+    import json
+
+    from rl_engine.models.muse_glimmer.reference.xrt_scoring import (
+        compare_xrt,
+        hex_to_fp32,
+        score_token_file,
+    )
+
+    vocab = tiny_model.cfg.vocab_size
+    seqs = []
+    for i, (n, cs) in enumerate([(40, 25), (140, 110)]):
+        seqs.append({"id": f"s{i}", "token_ids": _tokens(n, vocab, seed=90 + i).tolist(),
+                     "completion_start": cs})
+    path = tmp_path / "tokens.json"
+    path.write_text(json.dumps({"schema": "muse_glimmer_xrt_v1", "sequences": seqs}))
+    modes = ("prefill", "decode", "per_token", "chunked:prompt_boundary", "chunked:20/19",
+             "chunked:window_boundary_100")
+    out = score_token_file(tiny_model, path, check_modes=modes)
+    assert out["schema"] == "muse_glimmer_xrt_logprobs_v1" and out["tp"] == 1
+    for s, rec in zip(seqs, out["sequences"]):
+        ids = torch.tensor(s["token_ids"])
+        cs = s["completion_start"]
+        ref = tiny_model.logprobs(ids[:cs], ids[cs:], mode="train").float().cpu()
+        assert len(rec["logprobs_hex"]) == len(s["token_ids"]) - cs
+        assert all(len(h) == 8 for h in rec["logprobs_hex"])
+        assert torch.equal(hex_to_fp32(rec["logprobs_hex"]), ref)
+    first, second = (r["modes"] for r in out["checks"]["sequences"])
+    assert "skipped" in first["chunked:window_boundary_100"]  # 39 scored tokens < 101
+    assert "skipped" in second["chunked:20/19"]
+    assert second["chunked:window_boundary_100"]["byte_equal"]
+    assert out["checks"]["all_byte_equal_to_train"], out["checks"]
+    diff = compare_xrt(out, out)
+    assert diff["equal_tokens"] == diff["n_tokens"] == 15 + 30
