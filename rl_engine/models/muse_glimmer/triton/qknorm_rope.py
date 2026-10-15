@@ -14,7 +14,10 @@ Layout and block structure (contract R3: one logical row end-to-end inside one p
       scaled and rotated inside this one program with a block layout that depends only on
       the compile-time constants ``(BLOCK_HQ, BLOCK_HK, D, num_warps)`` - never on ``T`` or
       on the program id - so the bits of a row are the same at T=1 and T=4096 and in any
-      batch position (batch invariance by construction).
+      batch position (batch invariance by construction).  Head shards (TP2/4/8: 16/8/4 Q
+      heads, 1 KV head -> BLOCK_HQ 16/8/4, BLOCK_HK 1) give exactly the bits of the matching
+      slice of the full 32/2-head call (tested), because every head row is independent.
+    * Address arithmetic is int64 (program id cast to int64), so T*H*D >= 2^31 is safe.
 
 Reduction order (fixed, recorded in ``trace()``, identical to the torch golden)
     The 128 channels are loaded as two ``[BLOCK_H, 64]`` halves ``x1 = x[:, :64]`` and
@@ -28,8 +31,8 @@ Reduction order (fixed, recorded in ``trace()``, identical to the torch golden)
     product ``sum(g * x_hat)`` uses the same tree.
 
 Casts (contract R5)
-    inputs bf16 -> fp32 once at load; ``rstd = rsqrt(ss / D + eps)`` fp32; ``x_hat = x * rstd``;
-    ``q_hat *= qk_scale`` (fp32, Q only); rotation ``o1 = x1*c1 - x2*s1``,
+    inputs bf16 ONLY (other dtypes raise TypeError) -> fp32 once at load;
+    ``rstd = rsqrt(ss / D + eps)`` fp32; ``x_hat = x * rstd``; ``q_hat *= qk_scale`` (fp32, Q only); rotation ``o1 = x1*c1 - x2*s1``,
     ``o2 = x2*c2 + x1*s2`` in fp32; one cast to the output dtype at the store.  The kernels
     are launched with ``enable_fp_fusion=False`` so that no mul+add is contracted into an FMA:
     the arithmetic is then the same sequence of IEEE fp32 operations as the torch golden.
@@ -100,7 +103,9 @@ def _norm_scale_rope_rows_fwd(
     HAS_ROPE: tl.constexpr,
     APPLY_SCALE: tl.constexpr,
 ):
-    """Normalize, scale and rotate ``n_rows`` consecutive head rows starting at ``row0``."""
+    """Normalize, scale and rotate ``n_rows`` consecutive head rows starting at ``row0``.
+
+    ``row0`` is int64 (from the int64 program id), so ``offs`` is int64 for every T."""
     D: tl.constexpr = 2 * HALF
     rows = tl.arange(0, BLOCK_ROWS)
     cols = tl.arange(0, HALF)
@@ -212,7 +217,8 @@ def _qknorm_rope_fwd_kernel(
     HAS_ROPE: tl.constexpr,
 ):
     """One program per token: all HQ query heads and HK key heads of that token."""
-    t = tl.program_id(0)
+    # int64 so that row/element offsets never wrap: T*HQ*D reaches 2^31 at T = 524288 (HQ=32).
+    t = tl.program_id(0).to(tl.int64)
     D: tl.constexpr = 2 * HALF
     cols = tl.arange(0, HALF)
     if HAS_ROPE:
@@ -254,7 +260,7 @@ def _qknorm_rope_bwd_kernel(
     HAS_ROPE: tl.constexpr,
 ):
     """One program per token: dQ for its HQ query heads and dK for its HK key heads."""
-    t = tl.program_id(0)
+    t = tl.program_id(0).to(tl.int64)  # int64 offsets (see the forward kernel)
     D: tl.constexpr = 2 * HALF
     cols = tl.arange(0, HALF)
     if HAS_ROPE:
@@ -292,10 +298,14 @@ def _check_inputs(
         raise ValueError(f"q {tuple(q.shape)} and k {tuple(k.shape)} disagree on T or D")
     if D != HEAD_DIM:
         raise ValueError(f"the strict kernel pins head_dim={HEAD_DIM} (contract O4); got {D}")
-    if q.dtype != k.dtype:
-        raise ValueError(f"q and k must share a dtype; got {q.dtype} and {k.dtype}")
-    if q.dtype not in (torch.bfloat16, torch.float16, torch.float32):
-        raise TypeError(f"unsupported dtype {q.dtype}")
+    if q.dtype != torch.bfloat16 or k.dtype != torch.bfloat16:
+        # Contract O4/R5: bf16 in, fp32 math, ONE rounding to bf16 at the end.  Other dtypes
+        # used to run and return fp16/fp32 outputs (no bf16 rounding); fail closed instead.
+        raise TypeError(
+            "the strict qknorm_scaled_rope kernel takes bf16 q/k only (contract O4: bf16 in, "
+            f"one rounding to bf16 at the end); got q {q.dtype}, k {k.dtype}. Use "
+            "qknorm_scaled_rope_fp32/_fp64 for fp32/fp64 references."
+        )
     if q.device.type != "cuda":
         raise RuntimeError("the strict qknorm_scaled_rope kernel requires CUDA tensors")
     if (cos is None) != (sin is None):
@@ -324,6 +334,8 @@ def tile_config(HQ: int = 32, HK: int = 2, D: int = HEAD_DIM) -> dict[str, objec
         "num_warps": NUM_WARPS,
         "num_stages": NUM_STAGES,
         "enable_fp_fusion": False,
+        "offsets": "int64",
+        "dtype_in": "bfloat16 only (TypeError otherwise; no fallback)",
     }
 
 
@@ -336,7 +348,7 @@ def qknorm_rope_forward_triton(
     eps: float,
     qk_scale: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Strict forward. Returns ``(q_hat, k_hat)`` in the input dtype (bf16 on the contract path)."""
+    """Strict forward: bf16 ``(q, k)`` -> bf16 ``(q_hat, k_hat)``; any T >= 0 (int64 offsets)."""
     T, HQ, HK, D = _check_inputs(q, k, cos, sin)
     q = q.contiguous()
     k = k.contiguous()
@@ -383,10 +395,15 @@ def qknorm_rope_backward_triton(
     eps: float,
     qk_scale: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Strict backward. Returns ``(dq, dk)`` in the input dtype; row-local and deterministic."""
+    """Strict backward: bf16 ``(dq, dk)``; row-local and deterministic; any T (int64 offsets)."""
     T, HQ, HK, D = _check_inputs(q, k, cos, sin)
     if grad_q_hat.shape != q.shape or grad_k_hat.shape != k.shape:
         raise ValueError("output gradients must match q/k shapes")
+    if grad_q_hat.dtype != torch.bfloat16 or grad_k_hat.dtype != torch.bfloat16:
+        raise TypeError(
+            "the strict qknorm_scaled_rope backward takes bf16 output gradients only; got "
+            f"{grad_q_hat.dtype} and {grad_k_hat.dtype}"
+        )
     q = q.contiguous()
     k = k.contiguous()
     doq = grad_q_hat.contiguous()

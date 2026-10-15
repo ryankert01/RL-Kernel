@@ -26,6 +26,165 @@ Agent: qknorm_scaled_rope. Hardware: A100-SXM4-80GB, torch 2.13.0+cu130, Triton 
 - Benchmark T=4096: strict forward 0.076 ms vs torch-native HF-style 0.96 ms (12.6× faster,
   ~990 GB/s effective); forward+backward 0.42 ms vs 2.39 ms (5.7×).
 
+## Review follow-ups (2026-10-15, findings qknorm_rope:1..5)
+
+Branch `worktree-wf_7b064961-36f-6`, measured before at `6a61f6e` (POC head) and after at
+`9b2317b` (code; later commits only add this report and the JSON); A100-SXM4-80GB, Triton 3.7.1, torch 2.13.0 cu130 (vLLM env) and cu129 (Megatron
+env). Machine-readable results, including the per-bucket, per-shard, per-test and per-T series
+for plotting: `reports/muse_glimmer_poc/data/kernels_rope.json`.
+
+**In short:** all five findings were reproduced on the GPU. Four were real bugs and are
+now fixed so that they fail closed. The fifth (TP shards) was only a missing test: the kernel
+was already bit-exact, and the test is now added. No output bit changes for any shape. The
+sha256 of the forward and backward outputs at T=4096 (local, global, long-context positions) is
+identical before and after the fix, and identical between the two runtimes' envs.
+
+| id | finding | verdict | what we observed before | fix | after |
+|---|---|---|---|---|---|
+| qknorm_rope:1 | O4 table identity | real, fixed | `rope_table(device="cpu")` accepted; a CPU-built table differs from the CUDA one in 97,294 / 524,288 cos (18.6 %) and 99,316 sin elements at p < 4096, 23 % over all 131,072 positions (max abs 3.9e-3); `inv_freq` differs in 4/64 channels (6, 8, 56, 57); fed to the op it flips 20,007 / 16.8 M q̂ and 1,283 / 1.05 M k̂ bf16 outputs (positions 0..4095) and 331,488 q̂ at positions 126,976..131,071 | `rope_table` raises `RuntimeError` on non-CUDA devices; `canonical_rope_table(device)` = one cached object per CUDA device (131,072 rows, 64 MiB each), `verify=True` checks the pinned `CANONICAL_ROPE_TABLE_SHA256`; `rope_rows(positions)` gathers it; `rope_table_sha256()`; `trace()["rope_table"]` | CPU build raises. On CUDA, all 4 table builders in the repo (this module, `reference/golden_ops`, `runtime/fallback_ops`, `runtime/strict_kernels._fb_rope_table`) are bitwise identical over 16.8 M elements. Table sha256 `088dbb8c…56d9c` is identical in the cu130 and cu129 envs |
+| qknorm_rope:2 | non-bf16 accepted | real, fixed | fp32 q/k → fp32 outputs and grads (no bf16 rounding: 262,139 / 262,144 elements differ from the bf16 path); fp16 → fp16 outputs | `_check_inputs` requires bf16 q and k (`TypeError`); backward launcher requires bf16 output grads | `TypeError` for fp32, fp16 and mixed inputs; bf16 bits unchanged |
+| qknorm_rope:3 | no TP-shard test | coverage gap only (kernel correct), test added | 84 shard runs (T ∈ {1, 7, 4096} × local/global × TP2/4/8 × every rank; 16/8/4 Q heads + 1 KV head; BLOCK_HQ 16/8/4, BLOCK_HK 1): 0 mismatching elements in q̂, k̂, dq, dk vs the full-call slices | `TestG2TensorParallelShards` (T ∈ {1, 7, 256, 4096}, fwd+bwd, local/global, plus strided views and trace tile configs) | passes before and after (as expected for a coverage gap) |
+| qknorm_rope:4 | implicit local/global | real, fixed | `cos=None` on a sliding layer runs NoPE silently: 15,994,827 / 16,777,216 q̂ differ, no error; no `local` kwarg | `qknorm_scaled_rope(..., local=True/False)` checked against cos/sin (`ValueError`); `qknorm_scaled_rope_at(q, k, pos, local=… or layer_idx=…)` (contract signature, layer kind mandatory, canonical table); `layer_is_local(i)` (checked against the manifest's `layer_types`); `trace()["layer_selection"]` | explicit mismatches raise. `local=None` (legacy implicit) is still accepted so that existing callers keep working; integrator patches below make every call site explicit |
+| qknorm_rope:5 | int32 offsets | real, fixed | T = 524,352 (T·32·128 ≥ 2³¹ from row 524,288): default allocation → `CUDA error: an illegal memory access`; with an allocation layout where the wrapped address (X − 4 GiB) is mapped → **no error**, all 64 rows ≥ 524,288 wrong and 262,144 elements of an unrelated tensor overwritten | `t = tl.program_id(0).to(tl.int64)` in the fwd and bwd kernels (all offsets int64); `tile_config["offsets"] = "int64"` | 0 wrong rows, fwd+bwd, local/global, both layouts. No measurable speed change (interleaved A/B old vs new kernel: T=4096 local fwd 55.8 → 55.9 µs, bwd 76.1 → 75.7 µs; T=8192 fwd 99.7 → 100.0 µs; T=32768 fwd 370.7 → 372.2 µs), identical output bits at all 11 T × 2 layer kinds |
+
+Tests. 40 new tests in `test_qknorm_rope.py` (79 in total). On the old code 18 of them fail:
+17 assertion/API failures and the overflow test, which dies with an illegal memory access and
+was run in its own process. The other 22 pass before and after: the TP shards, plus the
+model-shape sweeps that guard against fail-closed checks breaking the model. After the fix all
+79 pass in BOTH envs (vLLM env and Megatron env).
+
+Shapes the model hits stay bit-exact. With kernel == fp32 golden → bf16, bitwise, these all
+pass: T ∈ {1..17, 31, 63..65, 127, 255..257, 1000, 2047..2049, 4095..4097, 8191, 8192} at
+random positions in [0, 131072), local and global; every decode batch 1..256 (batch-prefix
+invariance); backward vs the hand-written VJP at T ∈ {1, 17, 2049, 8192}. No alignment or
+padding rule is needed for this op: every head row is independent, BLOCK_H = next_pow2(H) is
+masked, and all T ≥ 0 work.
+
+Which bits changed: **none**. The int64 change touches only address arithmetic. The dtype,
+device and layer-kind checks only reject inputs that used to run, and those rejected inputs
+are never produced at Muse-Glimmer geometry by the current callers: all of them pass bf16
+q/k and CUDA tables. The model's forward and backward bits are unchanged (sha256 rows in the
+JSON, `experiments.bitwise_unchanged_by_fix`).
+
+Public API: backward compatible. The new arguments are keyword-only and optional
+(`local=None`), and the new functions are additive. The callers in `reference/`,
+`runtime/vllm_*`, `runtime/megatron_*` and `runtime/strict_ops.py` are unchanged, and their tests
+pass (`test_vllm_strict_binding.py` + `test_strict_model_tiny.py`: 39 passed, 1 skipped
+(needs E2E env); `test_megatron_strict_binding.py`: 8/9, where the one failure,
+`test_lm_head_tiles_tp2_equals_tp1_and_reference` (`dh2 != dh1`), is the pre-existing lm_head
+failure listed in RESUME.md and does not involve this op).
+
+CPU overhead (T=64, wall clock, two runs; the second ran at host load average ~250 on 240
+cores): forward through autograd 67 / 77 µs; fwd+bwd through autograd ≈ 365 / 335 µs, of which
+~110 µs CPU is in each of the forward and backward autograd nodes (Triton launch path;
+`record_backward` is not the cost: 364 vs 370 µs and 335 vs 322 µs without it). `rope_rows` costs
+109 / 151 µs with its range check (one device→host sync) and 35 / 46 µs with
+`check_range=False`, so call it once per forward, not once per layer. The kernels themselves
+are launch-bound (~40–55 µs floor, depending on host load) up to T ≈ 2048.
+
+### Follow-up benchmark (A100, median, µs; `experiments.bench_ab_old_vs_new_kernel` and `bench_series`)
+
+| T | fwd old (int32) | fwd new (int64) | bwd old | bwd new | torch-native HF fwd (bf16) | native / strict fwd |
+|---|---|---|---|---|---|---|
+| 1 | 54.0 | 51.7 | 56.7 | 55.6 | 315 | 6× (launch-bound both) |
+| 64 | 54.5 | 54.1 | 58.0 | 57.2 | 375 | 7× |
+| 1024 | 54.1 | 53.8 | 57.9 | 58.7 | 298 | 5.5× |
+| 4096 | 55.8 | 55.9 | 76.1 | 75.7 | 862 | 15× |
+| 8192 | 99.7 | 100.0 | 141.6 | 141.0 | 1609 | 16× |
+| 32768 | 370.7 | 372.2 | 533.2 | 530.9 | NOT RUN | – |
+
+Local layers; old/new interleaved in one process, 7 rounds, same inputs; bits equal at every T.
+Native-HF column from `bench_series` (final run, same lease, higher host load). The repo
+benchmark `benchmarks/models/muse_glimmer/bench_qknorm_rope.py` (T=4096) at the final commit:
+forward 0.086 ms strict vs 0.952 ms native (11.0×), forward+backward 0.431 vs 2.388 ms (5.5×).
+At 6a61f6e under lower load it gave 0.071 / 0.954 ms (13.5×) and 0.327 / 2.461 ms (7.5×). The
+difference is host-CPU launch overhead, not kernel time: the GPU-bound T ≥ 4096 rows match.
+
+### Follow-up: how to reproduce
+
+```
+# from the worktree root; scripts are in the session scratchpad (paths in kernels_rope.json "scripts")
+~/bin/gpu-lease -n 1 --pool 4-5 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_qknorm_rope.py -q -rA -p no:cacheprovider        # 79 passed
+~/bin/gpu-lease -n 1 --pool 4-5 -- env PYTHONPATH=$PWD ~/envs/megatron/bin/python -m pytest \
+    tests/models/muse_glimmer/test_qknorm_rope.py -q -rA -p no:cacheprovider        # 79 passed
+~/bin/gpu-lease -n 1 --pool 4-5 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed -q      # 440 passed, 3 skipped, 1 failed (pre-existing lm_head TP2)
+<scratchpad>/rope_fu/run_probes.sh <outdir> f1 f2 f3 f4 xenv xenv_megatron f5 f5c  # probes per finding
+<scratchpad>/rope_fu/run_bench.sh <label> <outdir>                                # series + repo bench
+<scratchpad>/rope_fu/run_script.sh vllm <scratchpad>/rope_fu/bench_ab.py <log> <json>  # old vs new A/B
+python3 <scratchpad>/rope_fu/build_json.py <sha> reports/muse_glimmer_poc/data/kernels_rope.json
+```
+Pre-fix evidence: the 40 new tests run against 6a61f6e gave 22 passed and 17 failed, and the
+overflow test, run alone, failed with `torch.AcceleratorError: CUDA error: an illegal memory
+access was encountered`. Per-test before/after outcomes are in `tests_new.per_test`.
+
+### Follow-up: integration requests (other owners' files; exact patches)
+
+1. Make every call site explicit about the layer kind (finding 4). All three non-Triton
+   implementations must accept the keyword first. Add it to
+   `reference/golden_ops.py::qknorm_scaled_rope`, `runtime/fallback_ops.py::qknorm_scaled_rope`
+   and `runtime/strict_kernels.py::_fb_qknorm_scaled_rope`:
+   ```python
+       *, eps: float = ..., qk_scale: float = ..., local: bool | None = None,
+   ) -> tuple[torch.Tensor, torch.Tensor]:
+       if local is not None and bool(local) != (cos is not None):
+           raise ValueError(f"local={local} but cos is {'None' if cos is None else 'given'}")
+   ```
+   Then at the call sites:
+   - `reference/strict_model.py:138` → `ops.qknorm_scaled_rope(q, k, cos, sin, eps=cfg.rms_norm_eps, qk_scale=cfg.qk_scale_factor, local=layer.is_local)`
+   - `runtime/vllm_strict.py:896` → add `local=bool(self.use_rope),`
+   - `runtime/megatron_strict.py:511` → add `local=True`; `:514` → add `local=False`
+   - `runtime/strict_ops.py:226/228` (probe) → add `local=True` / `local=False`
+2. Table identity (finding 1). Each runtime should prove it builds the canonical table once and
+   log the digest:
+   - `runtime/vllm_strict.py::_rope_for`: when `state.ops.is_strict("rope_table")`, replace the
+     `state.ops.rope_table(torch.arange(max_pos), ...)` build with
+     `from rl_engine.models.muse_glimmer.ops.qknorm_rope import canonical_rope_table, rope_table_sha256`;
+     `tables = canonical_rope_table(positions.device, verify=True)`, and record
+     `state.cfg["rope_table_sha256"] = rope_table_sha256(positions.device)` in provenance.
+     Rows: keep `cos[idx]`, which gives the same bits.
+   - `runtime/megatron_strict.py::rope`: the same, gathering
+     `rope_rows(positions, device=self.device)` once per forward (one host sync), and log
+     `rope_table_sha256(self.device)` in provenance.
+   - `reference/strict_model.py:132-136`: hoist the table out of the layer loop. Today it calls
+     `ops.rope_table(positions)` for each of the 39 local layers; compute `cos, sin` once before
+     `for layer in w.layers:`. The bits are unchanged.
+   - The E2E orchestrator compares the two runtimes' `rope_table_sha256` and fails if they differ.
+3. Add `<scratchpad>/rope_fu/bench_series.py` and `bench_ab.py` as
+   `benchmarks/models/muse_glimmer/bench_qknorm_rope_series.py` if the series benchmark should
+   live in the repo. Optional; I don't own `benchmarks/`.
+
+### Follow-up: open issues
+
+- `local=None` (implicit layer kind) is still accepted for backward compatibility. Once the
+  patches in item 1 are merged, make `local` required (a one-line change in
+  `qknorm_scaled_rope`, plus the tests).
+- The pinned table sha256 has been verified on A100 with torch 2.13 cu129 and cu130 only. Other
+  GPUs, or a different torch/CUDA math library, may change `cos`/`sin`/`pow` bits;
+  `test_canonical_table_fingerprint_is_pinned` and `canonical_rope_table(verify=True)` catch it.
+- CPU launch overhead (~50 µs per kernel launch, ~350 µs for an autograd fwd+bwd at small T)
+  dominates decode-size calls: 52 layers × ~65 µs ≈ 3.4 ms of host time per decode step for
+  this op alone. CUDA graphs or fusing the op into the QKV GEMM epilogue are the fix. This
+  wasn't tuned (performance only needs to be adequate).
+- NOT RUN: the real-checkpoint 52-layer chain and the vLLM/Megatron 30B engine runs with the
+  patched module. They are covered indirectly: forward and backward output bits are
+  sha256-identical before and after, and all caller unit tests pass.
+
+Contract wording proposed for O4 (RFC feedback):
+- "The RoPE table is `rope_table(arange(131072))` built ONCE per device by the fixed fp32
+  torch-CUDA formula `inv_freq = 1/torch.pow(θ, arange(0,128,2)/128)`, `angle = p·inv_freq`,
+  `cos/sin = cos/sin(cat(angle, angle))`. Rows are gathered by absolute position. Builds on any
+  other device are forbidden. Each runtime logs the table's sha256 (`088dbb8c…56d9c` on
+  torch 2.13 cu129/cu130), and train/rollout parity requires equal digests."
+- "Inputs q/k MUST be bf16; the op rejects other dtypes."
+- "The op takes the layer kind explicitly: `qknorm_scaled_rope(q, k, pos, local)`, where
+  `local = (i % 4 != 3)`. Passing tables to a global layer, or omitting them on a local layer, is
+  an error."
+- "Head-sharded calls (TP t: 32/t Q heads, 1 KV head) are bitwise equal to the slice of the TP1
+  call (parity axis TP1 vs TP2/4/8, G2)."
+- "Index arithmetic is 64-bit (no limit on T·H·D)."
+
 ## Design
 
 Files
@@ -43,6 +202,12 @@ qknorm_scaled_rope(q (T,32,128) bf16, k (T,2,128) bf16, cos (T,128) fp32 | None,
                    *, eps=1e-5, qk_scale=3.87) -> (q_hat bf16, k_hat bf16)      # differentiable
 qknorm_scaled_rope_fp32(...) -> fp32 outputs    # golden; autograd through it = fp32 reference backward
 trace() -> dict
+# added by the review follow-up (all additive / keyword-only):
+qknorm_scaled_rope(..., local: bool | None = None)          # explicit layer kind, checked
+qknorm_scaled_rope_at(q, k, positions | None, *, local=None, layer_idx=None, check_range=True)
+canonical_rope_table(device=None, *, verify=False) -> (cos, sin) (131072, 128) fp32, cached object
+rope_rows(positions, *, device=None, check_range=True) -> rows of the canonical table
+rope_table_sha256(device=None) -> str ;  layer_is_local(i) -> bool
 ```
 Usage: `cos, sin = rope_table(torch.arange(max_pos, device=dev), device=dev)` once per device,
 then `qknorm_scaled_rope(q, k, cos[pos], sin[pos])` (local) / `qknorm_scaled_rope(q, k, None, None)`
@@ -90,10 +255,14 @@ None in the numerics. Clarifications the contract text leaves open (chosen and d
    form `1 / pow(θ, 2i/128)` so that `inv_freq` matches HF bit for bit (the two forms can differ
    by an fp32 ulp). The contract should spell out the formula.
 2. The strict kernel pins `head_dim = 128` (contract value); other head dims raise. HQ/HK are
-   generic (power-of-two padded).
-3. The table is "built once and cached" by the caller (gather by position); `rope_table(pos)`
-   and `rope_table(arange)[pos]` are bitwise equal, so both patterns satisfy the contract.
-4. The op also accepts fp16/fp32 q/k (output dtype = input dtype); the contract path is bf16.
+   generic (power-of-two padded); the TP head shards 16/8/4 Q + 1 KV are tested bitwise
+   against the full-call slices (finding qknorm_rope:3).
+3. ~~The table is "built once and cached" by the caller.~~ Superseded by the review follow-up
+   (finding qknorm_rope:1): the module now owns the cache (`canonical_rope_table(device)`, one
+   object per CUDA device, sha256 pinned) and `rope_table` raises on non-CUDA devices.
+   `rope_table(pos)`, `rope_table(arange)[pos]` and `rope_rows(pos)` are bitwise equal.
+4. ~~The op also accepts fp16/fp32 q/k.~~ Superseded (finding qknorm_rope:2): non-bf16 q/k and
+   non-bf16 output gradients raise `TypeError`.
 5. `QKNormScaledRopeOp.op_class = "reduction"` follows the repo's `qk_norm` OperatorSpec row;
    the tests gate on the tighter ws1 elementwise rows (bf16 0.02/0.016), which pass.
 

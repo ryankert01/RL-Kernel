@@ -510,3 +510,335 @@ class TestG5Trace:
         json.dumps(t1)  # serializable
         assert QKNormScaledRopeOp().trace() == t1
         assert op.trace(HQ=8, HK=1)["tile_config"]["BLOCK_HK"] == 1
+
+
+# --------------------------------------------------------------------------------------
+# Review follow-ups (findings qknorm_rope:1..5, see REPORT_qknorm_rope.md "Review follow-ups")
+# --------------------------------------------------------------------------------------
+
+N_LAYERS = 52
+ROPE_POSITIONS = 131072  # max_position_embeddings
+# sha256(cos.bytes || sin.bytes) of rope_table(arange(131072)) on CUDA, measured on A100 with
+# torch 2.13.0+cu130 (vLLM env) AND torch 2.13.0+cu129 (Megatron env): identical.
+CANONICAL_SHA256 = "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c"
+
+
+class TestF1RopeTableIdentity:
+    """O4: 'table built once by a fixed fp32 torch-CUDA function, cached, identical object on
+    both runtimes'.  A CPU build differs from the CUDA build in ~19% of the elements."""
+
+    def test_rope_table_rejects_non_cuda_device(self):
+        with pytest.raises(RuntimeError, match="torch-CUDA"):
+            rope_table(torch.arange(8), device="cpu")
+        with pytest.raises(RuntimeError, match="torch-CUDA"):
+            rope_table(torch.arange(8, device=DEV), device=torch.device("cpu"))
+        # the fp64 reference table is not the runtime table and may live anywhere
+        c64, _ = rope_table_fp64(torch.arange(8), device="cpu")
+        assert c64.dtype == torch.float64
+
+    def test_canonical_table_is_cached_identical_object(self):
+        c1, s1 = op.canonical_rope_table(DEV)
+        c2, s2 = op.canonical_rope_table(DEV)
+        assert c1 is c2 and s1 is s2
+        assert c1.shape == s1.shape == (ROPE_POSITIONS, D) and c1.dtype == torch.float32
+        assert op.ROPE_TABLE_POSITIONS == ROPE_POSITIONS
+        c3, s3 = op.canonical_rope_table()  # default = current CUDA device
+        assert c3 is c1 and s3 is s1
+        full_c, full_s = rope_table(torch.arange(ROPE_POSITIONS, device=DEV), device=DEV)
+        assert torch.equal(c1, full_c) and torch.equal(s1, full_s)
+
+    def test_canonical_table_fingerprint_is_pinned(self):
+        """Cross-runtime identity: both envs (cu130 vLLM, cu129 Megatron) must produce these
+        bits; a torch/CUDA math-library change that alters cos/sin/pow is caught here."""
+        assert op.CANONICAL_ROPE_TABLE_SHA256 == CANONICAL_SHA256
+        assert op.rope_table_sha256(DEV) == CANONICAL_SHA256
+        c, _ = op.canonical_rope_table(DEV, verify=True)  # raises on a digest mismatch
+        assert c is op.canonical_rope_table(DEV)[0]
+        with pytest.raises(ValueError):
+            op.canonical_rope_table(DEV, theta=10000.0, verify=True)
+
+    def test_rope_rows_gathers_the_canonical_table(self):
+        pos = torch.tensor([0, 1, 2047, 2048, 4095, 777, ROPE_POSITIONS - 1], device=DEV)
+        rc, rs = rope_table(pos, device=DEV)
+        for p in (pos, pos.to(torch.int32), pos.cpu()):
+            for check in (True, False):
+                c, s = op.rope_rows(p, check_range=check)
+                assert c.device.type == "cuda"
+                assert torch.equal(c, rc) and torch.equal(s, rs)
+
+    def test_rope_rows_rejects_out_of_range_positions(self):
+        for bad in ([ROPE_POSITIONS], [-1], [3, ROPE_POSITIONS + 5]):
+            with pytest.raises(ValueError, match="position"):
+                op.rope_rows(torch.tensor(bad, device=DEV))
+        with pytest.raises(TypeError):
+            op.rope_rows(torch.tensor([1.0], device=DEV))
+
+    def test_other_repo_table_builders_are_bitwise_identical_on_cuda(self):
+        """Every table builder in the repo (reference golden, runtime fallback) must produce the
+        canonical bits on CUDA, so whichever runtime builds the table, it is the same."""
+        from rl_engine.models.muse_glimmer.reference import golden_ops
+        from rl_engine.models.muse_glimmer.runtime import fallback_ops
+
+        pos = torch.arange(ROPE_POSITIONS, device=DEV)
+        cc, sc = op.canonical_rope_table(DEV)
+        for fn in (golden_ops.rope_table, fallback_ops.rope_table):
+            c, s = fn(pos, theta=ROPE_THETA, dim=D, device=DEV)
+            assert torch.equal(c, cc) and torch.equal(s, sc), fn.__module__
+
+    def test_trace_records_table_provenance(self):
+        tab = trace()["rope_table"]
+        assert tab["device_type"] == "cuda"
+        assert tab["positions"] == ROPE_POSITIONS
+        assert tab["sha256"] == CANONICAL_SHA256
+        assert tab["builder"].endswith("qknorm_rope.rope_table")
+
+
+class TestF2DtypeFailClosed:
+    """R5 / O4: bf16 in, ONE rounding to bf16 at the end.  fp16/fp32 inputs used to be accepted
+    and silently produced fp16/fp32 outputs (no bf16 rounding)."""
+
+    @pytest.mark.parametrize("dt", [torch.float32, torch.float16])
+    def test_rejects_non_bf16_inputs(self, dt):
+        q, k = _make_qk(4, seed=2)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+        for qq, kk in ((q.to(dt), k.to(dt)), (q.to(dt), k), (q, k.to(dt))):
+            with pytest.raises(TypeError, match="bf16"):
+                qknorm_scaled_rope(qq, kk, cos, sin)
+            with pytest.raises(TypeError, match="bf16"):
+                qknorm_scaled_rope(qq, kk, None, None)
+
+    def test_backward_launcher_rejects_non_bf16_grads(self):
+        from rl_engine.models.muse_glimmer.triton.qknorm_rope import qknorm_rope_backward_triton
+
+        q, k = _make_qk(4, seed=3)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+        with pytest.raises(TypeError, match="bf16"):
+            qknorm_rope_backward_triton(
+                q, k, q.float(), k.float(), cos, sin, eps=RMS_NORM_EPS, qk_scale=QK_SCALE
+            )
+
+    def test_bf16_outputs_and_grads(self):
+        q, k = _make_qk(4, seed=4)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+        dq, dk = _grads(q, k, cos, sin, torch.ones_like(q), torch.ones_like(k))
+        assert dq.dtype == dk.dtype == torch.bfloat16
+
+
+def _tp_shards():
+    """(tp, rank, q-head slice, kv head) for TP2/4/8: the 32 Q heads split evenly, one KV head
+    per rank (replicated at TP4/8); GQA: q head h reads kv head h // 16."""
+    for t in (2, 4, 8):
+        hq = HQ // t
+        for r in range(t):
+            yield t, r, slice(r * hq, (r + 1) * hq), (r * hq) // 16
+
+
+class TestG2TensorParallelShards:
+    """Contract parity axis 'TP1 vs TP2/4/8': a rank's head shard (16/8/4 Q heads, 1 KV head;
+    BLOCK_HQ 16/8/4, BLOCK_HK 1) must give exactly the bits of the matching slice of the full
+    32/2-head call, forward and backward, local and global."""
+
+    @pytest.mark.parametrize("T", [1, 7, 256, T_REAL])
+    @pytest.mark.parametrize("local", [True, False])
+    def test_head_shards_equal_full_call_slices(self, T, local):
+        q, k = _make_qk(T, seed=60 + T, scale=2.0)
+        cos, sin = _tables(torch.arange(T, device=DEV) + 300) if local else (None, None)
+        gen = torch.Generator(device=DEV).manual_seed(61)
+        dyq = torch.randn(q.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        dyk = torch.randn(k.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        fq, fk = qknorm_scaled_rope(q, k, cos, sin)
+        fdq, fdk = _grads(q, k, cos, sin, dyq, dyk)
+        n = 0
+        for t, r, qs, kv in _tp_shards():
+            ks = slice(kv, kv + 1)
+            q_r, k_r = q[:, qs].contiguous(), k[:, ks].contiguous()
+            oq, ok = qknorm_scaled_rope(q_r, k_r, cos, sin)
+            assert torch.equal(oq, fq[:, qs]), (t, r, "q_hat")
+            assert torch.equal(ok, fk[:, ks]), (t, r, "k_hat")
+            dq, dk = _grads(q_r, k_r, cos, sin, dyq[:, qs].contiguous(), dyk[:, ks].contiguous())
+            assert torch.equal(dq, fdq[:, qs]), (t, r, "dq")
+            assert torch.equal(dk, fdk[:, ks]), (t, r, "dk")
+            n += 1
+        assert n == 14
+
+    def test_non_contiguous_shard_views(self):
+        q, k = _make_qk(64, seed=62)
+        cos, sin = _tables(torch.arange(64, device=DEV))
+        fq, fk = qknorm_scaled_rope(q, k, cos, sin)
+        oq, ok = qknorm_scaled_rope(q[:, 8:16], k[:, 1:2], cos, sin)  # strided views
+        assert torch.equal(oq, fq[:, 8:16]) and torch.equal(ok, fk[:, 1:2])
+
+    @pytest.mark.parametrize("tp,hq", [(1, 32), (2, 16), (4, 8), (8, 4)])
+    def test_shard_tile_config_in_trace(self, tp, hq):
+        hk = 2 if tp == 1 else 1
+        tc = trace(HQ=hq, HK=hk)["tile_config"]
+        assert tc["BLOCK_HQ"] == hq and tc["BLOCK_HK"] == hk and tc["num_warps"] == 4
+
+
+class TestF4ExplicitLayerSelection:
+    """Local (RoPE) vs global (NoPE) used to be implied by `cos is None` only."""
+
+    def test_layer_schedule_matches_manifest(self):
+        from pathlib import Path
+
+        manifest = Path(op.__file__).resolve().parents[1] / "museglimmer_manifest.json"
+        text_cfg = json.loads(manifest.read_text())["model_identity"]["config_fingerprint"][
+            "text_config"
+        ]
+        types = text_cfg["layer_types"]
+        assert len(types) == N_LAYERS
+        got = [op.layer_is_local(i) for i in range(N_LAYERS)]
+        assert got == [t == "sliding_attention" for t in types]
+        assert sum(got) == 39 and got.count(False) == 13
+        for bad in (-1, N_LAYERS):
+            with pytest.raises(ValueError):
+                op.layer_is_local(bad)
+
+    def test_explicit_local_flag_fails_closed(self):
+        q, k = _make_qk(8, seed=70)
+        cos, sin = _tables(torch.arange(8, device=DEV))
+        with pytest.raises(ValueError, match="local"):
+            qknorm_scaled_rope(q, k, None, None, local=True)
+        with pytest.raises(ValueError, match="local"):
+            qknorm_scaled_rope(q, k, cos, sin, local=False)
+
+    def test_explicit_flag_gives_legacy_bits(self):
+        q, k = _make_qk(T_REAL, seed=71, scale=2.0)
+        cos, sin = _tables(torch.arange(T_REAL, device=DEV))
+        for c, s, local in ((cos, sin, True), (None, None, False)):
+            a = qknorm_scaled_rope(q, k, c, s)
+            b = qknorm_scaled_rope(q, k, c, s, local=local)
+            assert torch.equal(a[0], b[0]) and torch.equal(a[1], b[1])
+            o = QKNormScaledRopeOp().forward(q, k, c, s, local=local)
+            assert torch.equal(a[0], o[0]) and torch.equal(a[1], o[1])
+
+    def test_positions_api_contract_signature(self):
+        """`qknorm_scaled_rope_at(q, k, pos, local=...)` (the contract's assembly signature)
+        gathers the canonical table itself; layer selection is mandatory and explicit."""
+        T = 300
+        q, k = _make_qk(T, seed=72, scale=2.0)
+        pos = torch.randint(0, ROPE_POSITIONS, (T,), device=DEV)
+        ref_l = qknorm_scaled_rope(q, k, *rope_table(pos, device=DEV))
+        ref_g = qknorm_scaled_rope(q, k, None, None)
+        for kw, ref in (
+            ({"local": True}, ref_l),
+            ({"local": False}, ref_g),
+            ({"layer_idx": 0}, ref_l),
+            ({"layer_idx": 3}, ref_g),
+            ({"layer_idx": 51}, ref_g),
+            ({"layer_idx": 50}, ref_l),
+        ):
+            got = op.qknorm_scaled_rope_at(q, k, pos, **kw)
+            assert torch.equal(got[0], ref[0]) and torch.equal(got[1], ref[1]), kw
+        got = op.qknorm_scaled_rope_at(q, k, pos, local=True, check_range=False)
+        assert torch.equal(got[0], ref_l[0]) and torch.equal(got[1], ref_l[1])
+        # global layers ignore positions (may be None)
+        got = op.qknorm_scaled_rope_at(q, k, None, local=False)
+        assert torch.equal(got[0], ref_g[0])
+        with pytest.raises(ValueError):
+            op.qknorm_scaled_rope_at(q, k, pos)  # no layer selection given
+        with pytest.raises(ValueError):
+            op.qknorm_scaled_rope_at(q, k, pos, local=True, layer_idx=3)  # contradictory
+        with pytest.raises(ValueError):
+            op.qknorm_scaled_rope_at(q, k, None, local=True)
+        with pytest.raises(ValueError):
+            op.qknorm_scaled_rope_at(q, k, pos[:-1], local=True)
+
+    def test_positions_api_backward_matches(self):
+        T = 64
+        q, k = _make_qk(T, seed=73, scale=2.0)
+        pos = torch.arange(T, device=DEV) + 4000
+        gen = torch.Generator(device=DEV).manual_seed(74)
+        dyq = torch.randn(q.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        dyk = torch.randn(k.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        ref = _grads(q, k, *rope_table(pos, device=DEV), dyq, dyk)
+        qg, kg = q.clone().requires_grad_(True), k.clone().requires_grad_(True)
+        got = torch.autograd.grad(
+            op.qknorm_scaled_rope_at(qg, kg, pos, local=True), (qg, kg), (dyq, dyk)
+        )
+        assert torch.equal(got[0], ref[0]) and torch.equal(got[1], ref[1])
+
+    def test_trace_records_layer_selection(self):
+        sel = trace()["layer_selection"]
+        assert "local" in sel and "i % 4 == 3" in sel
+
+
+class TestF5LargeTokenCounts:
+    """Element offsets must not wrap at T*HQ*D >= 2^31 (T >= 524288 at HQ=32): with int32
+    offsets the old kernel raised 'illegal memory access' or, with a different allocation
+    layout, silently wrote rows >= 524288 into an unrelated tensor."""
+
+    T_BIG = 524288 + 64
+
+    def test_rows_beyond_int32_offsets_match_small_calls(self):
+        free, _total = torch.cuda.mem_get_info()
+        if free < 24 * 2**30:
+            pytest.skip(f"needs ~20 GiB free GPU memory, have {free / 2**30:.1f} GiB")
+        T = self.T_BIG
+        gen = torch.Generator(device=DEV).manual_seed(80)
+        q = torch.randn(T, HQ, D, device=DEV, generator=gen, dtype=torch.bfloat16)
+        k = torch.randn(T, HK, D, device=DEV, generator=gen, dtype=torch.bfloat16)
+        rows = torch.arange(T - 128, T, device=DEV)  # straddles row 524288
+        for local in (False, True):
+            if local:
+                cos, sin = rope_table(torch.arange(T, device=DEV) % ROPE_POSITIONS, device=DEV)
+                c_r, s_r = cos[rows], sin[rows]
+            else:
+                cos = sin = c_r = s_r = None
+            oq, ok = qknorm_scaled_rope(q, k, cos, sin)
+            rq, rk = qknorm_scaled_rope(q[rows], k[rows], c_r, s_r)
+            assert torch.equal(oq[rows], rq) and torch.equal(ok[rows], rk), local
+            del oq, ok
+            if local:
+                dyq = torch.ones_like(q)
+                dyk = torch.ones_like(k)
+                dq, dk = _grads(q, k, cos, sin, dyq, dyk)
+                sdq, sdk = _grads(q[rows], k[rows], c_r, s_r, dyq[rows], dyk[rows])
+                assert torch.equal(dq[rows], sdq) and torch.equal(dk[rows], sdk)
+                del dq, dk, dyq, dyk
+        torch.cuda.empty_cache()
+
+    def test_trace_records_int64_offsets(self):
+        assert trace()["tile_config"]["offsets"] == "int64"
+
+
+class TestModelShapesStayBitwise:
+    """Fail-closed checks must not break any shape the 30B model hits: T = 1..8192 (training /
+    prefill) and decode batches 1..256, both layer kinds; kernel == golden -> bf16 bitwise."""
+
+    TS = list(range(1, 18)) + [31, 63, 64, 65, 127, 255, 256, 257, 1000, 2047, 2048, 2049]
+    TS += [4095, 4096, 4097, 8191, 8192]
+
+    @pytest.mark.parametrize("local", [True, False])
+    def test_token_counts_bitwise_vs_golden(self, local):
+        for T in self.TS:
+            q, k = _make_qk(T, seed=90 + T, scale=2.0)
+            pos = torch.randint(0, ROPE_POSITIONS, (T,), device=DEV)
+            cos, sin = rope_table(pos, device=DEV) if local else (None, None)
+            q_hat, k_hat = qknorm_scaled_rope(q, k, cos, sin)
+            gq, gk = qknorm_scaled_rope_fp32(q, k, cos, sin)
+            assert torch.equal(q_hat, gq.to(torch.bfloat16)), (T, local)
+            assert torch.equal(k_hat, gk.to(torch.bfloat16)), (T, local)
+
+    @pytest.mark.parametrize("local", [True, False])
+    def test_decode_batches_1_to_256(self, local):
+        q, k = _make_qk(256, seed=95, scale=2.0)
+        pos = torch.randint(0, ROPE_POSITIONS, (256,), device=DEV)
+        cos, sin = rope_table(pos, device=DEV) if local else (None, None)
+        ref_q, ref_k = qknorm_scaled_rope(q, k, cos, sin)
+        for b in range(1, 257):
+            c = cos[:b] if local else None
+            s = sin[:b] if local else None
+            oq, ok = qknorm_scaled_rope(q[:b], k[:b], c, s)
+            assert torch.equal(oq, ref_q[:b]) and torch.equal(ok, ref_k[:b]), b
+
+    @pytest.mark.parametrize("T", [1, 17, 2049, 8192])
+    def test_backward_bitwise_vs_handwritten_vjp(self, T):
+        q, k = _make_qk(T, seed=97, scale=2.0)
+        cos, sin = rope_table(torch.arange(T, device=DEV), device=DEV)
+        gen = torch.Generator(device=DEV).manual_seed(98)
+        dyq = torch.randn(q.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        dyk = torch.randn(k.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        dq, dk = _grads(q, k, cos, sin, dyq, dyk)
+        hq, hk = qknorm_scaled_rope_backward_fp32(q, k, dyq, dyk, cos, sin)
+        assert torch.equal(dq, hq.to(torch.bfloat16)) and torch.equal(dk, hk.to(torch.bfloat16))
