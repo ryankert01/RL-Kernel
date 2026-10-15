@@ -1,0 +1,261 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 RL-Kernel Contributors
+
+"""Tiny-config gates for the Muse Glimmer strict reference (RFC #501 full_model_chain).
+
+4 layers with the real [L, L, L, G] schedule, hidden 256, 8 heads / 2 kv heads, head dim 32,
+FFN 512, vocab 1024 (and 1000 to exercise lm_head padding), window 100 (not a multiple of the
+64-key block). Gates: train == prefill == chunked == decode == per-token (``torch.equal``);
+backward of the training forward deterministic across runs; HF-equivalent math at bf16 tolerance.
+"""
+
+from __future__ import annotations
+
+import pytest
+import torch
+
+from rl_engine.models.muse_glimmer.operator_trace import MuseGlimmerSpec
+from rl_engine.models.muse_glimmer.reference.backend import resolve_ops
+from rl_engine.models.muse_glimmer.reference.chain_harness import (
+    PathSpec,
+    compare_paths,
+    compare_strict_to_hf_outputs,
+    default_path_specs,
+    hf_text_logits,
+    hf_text_model_from_weights,
+    localize_first_drift,
+    strict_reference_outputs,
+)
+from rl_engine.models.muse_glimmer.reference.golden_ops import (
+    GoldenGemm,
+    attention_core,
+    tree_sum_last,
+)
+from rl_engine.models.muse_glimmer.reference.strict_model import (
+    MuseGlimmerStrictModel,
+    nanmean_loss,
+)
+from rl_engine.models.muse_glimmer.reference.weights import MuseGlimmerWeights, StrictConfig
+
+pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
+DEVICE = torch.device("cuda")
+
+
+def _tokens(n: int, vocab: int, seed: int) -> torch.Tensor:
+    gen = torch.Generator(device="cpu").manual_seed(seed)
+    return torch.randint(0, vocab, (n,), generator=gen)
+
+
+@pytest.fixture(scope="module")
+def tiny_model():
+    cfg = StrictConfig.tiny()
+    weights = MuseGlimmerWeights.random(cfg, device=DEVICE, seed=1, layout="both")
+    return MuseGlimmerStrictModel(weights, "golden")
+
+
+# -------------------------------------------------------------------------------------------
+# config / naming
+# -------------------------------------------------------------------------------------------
+def test_official_config_node_names_match_operator_trace():
+    spec = MuseGlimmerSpec.from_manifest()
+    cfg = StrictConfig.from_spec(spec)
+    assert cfg.node_names() == spec.node_names()
+    for name in cfg.node_names():
+        assert cfg.node_kind(name) == spec.node_kind(name)
+    assert cfg.padded_vocab_size == 202752 and cfg.sliding_window == 2048
+
+
+def test_tiny_config_has_real_schedule_and_padding():
+    cfg = StrictConfig.tiny()
+    assert list(cfg.layer_types) == ["sliding_attention"] * 3 + ["full_attention"]
+    assert cfg.layer_rope_theta() == [500000.0, 500000.0, 500000.0, 0.0]
+    assert StrictConfig.tiny(vocab_size=1000).padded_vocab_size == 1024
+
+
+# -------------------------------------------------------------------------------------------
+# building blocks
+# -------------------------------------------------------------------------------------------
+def test_tree_sum_is_row_independent_and_exact_on_integers():
+    x = torch.randint(-8, 8, (37, 6656), device=DEVICE).float()
+    full = tree_sum_last(x)
+    for i in (0, 5, 36):
+        assert torch.equal(tree_sum_last(x[i : i + 1])[0], full[i])
+    assert torch.equal(full, x.sum(-1))  # small integers: every order is exact
+
+
+def test_golden_gemm_is_batch_invariant_and_row_parallel_tree_matches_reference():
+    gemm = GoldenGemm("triton_fp32")
+    a = torch.randn(96, 512, device=DEVICE).to(torch.bfloat16)
+    w = torch.randn(192, 512, device=DEVICE).to(torch.bfloat16)
+    full = gemm(a, w, out_dtype=torch.float32)
+    one = gemm(a[7:8], w, out_dtype=torch.float32)
+    assert torch.equal(full[7:8], one)
+    assert torch.equal(gemm.row_parallel(a, w)[3:4], gemm.row_parallel(a[3:4], w))
+    ref = (a.float() @ w.float().t())
+    assert torch.allclose(full, ref, atol=1e-2, rtol=1e-3)
+    assert torch.allclose(gemm.row_parallel(a, w).float(), ref, atol=0.25, rtol=2e-2)
+
+
+def test_attention_core_split_invariance_with_window_inside_blocks():
+    torch.manual_seed(0)
+    nq, hq, hkv, d, window = 230, 8, 2, 32, 100
+    q = torch.randn(nq, hq, d, device=DEVICE).to(torch.bfloat16)
+    k = torch.randn(nq, hkv, d, device=DEVICE).to(torch.bfloat16)
+    v = torch.randn(nq, hkv, d, device=DEVICE).to(torch.bfloat16)
+    pos = torch.arange(nq, device=DEVICE)
+    full, lse_full = attention_core(q, k, v, pos, window=window)
+    # chunked queries over the same keys (all keys exist) must match row for row
+    pieces = []
+    for s, e in ((0, 1), (1, 64), (64, 130), (130, 131), (131, 230)):
+        o, _ = attention_core(q[s:e], k[:e], v[:e], pos[s:e], window=window, k_len=e)
+        pieces.append(o)
+    assert torch.equal(torch.cat(pieces), full)
+    # a gathered block range (paged form) with k_pos0 > 0: position 200 first sees key 101,
+    # i.e. block 1 (keys 64..127), so the gather starts at absolute key 64
+    o_last, lse_last = attention_core(
+        q[200:230], k[64:230], v[64:230], pos[200:230], window=window, k_pos0=64, k_len=230
+    )
+    assert torch.equal(o_last, full[200:230]) and torch.equal(lse_last, lse_full[200:230])
+    # global (no window): decode row equals the one-shot row
+    g_full, _ = attention_core(q, k, v, pos, window=None)
+    g_one, _ = attention_core(q[229:230], k, v, pos[229:230], window=None)
+    assert torch.equal(g_one, g_full[229:230])
+    # tolerance against a plain fp32 reference
+    kf = k.float().repeat_interleave(hq // hkv, dim=1)
+    vf = v.float().repeat_interleave(hq // hkv, dim=1)
+    s = torch.einsum("qhd,khd->hqk", q.float(), kf) * d**-0.5
+    i, j = torch.meshgrid(pos, pos, indexing="ij")
+    s = s.masked_fill(~((j <= i) & (j > i - window))[None], float("-inf"))
+    ref = torch.einsum("hqk,khd->qhd", torch.softmax(s, -1), vf)
+    assert torch.allclose(full.float(), ref, atol=2e-2, rtol=2e-2)
+
+
+# -------------------------------------------------------------------------------------------
+# the chain gate
+# -------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("vocab", [1024, 1000])
+@pytest.mark.parametrize("prompt_len,completion_len", [(150, 20), (3, 5)])
+def test_train_prefill_chunked_decode_are_byte_equal(vocab, prompt_len, completion_len):
+    cfg = StrictConfig.tiny(vocab_size=vocab)
+    weights = MuseGlimmerWeights.random(cfg, device=DEVICE, seed=vocab, layout="kn")
+    model = MuseGlimmerStrictModel(weights, "golden")
+    ids = _tokens(prompt_len + completion_len, vocab, seed=7)
+    specs = default_path_specs(prompt_len, completion_len, include_per_token=True,
+                               window=cfg.sliding_window)
+    specs.append(PathSpec("chunked:ones_then_rest", "chunked",
+                          (1, 1, 1, prompt_len + completion_len - 4)))
+    report = compare_paths(model, ids[:prompt_len], ids[prompt_len:], specs=specs)
+    assert report.all_equal, report.markdown()
+    assert all(torch.isfinite(r.logp).all() for r in report.results)
+    assert {r.spec.mode for r in report.results} >= {"train", "prefill", "chunked", "decode",
+                                                      "per_token"}
+
+
+def test_window_eviction_happens_and_keeps_bits(tiny_model):
+    cfg = tiny_model.cfg
+    ids = _tokens(300, cfg.vocab_size, seed=3)
+    # one-shot vs 64-chunks: with window 100 and 300 tokens, local layers evict pages
+    one = tiny_model.logprobs(ids[:280], ids[280:], mode="prefill")
+    session = tiny_model.new_session(300)
+    scored, targets = ids[:299], ids[1:300]
+    chunked = tiny_model.prefill(session, scored, targets=targets, chunk_sizes=[64] * 4 + [43])
+    assert session.cache.evictions > 0
+    assert session.cache.pages_in_use(3) > session.cache.pages_in_use(0)  # global keeps all
+    assert torch.equal(chunked[279:], one)
+
+
+def test_first_drift_localizer_reports_no_drift_on_equal_paths(tiny_model):
+    ids = _tokens(70, tiny_model.cfg.vocab_size, seed=11)
+    drift = localize_first_drift(tiny_model, ids[:60], ids[60:],
+                                 PathSpec("decode", "decode"))
+    assert drift.node is None and drift.rows_differing == 0
+    assert drift.nodes_checked >= 4 * 12
+
+
+def test_first_drift_localizer_catches_an_injected_difference(tiny_model):
+    ids = _tokens(40, tiny_model.cfg.vocab_size, seed=12)
+    ops = tiny_model.ops
+    original = ops.attention_paged
+
+    def perturbed(*args, **kwargs):
+        y, o, lse = original(*args, **kwargs)
+        return y, o + torch.ones_like(o) * 1e-2, lse  # only the ungated o is perturbed
+
+    ops.attention_paged = perturbed
+    try:
+        drift = localize_first_drift(tiny_model, ids[:30], ids[30:],
+                                     PathSpec("prefill", "prefill"))
+    finally:
+        ops.attention_paged = original
+    assert drift.node == "layers.0.attn" and drift.kind == "attention_local"
+    assert drift.first_row == 0
+
+
+# -------------------------------------------------------------------------------------------
+# backward (tiny only: a full-model backward does not fit one GPU)
+# -------------------------------------------------------------------------------------------
+def test_backward_is_deterministic_across_runs_and_finite():
+    cfg = StrictConfig.tiny()
+    ids = _tokens(96, cfg.vocab_size, seed=5).to(DEVICE)
+    targets = torch.cat([ids[1:], torch.full((1,), -1, device=DEVICE)])
+
+    def run(seed_weights: int = 2) -> tuple[float, dict[str, torch.Tensor]]:
+        weights = MuseGlimmerWeights.random(cfg, device=DEVICE, seed=seed_weights, layout="nk",
+                                            requires_grad=True)
+        model = MuseGlimmerStrictModel(weights, "golden")
+        out = model.forward_train(ids, targets)
+        loss = nanmean_loss(out["logp"])
+        loss.backward()
+        grads = {k: v.grad.detach().clone() for k, v in weights.parameters().items()
+                 if v.grad is not None}
+        return float(loss.item()), grads
+
+    loss_a, grads_a = run()
+    loss_b, grads_b = run()
+    assert loss_a == loss_b and torch.isfinite(torch.tensor(loss_a))
+    assert set(grads_a) == set(grads_b)
+    assert len(grads_a) == 3 + 4 * 12  # every text parameter received a gradient
+    for name in grads_a:
+        assert torch.isfinite(grads_a[name]).all(), name
+        assert torch.equal(grads_a[name], grads_b[name]), f"nondeterministic grad: {name}"
+    # repeated tokens exercise the sorted-segment embedding backward
+    emb = grads_a["model.language_model.embed_tokens.weight"]
+    assert emb.abs().sum() > 0
+
+
+# -------------------------------------------------------------------------------------------
+# HF-equivalent math at bf16 tolerance (NOT bitwise)
+# -------------------------------------------------------------------------------------------
+def test_matches_transformers_tiny_model_at_tolerance():
+    pytest.importorskip("transformers")
+    cfg = StrictConfig.tiny()
+    weights = MuseGlimmerWeights.random(cfg, device=DEVICE, seed=9, layout="both")
+    model = MuseGlimmerStrictModel(weights, "golden")
+    ids = _tokens(230, cfg.vocab_size, seed=21)
+    ref = strict_reference_outputs(model, ids)
+    hf_model, lm_head = hf_text_model_from_weights(weights, DEVICE)
+    hf_logits, hf_hidden = hf_text_logits(hf_model, lm_head, ids, cfg)
+    report = compare_strict_to_hf_outputs(ref, hf_logits, hf_hidden, completion_start=200)
+    # Tolerance anchor, NOT bitwise: HF rounds cos/sin, the qk scale, scores, the gate and silu
+    # to bf16 where the contract keeps fp32, so the residual stream drifts by bf16 noise per
+    # layer. Observed (seeds 9/10, 230 tokens): embedding ≤ 1 bf16 ulp, max|Δlogp| ≈ 0.025,
+    # max|Δlogit| ≈ 0.055 on logits with std 0.064 (random weights give near-flat logits, so
+    # argmax agreement (~0.84) is not informative here; the real-weights run is the anchor).
+    assert report["per_layer"][0]["layer"] == "embedding"
+    assert report["per_layer"][0]["max_abs"] <= 1e-2, report["per_layer"][0]
+    assert report["logits_all_positions"]["max_abs"] <= 0.15, report["logits_all_positions"]
+    assert report["logp_all"]["max_abs"] <= 0.1, report["logp_all"]
+    assert report["logp_all"]["mean_abs"] <= 0.02, report["logp_all"]
+    assert 0.0 <= report["argmax_agreement_all"] <= 1.0
+    assert len(report["per_layer"]) == cfg.num_hidden_layers + 1  # embedding, L0..L2, final
+
+
+def test_triton_backend_requires_sibling_ops_or_allow_partial():
+    from rl_engine.models.muse_glimmer.reference.backend import SiblingOpsMissing
+
+    try:
+        ops = resolve_ops("triton")
+    except SiblingOpsMissing:
+        ops = resolve_ops("triton", allow_partial=True)
+        assert ops.golden_nodes()  # substitutions are recorded, never silent
+    assert ops.backend == "triton"
