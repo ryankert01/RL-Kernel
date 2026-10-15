@@ -48,3 +48,4 @@ All seven agent branches except `ablation` (no commits yet) were merged into the
 state (some agents were still committing; re-run `git merge --no-edit <branch>` for each to pick up late commits).
 Modules import; the per-row tests, the real-weights chain run, TP/CP multi-GPU tests and the E2E have NOT been
 re-run by the integrator after these merges — do that first when resuming (step 1 above).
+- WS2 TP hand-back merged at its final HEAD 5816b5a: TP2/TP4==TP1 bitwise for tp_canonical_tree and vocab_parallel_softcap_logp on NCCL ranks; NCCL all_reduce control diverges at TP4 (tree is load-bearing). OPEN FINDING: ops/gated_attention.py strict forward pins 32 Q / 2 KV heads, so a TP-sharded rank cannot call it — add head-count parameters to the kernel (or zero-pad shards to full geometry) before the vLLM/Megatron TP>1 runs. TP8 tests still unrun (MUSEGLIMMER_TP8=1).
