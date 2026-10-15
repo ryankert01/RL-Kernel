@@ -25,10 +25,11 @@ from typing import Any, Optional
 import torch
 import torch.distributed as dist
 
-try:
-    import rl_engine  # noqa: F401
-except ImportError:  # torchrun puts the script directory, not the repo root, on sys.path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+# torchrun puts the script directory, not the repo root, on sys.path, and the shared POC
+# environment may carry an editable install of ANOTHER checkout: pin this checkout first.
+_REPO_ROOT = str(Path(__file__).resolve().parents[4])
+if sys.path[:1] != [_REPO_ROOT]:
+    sys.path.insert(0, _REPO_ROOT)
 
 from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa  # noqa: E402
 
