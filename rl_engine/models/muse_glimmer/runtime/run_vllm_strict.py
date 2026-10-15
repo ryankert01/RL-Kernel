@@ -101,7 +101,13 @@ def _git_status() -> dict[str, Any]:
             text=True,
             stderr=subprocess.DEVNULL,
         ).splitlines()
-        return {"git_dirty": bool(lines), "git_status_porcelain": lines, "tree": str(root)}
+        code = [line for line in lines if not line[3:].startswith("reports/")]
+        return {
+            "git_dirty": bool(lines),
+            "git_dirty_code": bool(code),
+            "git_status_porcelain": lines,
+            "tree": str(root),
+        }
     except Exception as exc:  # noqa: BLE001
         return {"git_dirty": None, "git_status_error": f"{type(exc).__name__}: {exc}"}
 

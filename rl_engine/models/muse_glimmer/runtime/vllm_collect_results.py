@@ -129,6 +129,7 @@ def _xrt_summary(doc: dict, *, embed: bool = False) -> dict[str, Any]:
         "backend": doc.get("backend"),
         "commit": doc.get("commit"),
         "git_dirty": doc.get("git_dirty"),
+        "git_status_porcelain": doc.get("git_status_porcelain"),
         "lora_sha256": doc.get("lora_sha256"),
         "sequences": len(doc["sequences"]),
         "tokens": sum(len(s["logprobs_hex"]) for s in doc["sequences"]),
@@ -408,7 +409,12 @@ def collect(
         "row": "vllm_runtime_adapter",
         "schema": "muse_glimmer_vllm_runtime_results_v2",
         "commits_measured": sorted({r.get("commit") for r in runs if r.get("commit")}),
-        "dirty_runs": [r["_file"] for r in runs if r.get("git_dirty")],
+        "dirty_runs": [r["_file"] for r in runs if r.get("git_dirty_code", r.get("git_dirty"))],
+        "dirty_runs_data_only": [
+            {"run": r["_file"], "modified": r.get("git_status_porcelain")}
+            for r in runs
+            if r.get("git_dirty") and not r.get("git_dirty_code", True)
+        ],
         "env": next((r["env"] for r in runs if r.get("env")), {}),
         "commands": [r["command"] for r in runs],
         "runs": [
@@ -419,6 +425,8 @@ def collect(
                 "status": r.get("status"),
                 "commit": r.get("commit"),
                 "git_dirty": r.get("git_dirty"),
+                "git_dirty_code": r.get("git_dirty_code"),
+                "git_status_porcelain": r.get("git_status_porcelain"),
                 "engine_load_s": r.get("engine_load_s"),
                 "engine": _engine_flags(r),
                 "command": r["command"],
