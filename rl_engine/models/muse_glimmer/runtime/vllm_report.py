@@ -104,9 +104,9 @@ def headline(results: dict) -> list[str]:
     for label, what in (
         (
             "long_window_no_lora",
-            "long window: 2261-token prompt + 256 decode tokens (positions 2261-2516 > 2048, "
-            "sliding-window eviction), chunked prefill (max_num_batched_tokens=512), 1 greedy + "
-            "4 seeded T=1 copies",
+            "long window: 2261-token prompt + 256 decode tokens (positions 2261-2516 > 2048; vLLM "
+            "frees the pages before the window), chunked prefill (max_num_batched_tokens=512), "
+            "1 greedy + 4 seeded T=1 copies",
         ),
         (
             "decode_batch_64_no_lora",
@@ -191,9 +191,10 @@ def headline(results: dict) -> list[str]:
     hashes = []
     for lr in results.get("lora_random") or []:
         if isinstance(lr, dict):
+            workers = lr.get("lora_sha256_per_worker") or lr.get("worker_hashes") or []
             hashes.append(
                 f"{lr['mode']} TP{lr['tp']}: {'yes' if lr.get('hash_identity') else 'NO'} "
-                f"({len(lr.get('worker_hashes') or lr.get('native_lora_reports') or [])} workers)"
+                f"(workers recomputing: {len(workers)})"
             )
     rows.append(
         "| `provenance()[\"lora_sha256\"]` = hash recomputed by every TP worker on what it "
@@ -217,11 +218,11 @@ def headline(results: dict) -> list[str]:
         for e in entries:
             mode = "strict" if " strict" in f" {e['what']}" else "native"
             cells[mode].append(
-                f"{e['what'].split(':')[0]}: {e['identical_tokens_and_logprob_bits']} / "
-                f"{e['sequences']}"
+                f"{e['what'].split(':')[0]}: tokens {e['identical_token_sequences']}, "
+                f"tokens+bits {e['identical_tokens_and_logprob_bits']} / {e['sequences']}"
             )
         rows.append(
-            f"| {what} (sequences identical in tokens and bits) | "
+            f"| {what} (identical sequences: same tokens; same tokens and logprob bits) | "
             f"{'; '.join(cells['native']) or NR} | {'; '.join(cells['strict']) or NR} |"
         )
     return rows
