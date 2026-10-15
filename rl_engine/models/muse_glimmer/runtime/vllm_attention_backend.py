@@ -14,17 +14,28 @@ vLLM 0.31 facts this file depends on (RFC notes):
   output_scale, output_block_scale)``; ``AttentionBackend.get_kv_cache_shape`` is gone and the
   per-layer ``kv_cache`` is logically ``(blocks, kv_heads, block_size, 2 * head_dim)`` with K and V
   packed along the last dim (``KVCacheLayout``).  The strict op needs separate CONTIGUOUS
-  ``(blocks, 16, 2, 128)`` K and V caches, so this backend reinterprets the layer's (contiguous)
-  buffer as ``(2, blocks, block_size, kv_heads, head_dim)`` and owns the KV write
-  (``do_kv_cache_update`` -> ``reshape_and_cache_flash`` on those views; a pure copy).  Nothing
-  else reads the buffer in strict mode (no prefix caching, no KV connector, no cascade).
+  ``(blocks, 16, H_kv, 128)`` K and V caches, so this backend reinterprets the layer's
+  (contiguous) buffer as ``(2, blocks, block_size, kv_heads, head_dim)`` and owns the KV write
+  (``do_kv_cache_update`` -> ``reshape_and_cache_flash`` on those views; a pure copy).
+  The strict page ``b`` is therefore NOT the native page ``b``: native page ``b`` is the bytes
+  ``[b*N*H*2D, (b+1)*N*H*2D)`` of the layer region, strict K page ``b`` is ``[b*N*H*D,
+  (b+1)*N*H*D)`` and strict V page ``b`` sits in the second half.  This is safe only because
+  nothing but this backend touches the region: the binding rejects prefix caching (its partial-hit
+  copy-on-write copies native page ranges), KV connectors / transfer / offloading, speculative
+  decoding, context parallelism, KV sharing and KV-block zeroing at model init
+  (``vllm_strict.check_strict_engine_config``) and makes the native page writers raise
+  (``copy_kv_cache_blocks_inplace``, ``KVBlockZeroer.zero_block_ids``); cascade attention is off
+  in the metadata builder and rejected in :meth:`forward`.  Layers of different KV-cache groups
+  that share one tensor use the same strict view and disjoint block ids, so they cannot overlap.
 * ``FlashAttentionMetadata`` carries ``block_table``, ``seq_lens``, ``query_start_loc``,
   ``max_query_len`` and ``num_actual_tokens`` per KV-cache group.  vLLM marks never-allocated or
   evicted (sliding-window) pages with the null block id ``0``; the strict op wants ``-1``, and
   masks by absolute position so an evicted page is only ever touched where its keys are masked.
-* The strict kernel pins the full head set (32 query heads, 2 KV heads).  At TP > 1 the installer
-  replicates KV (every rank holds both KV heads and runs the full attention redundantly after an
-  exact all-gather of q/k/v/gate), so this backend always sees 32/2.
+* Heads per rank: vLLM builds each rank's ``Attention`` with ``32/t`` query heads and
+  ``max(1, 2/t)`` KV heads (TP2 16/1, TP4 8/1 with the KV head replicated on two ranks); this
+  backend passes exactly those counts to the strict op (``num_q_heads``/``num_kv_heads``).  Heads
+  never interact in O5, so the rank's output is the matching slice of the TP1 output bit for bit
+  (``ops/REPORT_gated_attention_fwd.md``, wave A: TP2/4/8 shard parity).
 
 The gate pre-activation (contract: gate on the ``input_layernorm`` output, applied inside the
 attention op) travels on a side channel: the patched ``MuseGlimmerAttention.forward`` stores it on
@@ -69,10 +80,11 @@ def strict_kv_views(kv_cache: torch.Tensor, head_size: int) -> tuple[torch.Tenso
     logical view is a permutation, not contiguous).  When the layer's region is dense (the
     physical-order view is contiguous; true for the layer-outermost layouts ``LBNHC``/``LBHNC``),
     its ``B * N * H * 2D`` elements are re-viewed as ``(2, B, N, H, D)``: K of every page in the
-    first half, V in the second.  Only the strict backend reads or writes the cache in strict mode
-    (prefix caching, KV connectors and cascade attention are off), and page ``b`` keeps the same
-    byte range in both views' coordinates, so sharing a tensor between layers of different KV
-    groups (disjoint block ids) stays safe.
+    first half, V in the second.  The strict page ``b`` is NOT the native page ``b`` (different
+    byte ranges), so this view is only valid while nothing else addresses the region by block id:
+    prefix caching, zeroing and KV connectors are rejected at init and the native page writers
+    raise (see the module docstring).  Layers of different KV groups that share a tensor use this
+    same view with disjoint block ids, so they cannot overlap.
     """
 
     if kv_cache.dim() != 4:
@@ -201,6 +213,8 @@ def _build_classes() -> tuple[type, type, type]:
                 cu_seqlens_q.to(torch.int32),
                 window=window,
                 max_seqlen_q=int(attn_metadata.max_query_len),
+                num_q_heads=int(self.num_heads),
+                num_kv_heads=int(self.num_kv_heads),
             )
             output[:num_tokens].copy_(y.view(num_tokens, self.num_heads, self.head_size))
             CALL_COUNTS["attention.local" if window is not None else "attention.global"] += 1

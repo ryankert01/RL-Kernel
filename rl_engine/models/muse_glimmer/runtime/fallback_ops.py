@@ -389,6 +389,15 @@ def _attend_rows(
     return o, lse
 
 
+def _check_heads(nh: int, nkv: int, num_q_heads: int | None, num_kv_heads: int | None) -> None:
+    if num_q_heads is not None and int(num_q_heads) != int(nh):
+        raise ValueError(f"num_q_heads={num_q_heads} but q has {nh} heads")
+    if num_kv_heads is not None and int(num_kv_heads) != int(nkv):
+        raise ValueError(f"num_kv_heads={num_kv_heads} but the K/V tensors have {nkv} heads")
+    if nh % nkv:
+        raise ValueError(f"{nh} query heads are not a multiple of {nkv} KV heads")
+
+
 def _apply_gate(o: torch.Tensor, gate_logits: torch.Tensor) -> torch.Tensor:
     t = o.shape[0]
     o_flat = o.reshape(t, -1)
@@ -407,14 +416,18 @@ def gated_attention_fwd_paged(
     *,
     window: int | None,
     max_seqlen_q: int | None = None,
+    num_q_heads: int | None = None,
+    num_kv_heads: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Paged rollout attention: ``q (T, nh, D)``, caches ``(P, page, nkv, D)`` (any strides),
     ``block_table (B, maxP)``, ``seq_lens (B,)``, ``cu_seqlens_q (B+1,)``.  Query ``i`` of request
     ``b`` sits at absolute position ``seq_lens[b] - len_q[b] + i``.  Returns ``(y, o, lse)`` with
-    ``y = o * sigmoid(gate)`` (bf16, ``(T, nh*D)``)."""
+    ``y = o * sigmoid(gate)`` (bf16, ``(T, nh*D)``).  ``num_q_heads``/``num_kv_heads`` (the strict
+    op's per-rank head counts) are checked against the shapes when given."""
 
     t, nh, d = q.shape
     nkv = k_cache.shape[2]
+    _check_heads(nh, nkv, num_q_heads, num_kv_heads)
     page = k_cache.shape[1]
     cu = cu_seqlens_q.tolist()
     lens = seq_lens.tolist()
@@ -449,11 +462,14 @@ def gated_attention_fwd_varlen(
     q_pos: torch.Tensor,
     *,
     window: int | None,
+    num_q_heads: int | None = None,
+    num_kv_heads: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Packed (training/prefill) attention; ``k``/``v`` rows of sequence ``b`` are its keys at
     absolute positions ``0..len_k[b]-1`` and ``q_pos`` holds the absolute query positions."""
 
     t, nh, d = q.shape
+    _check_heads(nh, k.shape[1], num_q_heads, num_kv_heads)
     cu_q = cu_seqlens_q.tolist()
     cu_k = cu_seqlens_k.tolist()
     o = torch.empty((t, nh, d), dtype=torch.bfloat16, device=q.device)
@@ -524,6 +540,17 @@ def softcap_tile_stats(
     gathered = z_hat.gather(1, local.clamp(0, width - 1).unsqueeze(1)).squeeze(1)
     target_logit = torch.where(in_tile, gathered, torch.zeros_like(gathered))
     return m_t, s_t, target_logit, in_tile
+
+
+def softcap_logits(z: torch.Tensor, *, multiplier: float, softcap: float) -> torch.Tensor:
+    """``z_hat = T * tanh((z * m) / T)`` elementwise in fp32 (the order of
+    :func:`softcap_tile_stats`), tensor-valued constants so the division is IEEE."""
+
+    if z.dtype != torch.float32:
+        raise TypeError("softcap_logits expects fp32 logits")
+    mult = torch.tensor(float(multiplier), dtype=torch.float32, device=z.device)
+    cap = torch.tensor(float(softcap), dtype=torch.float32, device=z.device)
+    return cap * torch.tanh((z * mult) / cap)
 
 
 def _merge_stats(
@@ -622,6 +649,7 @@ __all__ = [
     "qknorm_scaled_rope",
     "rank_chunk_ids",
     "rope_table",
+    "softcap_logits",
     "softcap_tile_stats",
     "swiglu",
     "target_logit_from_stats",

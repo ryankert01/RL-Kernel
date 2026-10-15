@@ -44,7 +44,21 @@ def _load(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def compare_xrt(a: dict, b: dict) -> dict[str, Any]:
+def xrt_label(doc: dict) -> str:
+    """Human label of an xrt dump: runtime/mode, LoRA marker, TP (reference chain: its mode)."""
+
+    if str(doc.get("runtime", "")).startswith("reference"):
+        mode = str(doc.get("backend", "")).split("mode=")[-1] if "mode=" in str(
+            doc.get("backend", "")
+        ) else str(doc.get("mode", ""))
+        return f"reference chain {mode}".strip()
+    lora = " lora" if doc.get("lora_sha256") else ""
+    return f"{doc['mode']}{lora} tp{doc['tp']}"
+
+
+def compare_xrt(
+    a: dict, b: dict, *, a_label: str | None = None, b_label: str | None = None
+) -> dict[str, Any]:
     """Token-level bitwise comparison of two muse_glimmer_xrt_logprobs_v1 files."""
 
     by_id = {s["id"]: s["logprobs_hex"] for s in b["sequences"]}
@@ -71,9 +85,9 @@ def compare_xrt(a: dict, b: dict) -> dict[str, Any]:
         max_abs = max(max_abs, max(diffs or [0.0]))
         sum_abs += sum(diffs)
     return {
-        "a": f"{a['mode']} tp{a['tp']}",
+        "a": a_label or xrt_label(a),
+        "b": b_label or xrt_label(b),
         "mean_abs_diff": sum_abs / total if total else 0.0,
-        "b": f"{b['mode']} tp{b['tp']}",
         "tokens": total,
         "mismatched": mismatched,
         "bitwise_equal": mismatched == 0,

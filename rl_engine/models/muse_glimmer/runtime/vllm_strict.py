@@ -9,22 +9,40 @@ What is strict and what stays native
 Strict (contract ``docs/contracts/muse-glimmer-30b-strict-contract.md``, "Model assembly"):
 embedding norm (O1), the four sandwich norms + final norm (O2), q/k/v/gate as FOUR det GEMMs on
 canonical slices of vLLM's fused ``qkv_proj`` + ``output_gate_proj`` weights (O3), qk-norm + scale
-+ RoPE (O4), paged gated attention with the gate inside the op (O5), o_proj / down_proj as
-row-parallel fp32 sub-tree partials + rank-ordered all-gather + canonical tree (O3), SwiGLU (O6)
-and the selected-token log-probability through the vocab-tile API (O7).  Every selected-token
-logprob vLLM returns (sampled tokens via the V2 ``Sampler.__call__``; prompt tokens via
-``compute_prompt_logprobs_with_chunking``) is overwritten with the strict value.
++ RoPE (O4), paged gated attention with the gate inside the op on this rank's heads (O5),
+o_proj / down_proj as row-parallel fp32 sub-tree partials + rank-ordered all-gather + canonical
+tree (O3), SwiGLU (O6), the selected-token log-probability through the vocab-tile API (O7) and
+the LOGITS vLLM samples from: ``MuseGlimmerForCausalLM.compute_logits`` returns the strict fp32
+``zhat = T * tanh(z * m / T)`` of every real vocab column (8 canonical det-GEMM tiles + the O7
+kernel's own soft cap, TP-gathered by exact data movement), so greedy argmax and vLLM V2's
+seeded Gumbel sampler choose tokens from strict logits.  Every selected-token logprob vLLM returns
+(sampled tokens via the V2 ``Sampler.__call__``; prompt tokens via
+``compute_prompt_logprobs_with_chunking``) is overwritten with the strict O7 value computed from
+the same fp32 tiles.
 
-Native (out of the strict contract, recorded in provenance): token SELECTION.  vLLM keeps computing
-its own bf16 soft-capped logits (``MuseGlimmerForCausalLM.compute_logits``) and samples / argmaxes
-from them; ``selected_token_ranks`` and any top-k logprob columns beyond the selected token also come
-from those native logits.  KV-cache writes stay native (``reshape_and_cache_flash`` is a copy).
+Native (recorded in provenance): the sampler kernels themselves (temperature division, Gumbel
+noise from the per-request seed and position, per-row argmax: row-local, batch invariant) and
+``selected_token_ranks`` (a comparison count over the strict logits).  Requests that would read
+NATIVE numbers fail closed: top-k / top-p filtering, ``logprobs > 0`` / ``prompt_logprobs > 0``
+(extra top-k columns), ``logprob_token_ids`` / ``prompt_logprob_token_ids`` scoring and the
+processed logprobs modes all raise.
+
+KV pages: the strict backend re-views each layer's KV region as ``(2, B, N, H, D)`` (all K pages,
+then all V pages), so native page ``b`` and strict page ``b`` are DIFFERENT byte ranges.  Only
+the strict backend may touch the region: prefix caching, KV connectors / transfer / offloading,
+speculative decoding, decode/prefill context parallelism, KV sharing, cascade attention and
+KV-block zeroing are rejected at model init, and the two native page-addressed writers of the
+V2 model runner (``copy_kv_cache_blocks_inplace``, ``KVBlockZeroer.zero_block_ids``) raise if
+they are ever reached.
 
 Fused-weight slice mapping (per TP rank ``r`` of ``t``; H = 6656, D = 128)
 ----------------------------------------------------------------------
 ``qkv_proj.weight`` rows: ``[0, q_size)`` = q heads ``[32r/t, 32(r+1)/t)``; ``[q_size, q_size +
 kv_size)`` = k head(s) of this rank; ``[q_size + kv_size, q_size + 2 kv_size)`` = v head(s)
-(``q_size = 4096/t``, ``kv_size = 128 * max(1, 2/t)``; at TP > 2 the kv head is replicated).
+(``q_size = 4096/t``, ``kv_size = 128 * max(1, 2/t)``; at TP > 2 the kv head ``(2r)//t`` is
+replicated on ``t/2`` ranks).  The rank's attention runs on exactly these heads
+(``num_q_heads = 32/t``, ``num_kv_heads = max(1, 2/t)``: TP2 16/1, TP4 8/1, TP8 4/1); heads never
+interact in O5, so each rank's output equals the matching slice of the TP1 call bit for bit.
 ``output_gate_proj.weight`` rows ``[0, q_size)`` = gate channels of the same q heads.
 ``gate_up_proj.weight`` rows ``[0, F/t)`` = mlp gate, ``[F/t, 2F/t)`` = mlp up (F = 19968).
 ``o_proj.weight`` ``(H, 4096/t)`` = canonical K chunks ``rank_chunk_ids(t, r)`` (chunk = 512);
@@ -46,10 +64,13 @@ rollout compute the same bits::
 Column-parallel slots keep ``A`` replicated and shard ``B`` rows like the base weight; row-parallel
 slots shard ``A`` columns like the base weight (K chunks + tree: ``acc32`` is the cross-rank tree of
 the fp32 sub-tree partials) and keep ``B`` replicated.  ``B = 0`` is a bitwise no-op
-(``acc + 0.0 == acc``; the one rounding is the same as without LoRA).
+(``acc + 0.0 == acc``; the one rounding is the same as without LoRA).  Every TP rank recomputes the
+canonical ``muse_glimmer_lora_sha256_v1`` hash over the full tensors it read (before sharding) and
+reports THAT hash (never the declared one); a mismatch with the declared hash fails the load.
 
 Fail-closed checks: ``check_runtime_binding`` (native class, four-GEMM grouping, speculative off),
-config pins, ``enforce_eager`` / no torch.compile, bf16 KV cache, canonical lm_head tiling.
+config pins, ``enforce_eager`` / no torch.compile, bf16 KV cache, the KV-page feature list above,
+canonical lm_head tiling, per-rank head geometry, every op resolved to the strict sibling kernel.
 """
 
 from __future__ import annotations
@@ -126,9 +147,12 @@ _LORA_KEY = re.compile(
 )
 _MARK = "__rl_kernel_museglimmer_strict_original__"
 _SAMPLING_NOTE = (
-    "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the "
-    "selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k "
-    "logprob columns stay native"
+    "strict logits: compute_logits returns the O7 fp32 zhat of every real vocab column (8 "
+    "canonical det-GEMM tiles + the O7 kernel soft cap, exact TP all-gather); vLLM V2's sampler "
+    "kernels (temperature divide, seeded Gumbel noise, per-row argmax) choose the token from "
+    "them; the selected-token logprob is the strict O7 value of the same tiles; "
+    "selected_token_ranks is vLLM's comparison count over the strict logits; top-k/top-p, "
+    "logprobs>0, prompt_logprobs>0, logprob token-id scoring and processed logprob modes raise"
 )
 
 _STATE: StrictBindingState | None = None
@@ -144,7 +168,8 @@ class StrictBindingState:
     ops: StrictOps
     hooks: list[str] = field(default_factory=list)
     call_counts: Counter = field(default_factory=Counter)
-    lora_sha256: str | None = None
+    lora_sha256: str | None = None  # RECOMPUTED by this rank over the tensors it installed
+    lora_sha256_declared: str | None = None  # what the driver declared (must equal the above)
     lora: dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]] = field(default_factory=dict)
     tp_size: int = 1
     tp_rank: int = 0
@@ -156,7 +181,8 @@ class StrictBindingState:
     model_class: str | None = None
     cfg: dict[str, Any] = field(default_factory=dict)
     rope_cache: dict[str, tuple[torch.Tensor, torch.Tensor]] = field(default_factory=dict)
-    logits_ctx: torch.Tensor | None = None
+    logits_ctx: tuple[torch.Tensor, list[torch.Tensor]] | None = None
+    stash_logits: bool = True
     role: str = "engine"
     notes: list[str] = field(default_factory=list)
     checks: dict[str, str] = field(default_factory=dict)
@@ -167,29 +193,33 @@ class StrictBindingState:
         if message not in self.notes:
             self.notes.append(message)
 
-    def take_logits_ctx(self) -> torch.Tensor | None:
+    def take_logits_ctx(self) -> tuple[torch.Tensor, list[torch.Tensor]] | None:
         ctx = self.logits_ctx
         self.logits_ctx = None
         return ctx
 
     def kv_ownership(self) -> dict[str, Any]:
         t, r = self.tp_size, self.tp_rank
-        heads_per_rank = NUM_HEADS // t
+        heads_per_rank, kv_per_rank = rank_head_counts(t)
         replicas = max(1, t // NUM_KV_HEADS)
-        kv_per_rank = max(1, NUM_KV_HEADS // t)
         kv_first = (r // replicas) * kv_per_rank
         chunks = list(fb.rank_chunk_ids(t, r))
         tiles_per_rank = CANONICAL_TP // t
         return {
             "q_heads": [r * heads_per_rank, (r + 1) * heads_per_rank],
             "kv_heads_projected": [kv_first, kv_first + kv_per_rank],
-            "kv_heads_cached": [0, NUM_KV_HEADS],
-            "kv_heads_replicated": True,
+            "kv_heads_cached": [kv_first, kv_first + kv_per_rank],
+            "kv_heads_replicated": t > NUM_KV_HEADS,
+            "kv_head_replicas": replicas,
+            "attention_heads_per_rank": {
+                "num_q_heads": heads_per_rank,
+                "num_kv_heads": kv_per_rank,
+            },
             "attention": (
-                "TP1"
+                "TP1 (32 q / 2 kv heads)"
                 if t == 1
-                else "full 32/2-head attention run redundantly on every rank after an "
-                "exact all-gather of q/k/v/gate (bit-identical to TP1)"
+                else f"per-rank heads: {heads_per_rank} q / {kv_per_rank} kv heads on this rank "
+                "(strict op with num_q_heads/num_kv_heads; heads never interact in O5)"
             ),
             "o_proj_chunks": chunks,
             "down_proj_chunks": chunks,
@@ -228,7 +258,15 @@ class StrictBindingState:
             },
             "call_counts": counts,
             "lora_sha256": self.lora_sha256,
+            "lora_sha256_source": (
+                "recomputed by this rank (muse_glimmer_lora_sha256_v1) over the tensors it read "
+                "and sharded"
+                if self.lora_sha256 is not None
+                else None
+            ),
+            "lora_sha256_declared": self.lora_sha256_declared,
             "lora_slots": {str(k): sorted(v) for k, v in self.lora.items()},
+            "rl_engine_file": _rl_engine_file(),
             "tp": self.tp_size,
             "tp_rank": self.tp_rank,
             "canonical_tp": CANONICAL_TP,
@@ -254,6 +292,15 @@ class StrictBindingState:
             )
             temporary.replace(path)
         return path
+
+
+def _rl_engine_file() -> str | None:
+    try:
+        import rl_engine
+
+        return str(Path(rl_engine.__file__).resolve())
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def get_state() -> StrictBindingState | None:
@@ -294,6 +341,14 @@ def canonical_gate_up_slices(fused_weight: torch.Tensor) -> tuple[torch.Tensor, 
         raise ValueError("fused gate_up weight must have an even number of rows")
     half = fused_weight.shape[0] // 2
     return fused_weight[:half], fused_weight[half:]
+
+
+def rank_head_counts(tp_size: int) -> tuple[int, int]:
+    """Per-rank ``(num_q_heads, num_kv_heads)`` of vLLM's head sharding: 32/t and max(1, 2/t)."""
+
+    if tp_size < 1 or NUM_HEADS % tp_size or CANONICAL_TP % tp_size:
+        raise ValueError(f"TP {tp_size} does not shard {NUM_HEADS} heads / {CANONICAL_TP} chunks")
+    return NUM_HEADS // tp_size, max(1, NUM_KV_HEADS // tp_size)
 
 
 def lm_head_tiles_for_rank(tp_size: int, rank: int) -> list[int]:
@@ -488,14 +543,10 @@ def row_parallel_project(
     return (acc + lora_small_k(z.to(torch.bfloat16), lora_b)).to(torch.bfloat16)
 
 
-def strict_selected_logp(
-    state: StrictBindingState, hidden: torch.Tensor, targets: torch.Tensor
-) -> torch.Tensor:
-    """O7 for the given rows: fp32 tile logits -> softcap tile stats -> gathered tree -> logp."""
-
+def _lm_head_shard(state: StrictBindingState) -> tuple[torch.Tensor, list[int]]:
     lm_head = state.lm_head
     if lm_head is None:
-        raise RuntimeError("strict logp requires the bound Muse Glimmer lm_head")
+        raise RuntimeError("strict logits/logp require the bound Muse Glimmer lm_head")
     weight = lm_head.weight
     tiles = lm_head_tiles_for_rank(state.tp_size, state.tp_rank)
     if weight.shape[0] != len(tiles) * TILE_ROWS:
@@ -503,40 +554,103 @@ def strict_selected_logp(
             f"lm_head shard has {weight.shape[0]} rows; strict mode requires the canonical "
             f"{len(tiles)} tiles x {TILE_ROWS} rows (ParallelLMHead padding patch missing?)"
         )
+    return weight, tiles
+
+
+def strict_z_tiles(state: StrictBindingState, hidden: torch.Tensor) -> list[torch.Tensor]:
+    """fp32 ``z`` of this rank's canonical vocab tiles: ``det_gemm(h, W_lm[tile])`` (O7, O3)."""
+
+    weight, tiles = _lm_head_shard(state)
+    return [
+        state.ops.det_gemm(
+            hidden, weight[i * TILE_ROWS : (i + 1) * TILE_ROWS], out_dtype=torch.float32
+        )
+        for i in range(len(tiles))
+    ]
+
+
+def logp_from_z_tiles(
+    state: StrictBindingState, z_tiles: list[torch.Tensor], targets: torch.Tensor
+) -> torch.Tensor:
+    """O7 from this rank's fp32 tiles: softcap tile stats -> rank-ordered gather -> fixed tree."""
+
+    _weight, tiles = _lm_head_shard(state)
+    if len(z_tiles) != len(tiles):
+        raise RuntimeError(f"expected {len(tiles)} local vocab tiles, got {len(z_tiles)}")
     cfg = state.cfg
     multiplier = float(cfg["output_multiplier"])
     softcap = float(cfg["final_logit_softcapping"])
+    tgt = targets.to(torch.int64)
+    rows = tgt.shape[0]
+    local_stats = []
+    for z, tile_id in zip(z_tiles, tiles, strict=True):
+        m_t, s_t, target_logit, in_tile = state.ops.softcap_tile_stats(
+            z, tile_id, tgt, multiplier=multiplier, softcap=softcap, vocab_size=REAL_VOCAB
+        )
+        local_stats.append(torch.stack([m_t, s_t, target_logit, in_tile.to(torch.float32)]))
+    local = torch.stack(local_stats)  # (tiles_per_rank, 4, T)
+    gathered = all_gather_stack(state, local).reshape(CANONICAL_TP, 4, rows)
+    stats = [
+        (gathered[j, 0], gathered[j, 1], gathered[j, 2], gathered[j, 3] > 0.5)
+        for j in range(CANONICAL_TP)
+    ]
+    # combine_tile_stats consumes (M_t, S_t) pairs in tile order; the target logit is the single
+    # non-zero entry over the tiles (fixed tree, exact).
+    _, log_z = state.ops.combine_tile_stats([(m, s) for m, s, _tl, _in in stats])
+    return fb.target_logit_from_stats(stats) - log_z
+
+
+def strict_selected_logp(
+    state: StrictBindingState, hidden: torch.Tensor, targets: torch.Tensor
+) -> torch.Tensor:
+    """O7 for the given rows: fp32 tile logits -> softcap tile stats -> gathered tree -> logp.
+
+    Rows are processed in chunks of ``LOGP_CHUNK_ROWS``; every step is row-local (det_gemm is
+    batch invariant), so the chunking cannot change a row's bits.
+    """
+
     rows = hidden.shape[0]
     outputs = []
     for start in range(0, rows, LOGP_CHUNK_ROWS):
         h = hidden[start : start + LOGP_CHUNK_ROWS]
-        tgt = targets[start : start + LOGP_CHUNK_ROWS].to(torch.int64)
-        local_stats = []
-        for i, tile_id in enumerate(tiles):
-            w_tile = weight[i * TILE_ROWS : (i + 1) * TILE_ROWS]
-            z = state.ops.det_gemm(h, w_tile, out_dtype=torch.float32)
-            m_t, s_t, target_logit, in_tile = state.ops.softcap_tile_stats(
-                z,
-                tile_id,
-                tgt,
-                multiplier=multiplier,
-                softcap=softcap,
-                vocab_size=REAL_VOCAB,
-            )
-            local_stats.append(torch.stack([m_t, s_t, target_logit, in_tile.to(torch.float32)]))
-        local = torch.stack(local_stats)  # (tiles_per_rank, 4, T)
-        gathered = all_gather_stack(state, local).reshape(CANONICAL_TP, 4, h.shape[0])
-        stats = [
-            (gathered[j, 0], gathered[j, 1], gathered[j, 2], gathered[j, 3] > 0.5)
-            for j in range(CANONICAL_TP)
-        ]
-        # combine_tile_stats consumes (M_t, S_t) pairs in tile order; the target logit is the
-        # single non-zero entry over the tiles (fixed tree, exact).
-        _, log_z = state.ops.combine_tile_stats([(m, s) for m, s, _tl, _in in stats])
-        outputs.append(fb.target_logit_from_stats(stats) - log_z)
+        tgt = targets[start : start + LOGP_CHUNK_ROWS]
+        outputs.append(logp_from_z_tiles(state, strict_z_tiles(state, h), tgt))
     if not outputs:
         return hidden.new_empty((0,), dtype=torch.float32)
     return torch.cat(outputs) if len(outputs) > 1 else outputs[0]
+
+
+def strict_logits(
+    state: StrictBindingState, hidden: torch.Tensor
+) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    """Strict sampling logits ``(T, 202048)`` fp32 + this rank's fp32 ``z`` tiles.
+
+    ``zhat = T * tanh((z * m) / T)`` with the O7 kernel's own soft cap (bitwise the ``zhat`` its
+    tile stats use), on the canonical 8 det-GEMM vocab tiles; at TP > 1 every rank's soft-capped
+    tiles are all-gathered in rank order (= tile order; pure data movement), so every rank holds
+    the identical full row.  The 704 zero-padded columns are sliced off.
+    """
+
+    rows = hidden.shape[0]
+    if rows == 0:
+        return hidden.new_empty((0, REAL_VOCAB), dtype=torch.float32), []
+    z_tiles = strict_z_tiles(state, hidden)
+    cfg = state.cfg
+    multiplier = float(cfg["output_multiplier"])
+    softcap = float(cfg["final_logit_softcapping"])
+    local = torch.empty(
+        (rows, len(z_tiles) * TILE_ROWS), dtype=torch.float32, device=hidden.device
+    )
+    for i, z in enumerate(z_tiles):
+        local[:, i * TILE_ROWS : (i + 1) * TILE_ROWS] = state.ops.softcap_logits(
+            z, multiplier=multiplier, softcap=softcap
+        )
+    if state.tp_size == 1:
+        full = local
+    else:
+        gathered = all_gather_stack(state, local)  # (tp, T, cols); rank order == tile order
+        full = gathered.permute(1, 0, 2).reshape(rows, state.tp_size * local.shape[1])
+    return full[:, :REAL_VOCAB], z_tiles
 
 
 def _rope_for(
@@ -604,7 +718,77 @@ def _check_pins(text: Any) -> dict[str, Any]:
     return pins
 
 
+def check_strict_engine_config(vllm_config: Any) -> dict[str, str]:
+    """Fail closed on vLLM features that address KV pages in the NATIVE layout (or otherwise
+    bypass the strict path); returns the per-feature verdicts recorded in provenance.
+
+    The strict backend re-views each layer's KV region as ``(2, B, N, H, D)`` (all K pages, then
+    all V pages), so a native page ``b`` (bytes ``[b*N*H*2D, (b+1)*N*H*2D)`` of the layer region)
+    is NOT the strict page ``b``: any native code that copies, zeroes, offloads or transfers KV
+    pages by block id would move the wrong bytes.  None of them is proven safe, so all are
+    rejected.
+    """
+
+    if vllm_config is None:
+        return {"engine_config": "not checked (no vllm_config: unit test)"}
+    verdicts: dict[str, str] = {}
+    problems: list[str] = []
+    cache = getattr(vllm_config, "cache_config", None)
+    parallel = getattr(vllm_config, "parallel_config", None)
+    model_config = getattr(vllm_config, "model_config", None)
+
+    def need(ok: bool, name: str, detail: str) -> None:
+        verdicts[name] = "passed" if ok else f"REJECTED: {detail}"
+        if not ok:
+            problems.append(f"{name}: {detail}")
+
+    need(
+        not bool(getattr(cache, "enable_prefix_caching", False)),
+        "prefix_caching_off",
+        "enable_prefix_caching=True (partial-hit copy-on-write copies native page ranges)",
+    )
+    need(
+        getattr(cache, "kv_offloading_size", None) is None,
+        "kv_offloading_off",
+        f"kv_offloading_size={getattr(cache, 'kv_offloading_size', None)}",
+    )
+    need(
+        getattr(vllm_config, "kv_transfer_config", None) is None,
+        "kv_connector_off",
+        "kv_transfer_config is set (KV connectors / transfer / offload read native pages)",
+    )
+    need(
+        getattr(vllm_config, "speculative_config", None) is None,
+        "speculative_decoding_off",
+        "speculative_config is set",
+    )
+    need(
+        not bool(getattr(cache, "kv_sharing_fast_prefill", False)),
+        "kv_sharing_fast_prefill_off",
+        "kv_sharing_fast_prefill=True",
+    )
+    dcp = int(getattr(parallel, "decode_context_parallel_size", 1) or 1)
+    pcp = int(getattr(parallel, "prefill_context_parallel_size", 1) or 1)
+    need(dcp == 1, "decode_context_parallel_off", f"decode_context_parallel_size={dcp}")
+    need(pcp == 1, "prefill_context_parallel_off", f"prefill_context_parallel_size={pcp}")
+    pp = int(getattr(parallel, "pipeline_parallel_size", 1) or 1)
+    need(pp == 1, "pipeline_parallel_off", f"pipeline_parallel_size={pp} (untested)")
+    mode = str(getattr(model_config, "logprobs_mode", "raw_logprobs"))
+    need(
+        mode == "raw_logprobs",
+        "logprobs_mode_raw",
+        f"logprobs_mode={mode!r} (strict overwrites the raw selected-token logprob only)",
+    )
+    if problems:
+        raise RuntimeError(
+            "strict Muse Glimmer binding: engine features that bypass the strict KV/logit path "
+            "are enabled (fail closed): " + "; ".join(problems)
+        )
+    return verdicts
+
+
 def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None:
+    state.checks.update(check_strict_engine_config(vllm_config))
     speculative = (
         vllm_config is not None and getattr(vllm_config, "speculative_config", None) is not None
     )
@@ -684,10 +868,17 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
         if bool(attention.use_rope) != expected_local:
             raise RuntimeError(f"layer {attention.layer_idx}: rope/window schedule mismatch")
         impl = attention.attn.impl
-        if int(impl.num_heads) != NUM_HEADS or int(impl.num_kv_heads) != NUM_KV_HEADS:
+        heads_q, heads_kv = rank_head_counts(state.tp_size)
+        if (
+            int(impl.num_heads) != heads_q
+            or int(impl.num_kv_heads) != heads_kv
+            or int(attention.q_size) != heads_q * HEAD_DIM
+            or int(attention.kv_size) != heads_kv * HEAD_DIM
+        ):
             raise RuntimeError(
                 f"layer {attention.layer_idx}: vLLM Attention has {impl.num_heads}/"
-                f"{impl.num_kv_heads} heads; strict mode needs the full {NUM_HEADS}/{NUM_KV_HEADS}"
+                f"{impl.num_kv_heads} heads (q_size {attention.q_size}, kv_size "
+                f"{attention.kv_size}); strict TP{state.tp_size} needs {heads_q}/{heads_kv}"
             )
         if type(impl).__name__ != "MuseGlimmerStrictAttentionImpl":
             raise RuntimeError(
@@ -699,6 +890,12 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
         first_attention = first_attention or attention
     if first_attention is None:
         raise RuntimeError("no Muse Glimmer attention layers found")
+    if hasattr(model, "compute_logits_local"):
+        raise RuntimeError(
+            "strict Muse Glimmer: the model exposes compute_logits_local (batch-sharded sampling "
+            "would bypass the strict compute_logits); fail closed"
+        )
+    state.checks["batch_sharded_sampling"] = "inactive (no compute_logits_local)"
     _bind_final_norm(state, model.model.norm)
     state.model = model
     state.lm_head = model.lm_head
@@ -712,7 +909,9 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
         )
     )
     state.cfg["window_keys_incl_self"] = int(pins["sliding_window"])
-    state.cfg["sampling"] = "native"
+    state.cfg["sampling"] = "strict_logits"
+    heads_q, heads_kv = rank_head_counts(state.tp_size)
+    state.checks["attention_heads_per_rank"] = f"{heads_q}/{heads_kv}"
     state.persist()
 
 
@@ -790,49 +989,118 @@ def _patch_lm_head_padding(state: StrictBindingState) -> None:
     )
 
 
-def gather_heads(
-    state: StrictBindingState, local: torch.Tensor, *, replicas: int = 1
+def strict_attention_forward(
+    state: StrictBindingState, module: Any, positions: torch.Tensor, hidden_states: torch.Tensor
 ) -> torch.Tensor:
-    """TP > 1: all-gather a per-rank head shard ``(T, n_local)`` into the full ``(T, n)`` tensor.
+    """The strict ``MuseGlimmerAttention.forward`` body on THIS rank's heads (also driven by the
+    TP simulation, so the real slicing code is what the simulation checks).
 
-    Rank order is head order (column-parallel shards).  ``replicas`` > 1 (KV heads replicated
-    across consecutive ranks) keeps one copy per distinct shard.  Pure data movement: exact.
+    Four det GEMMs on the rank's canonical slices of ``qkv_proj`` / ``output_gate_proj`` (+ strict
+    LoRA), O4 on the rank's ``32/t`` q heads and ``max(1, 2/t)`` kv heads, the gate on the side
+    channel, ``module.attn`` (the strict paged backend with ``num_q_heads``/``num_kv_heads`` =
+    the rank's heads), then the row-parallel ``o_proj`` tree.  No head all-gather: heads never
+    interact in O5, so the rank's attention output is the matching slice of the TP1 output bit
+    for bit, and it is exactly the K columns of the rank's ``o_proj`` shard.
     """
 
-    if state.tp_size == 1:
-        return local
-    gathered = all_gather_stack(state, local)  # (tp, T, n_local)
-    ranks = range(0, state.tp_size, replicas)
-    return torch.cat([gathered[r] for r in ranks], dim=-1)
+    ops = state.ops
+    layer_idx = int(module.layer_idx)
+    lora = state.lora.get(layer_idx, {})
+    heads_q, heads_kv = rank_head_counts(state.tp_size)
+    if int(module.q_size) != heads_q * HEAD_DIM or int(module.kv_size) != heads_kv * HEAD_DIM:
+        raise RuntimeError(
+            f"layer {layer_idx}: q_size/kv_size {module.q_size}/{module.kv_size} do not match "
+            f"TP{state.tp_size} heads {heads_q}/{heads_kv} (fail closed)"
+        )
+    w_q, w_k, w_v = canonical_qkv_slices(module.qkv_proj.weight, module.q_size, module.kv_size)
+    w_g = module.output_gate_proj.weight
+    q = column_parallel_project(state, hidden_states, w_q, lora.get("q_proj"))
+    k = column_parallel_project(state, hidden_states, w_k, lora.get("k_proj"))
+    v = column_parallel_project(state, hidden_states, w_v, lora.get("v_proj"))
+    gate = column_parallel_project(state, hidden_states, w_g, lora.get("gate_proj"))
+    tokens = hidden_states.shape[0]
+    q_heads = q.view(tokens, heads_q, HEAD_DIM)
+    k_heads = k.view(tokens, heads_kv, HEAD_DIM)
+    if module.use_rope:
+        cos, sin = _rope_for(state, positions)
+    else:
+        cos = sin = None
+    q_heads, k_heads = ops.qknorm_scaled_rope(
+        q_heads,
+        k_heads,
+        cos,
+        sin,
+        eps=float(module.qk_norm.eps),
+        qk_scale=float(module.scale_query_by),
+    )
+    setattr(module.attn, attn_backend.GATE_ATTR, gate.contiguous())
+    try:
+        attended = module.attn(
+            q_heads.reshape(tokens, heads_q * HEAD_DIM),
+            k_heads.reshape(tokens, heads_kv * HEAD_DIM),
+            v,
+        )
+    finally:
+        setattr(module.attn, attn_backend.GATE_ATTR, None)
+    state.call_counts["attention_forward"] += 1
+    return row_parallel_project(
+        state, attended.contiguous(), module.o_proj.weight, lora.get("o_proj")
+    )
 
 
-def _patch_attention_factory(state: StrictBindingState) -> None:
-    """At TP > 1 build the vLLM ``Attention`` layer with the FULL head set (KV replicated).
+def strict_mlp_forward(state: StrictBindingState, module: Any, x: torch.Tensor) -> torch.Tensor:
+    """The strict ``MuseGlimmerMLP.forward`` body (canonical gate/up slices, O6, down tree)."""
 
-    The strict kernel pins 32 query / 2 KV heads, so every rank keeps both KV heads in its own
-    cache and runs the whole attention redundantly on exactly the TP1 inputs (bit-identical).
-    """
+    lora = state.lora.get(int(getattr(module, "_rlk_layer_idx", -1)), {})
+    w_gate, w_up = canonical_gate_up_slices(module.gate_up_proj.weight)
+    gate = column_parallel_project(state, x, w_gate, lora.get("mlp.gate_proj"))
+    up = column_parallel_project(state, x, w_up, lora.get("mlp.up_proj"))
+    hidden = state.ops.swiglu(gate, up)
+    state.call_counts["mlp_forward"] += 1
+    return row_parallel_project(state, hidden, module.down_proj.weight, lora.get("mlp.down_proj"))
 
-    from vllm.model_executor.models import muse_glimmer as mg
 
-    original_attention = mg.Attention
-    if getattr(original_attention, _MARK, False):
-        return
+def _forbid(state: StrictBindingState, what: str) -> Callable[..., Any]:
+    def guard(*_args: Any, **_kwargs: Any) -> Any:
+        state.call_counts[f"forbidden.{what}"] += 1
+        raise RuntimeError(
+            f"strict Muse Glimmer: {what} would address KV pages in vLLM's native layout, but the "
+            "strict backend re-views every layer region as (2, B, N, H, D) (fail closed)"
+        )
 
-    def attention_factory(
-        num_heads: int, head_size: int, scale: float, num_kv_heads=None, **kwargs
-    ):
-        from vllm.distributed import get_tensor_model_parallel_world_size
+    return guard
 
-        tp = int(get_tensor_model_parallel_world_size())
-        if tp > 1 and int(num_heads) * tp == NUM_HEADS and int(head_size) == HEAD_DIM:
-            num_heads, num_kv_heads = NUM_HEADS, NUM_KV_HEADS
-            state.note("TP>1: vLLM Attention layers built with the full 32/2 heads (KV replicated)")
-        return original_attention(num_heads, head_size, scale, num_kv_heads, **kwargs)
 
-    setattr(attention_factory, _MARK, True)
-    mg.Attention = attention_factory
-    state.hooks.append("vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)")
+def _patch_kv_page_writers(state: StrictBindingState) -> None:
+    """Make the native page-addressed KV writers of the model runners raise (defence in depth
+    behind :func:`check_strict_engine_config`)."""
+
+    from vllm.v1.worker import utils as worker_utils
+    from vllm.v1.worker.gpu import model_runner as v2_runner
+
+    if getattr(worker_utils.KVBlockZeroer, _MARK, None) is None:
+        setattr(worker_utils.KVBlockZeroer, _MARK, worker_utils.KVBlockZeroer.zero_block_ids)
+        worker_utils.KVBlockZeroer.zero_block_ids = _forbid(state, "KVBlockZeroer.zero_block_ids")
+        state.hooks.append("vllm.v1.worker.utils.KVBlockZeroer.zero_block_ids (raises)")
+    modules: list[Any] = [v2_runner]
+    try:
+        from vllm.v1.worker import gpu_model_runner as v1_runner
+
+        modules.append(v1_runner)
+    except Exception:  # noqa: BLE001 - the V1 runner is not used by the 0.31 CUDA default
+        pass
+    for module in modules:
+        if getattr(module, _MARK + "copy", None) is not None:
+            continue
+        setattr(module, _MARK + "copy", module.copy_kv_cache_blocks_inplace)
+        module.copy_kv_cache_blocks_inplace = _forbid(state, "copy_kv_cache_blocks_inplace")
+        state.hooks.append(f"{module.__name__}.copy_kv_cache_blocks_inplace (raises)")
+    for name in ("_init_kv_zero_meta",):
+        cls = v2_runner.GPUModelRunner
+        if getattr(cls, _MARK + name, None) is None and hasattr(cls, name):
+            setattr(cls, _MARK + name, getattr(cls, name))
+            setattr(cls, name, _forbid(state, f"GPUModelRunner.{name} (KV-block zeroing)"))
+            state.hooks.append(f"{v2_runner.__name__}.GPUModelRunner.{name} (raises)")
 
 
 def _patch_model(state: StrictBindingState) -> None:
@@ -841,9 +1109,8 @@ def _patch_model(state: StrictBindingState) -> None:
     cls = mg.MuseGlimmerForCausalLM
     if hasattr(cls, _MARK):
         return
-    _patch_attention_factory(state)
     original_init = cls.__init__
-    original_logits = cls.compute_logits
+    original_logits = cls.compute_logits  # kept under _MARK for provenance only
     original_embed = mg.MuseGlimmerModel.embed_input_ids
     original_layer = mg.MuseGlimmerDecoderLayer.forward
     original_attention = mg.MuseGlimmerAttention.forward
@@ -854,9 +1121,13 @@ def _patch_model(state: StrictBindingState) -> None:
         _bind_model(state, self, vllm_config)
 
     def compute_logits(self: Any, hidden_states: torch.Tensor) -> torch.Tensor | None:
-        logits = original_logits(self, hidden_states)
-        state.logits_ctx = hidden_states
-        state.call_counts["compute_logits.native_for_sampling"] += 1
+        # Strict sampling logits (module docstring); the native cuBLAS lm_head is never run.
+        logits, z_tiles = strict_logits(state, hidden_states)
+        if state.stash_logits:
+            # The sampler patch turns the same fp32 tiles into the selected-token O7 logprob.
+            state.logits_ctx = (hidden_states, z_tiles)
+        state.call_counts["compute_logits.strict"] += 1
+        state.call_counts["compute_logits.strict_rows"] += int(hidden_states.shape[0])
         return logits
 
     def embed_input_ids(self: Any, input_ids: torch.Tensor) -> torch.Tensor:
@@ -916,64 +1187,13 @@ def _patch_model(state: StrictBindingState) -> None:
     def attention_forward(
         self: Any, positions: torch.Tensor, hidden_states: torch.Tensor
     ) -> torch.Tensor:
-        ops = state.ops
-        layer_idx = int(self.layer_idx)
-        lora = state.lora.get(layer_idx, {})
-        w_q, w_k, w_v = canonical_qkv_slices(self.qkv_proj.weight, self.q_size, self.kv_size)
-        w_g = self.output_gate_proj.weight
-        q = column_parallel_project(state, hidden_states, w_q, lora.get("q_proj"))
-        k = column_parallel_project(state, hidden_states, w_k, lora.get("k_proj"))
-        v = column_parallel_project(state, hidden_states, w_v, lora.get("v_proj"))
-        gate = column_parallel_project(state, hidden_states, w_g, lora.get("gate_proj"))
-        tokens = hidden_states.shape[0]
-        if state.tp_size > 1:
-            # KV-replicated attention: exact all-gather of the per-rank head shards so the strict
-            # kernel always runs the full 32/2-head problem on TP1-identical inputs.
-            kv_replicas = max(1, state.tp_size // NUM_KV_HEADS)
-            q = gather_heads(state, q)
-            k = gather_heads(state, k, replicas=kv_replicas)
-            v = gather_heads(state, v, replicas=kv_replicas)
-            gate = gather_heads(state, gate)
-        q_heads = q.view(tokens, NUM_HEADS, HEAD_DIM)
-        k_heads = k.view(tokens, NUM_KV_HEADS, HEAD_DIM)
-        if self.use_rope:
-            cos, sin = _rope_for(state, positions)
-        else:
-            cos = sin = None
-        q_heads, k_heads = ops.qknorm_scaled_rope(
-            q_heads,
-            k_heads,
-            cos,
-            sin,
-            eps=float(self.qk_norm.eps),
-            qk_scale=float(self.scale_query_by),
-        )
-        setattr(self.attn, attn_backend.GATE_ATTR, gate.contiguous())
-        try:
-            attended = self.attn(
-                q_heads.reshape(tokens, NUM_HEADS * HEAD_DIM),
-                k_heads.reshape(tokens, NUM_KV_HEADS * HEAD_DIM),
-                v,
-            )
-        finally:
-            setattr(self.attn, attn_backend.GATE_ATTR, None)
-        if state.tp_size > 1:
-            # Keep this rank's heads (= the o_proj weight shard's K columns).
-            attended = attended[:, state.tp_rank * self.q_size : (state.tp_rank + 1) * self.q_size]
-            attended = attended.contiguous()
-        state.call_counts["attention_forward"] += 1
-        return row_parallel_project(state, attended, self.o_proj.weight, lora.get("o_proj"))
+        return strict_attention_forward(state, self, positions, hidden_states)
 
     def mlp_forward(self: Any, x: torch.Tensor) -> torch.Tensor:
-        lora = state.lora.get(int(getattr(self, "_rlk_layer_idx", -1)), {})
-        w_gate, w_up = canonical_gate_up_slices(self.gate_up_proj.weight)
-        gate = column_parallel_project(state, x, w_gate, lora.get("mlp.gate_proj"))
-        up = column_parallel_project(state, x, w_up, lora.get("mlp.up_proj"))
-        hidden = state.ops.swiglu(gate, up)
-        state.call_counts["mlp_forward"] += 1
-        return row_parallel_project(state, hidden, self.down_proj.weight, lora.get("mlp.down_proj"))
+        return strict_mlp_forward(state, self, x)
 
     setattr(cls, _MARK, original_init)
+    setattr(cls, _MARK + "compute_logits", original_logits)
     cls.__init__ = init_wrapped
     cls.compute_logits = compute_logits
     mg.MuseGlimmerModel.embed_input_ids = embed_input_ids
@@ -997,6 +1217,43 @@ def _patch_model(state: StrictBindingState) -> None:
     )
 
 
+def check_sampling_request(
+    *,
+    num_logprobs: int,
+    max_token_ids: int,
+    top_k: Any,
+    top_p: Any,
+    logprobs_mode: str,
+) -> None:
+    """Fail closed on sampler requests whose numbers would be native (see module docstring)."""
+
+    problems = []
+    if top_k is not None or top_p is not None:
+        problems.append("top-k/top-p filtering (native sort-based kernels)")
+    if int(num_logprobs) > 0:
+        problems.append(f"logprobs={num_logprobs} (top-k columns would be native log_softmax)")
+    if int(max_token_ids) > 0:
+        problems.append("logprob_token_ids scoring (native log_softmax columns)")
+    if str(logprobs_mode) != "raw_logprobs":
+        problems.append(f"logprobs_mode={logprobs_mode!r}")
+    if problems:
+        raise RuntimeError(
+            "strict Muse Glimmer sampler: unsupported request (fail closed): " + "; ".join(problems)
+        )
+
+
+def check_prompt_logprobs_request(num_prompt_logprobs: int, logprobs_mode: str) -> None:
+    """Strict prompt logprobs: only the selected-token column (``prompt_logprobs=0``)."""
+
+    if int(num_prompt_logprobs) != 0:
+        raise RuntimeError(
+            f"strict Muse Glimmer: prompt_logprobs={num_prompt_logprobs} requests native top-k "
+            "columns; strict mode supports prompt_logprobs=0 only (fail closed)"
+        )
+    if str(logprobs_mode) != "raw_logprobs":
+        raise RuntimeError(f"strict Muse Glimmer: logprobs_mode={logprobs_mode!r} (fail closed)")
+
+
 def _patch_sampler(state: StrictBindingState) -> None:
     from vllm.v1.worker.gpu.sample.sampler import Sampler
 
@@ -1005,29 +1262,51 @@ def _patch_sampler(state: StrictBindingState) -> None:
     original_call = Sampler.__call__
 
     def call_wrapped(self: Any, logits: torch.Tensor, input_batch: Any) -> Any:
+        ctx = state.take_logits_ctx()
+        dims = self.get_logprobs_dims(input_batch.idx_mapping_np)
+        top_k, top_p = self.sampling_states.get_top_k_top_p(
+            input_batch.expanded_idx_mapping, input_batch.idx_mapping_np
+        )
+        check_sampling_request(
+            num_logprobs=dims[0] if dims is not None else 0,
+            max_token_ids=dims[1] if dims is not None else 0,
+            top_k=top_k,
+            top_p=top_p,
+            logprobs_mode=str(self.logprobs_mode),
+        )
+        if ctx is None or ctx[0].shape[0] != logits.shape[0]:
+            raise RuntimeError(
+                "strict Muse Glimmer sampler: the logits do not come from the strict "
+                "compute_logits of this step (fail closed)"
+            )
         output = original_call(self, logits, input_batch)
-        hidden = state.take_logits_ctx()
         logprobs_tensors = getattr(output, "logprobs_tensors", None)
+        state.call_counts["sampler.strict_logits_rows"] += int(logits.shape[0])
         if logprobs_tensors is None:
             return output
-        if hidden is None or hidden.shape[0] != logits.shape[0]:
-            raise RuntimeError(
-                "strict Muse Glimmer logp: sampler rows do not match the hidden states published "
-                "by MuseGlimmerForCausalLM.compute_logits (fail closed)"
-            )
         targets = output.sampled_token_ids.reshape(-1).to(torch.int64)
-        if targets.shape[0] != logits.shape[0]:
+        if targets.shape[0] != logits.shape[0] or logprobs_tensors.logprobs.shape[1] != 1:
             raise RuntimeError("strict Muse Glimmer logp: unexpected sampled-token layout")
-        logprobs_tensors.logprobs[:, 0] = strict_selected_logp(state, hidden, targets)
+        logprobs_tensors.logprobs[:, 0] = logp_from_z_tiles(state, ctx[1], targets)
         state.call_counts["sampler.strict_logp_calls"] += 1
         state.call_counts["sampler.strict_logp_rows"] += int(logits.shape[0])
         if state.call_counts["sampler.strict_logp_calls"] == 1:
             state.persist()
         return output
 
+    def init_wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
+        getattr(Sampler, _MARK + "init")(self, *args, **kwargs)
+        # Fused FlashInfer / XPU samplers take a different (top-k/top-p) code path; strict mode
+        # rejects top-k/top-p anyway, this keeps the Gumbel path the only one.
+        self.use_flashinfer = False
+        self.use_xpu_sampler = False
+
     setattr(Sampler, _MARK, original_call)
+    setattr(Sampler, _MARK + "init", Sampler.__init__)
     Sampler.__call__ = call_wrapped
+    Sampler.__init__ = init_wrapped
     state.hooks.append("vllm.v1.worker.gpu.sample.sampler.Sampler.__call__")
+    state.hooks.append("vllm.v1.worker.gpu.sample.sampler.Sampler.__init__ (Gumbel path only)")
 
 
 def _patch_prompt_logprobs(state: StrictBindingState) -> None:
@@ -1044,11 +1323,24 @@ def _patch_prompt_logprobs(state: StrictBindingState) -> None:
         num_prompt_logprobs: int,
         logprobs_mode: Any = "raw_logprobs",
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        token_ids, scores, ranks = original(
-            prompt_token_ids, prompt_hidden_states, logits_fn, num_prompt_logprobs, logprobs_mode
-        )
+        check_prompt_logprobs_request(num_prompt_logprobs, str(logprobs_mode))
         state.take_logits_ctx()
+        state.stash_logits = False  # the chunked logits_fn calls must not keep their tiles alive
+        try:
+            # Ranks: vLLM's comparison count over the strict logits (logits_fn is the patched
+            # compute_logits); the score column is overwritten with strict O7 below.
+            token_ids, scores, ranks = original(
+                prompt_token_ids,
+                prompt_hidden_states,
+                logits_fn,
+                num_prompt_logprobs,
+                logprobs_mode,
+            )
+        finally:
+            state.stash_logits = True
         targets = prompt_token_ids.to(torch.int64)
+        if scores.shape[1] != 1:
+            raise RuntimeError("strict Muse Glimmer prompt logp: unexpected column layout")
         scores[:, 0] = strict_selected_logp(
             state, prompt_hidden_states[: targets.shape[0]], targets
         )
@@ -1062,6 +1354,23 @@ def _patch_prompt_logprobs(state: StrictBindingState) -> None:
     module.compute_prompt_logprobs_with_chunking = wrapped
     state.hooks.append(
         "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+    )
+    worker_cls = module.PromptLogprobsWorker
+    original_token_ids = worker_cls.compute_prompt_token_id_logprobs
+
+    def token_id_logprobs(self: Any, *args: Any, **kwargs: Any) -> dict[str, torch.Tensor]:
+        if self.token_id_scores:
+            raise RuntimeError(
+                "strict Muse Glimmer: prompt_logprob_token_ids scoring would return native "
+                "log_softmax values (fail closed)"
+            )
+        return original_token_ids(self, *args, **kwargs)
+
+    setattr(worker_cls, _MARK, original_token_ids)
+    worker_cls.compute_prompt_token_id_logprobs = token_id_logprobs
+    state.hooks.append(
+        "vllm.v1.worker.gpu.sample.prompt_logprob.PromptLogprobsWorker."
+        "compute_prompt_token_id_logprobs (raises on token-id scoring)"
     )
 
 
@@ -1083,6 +1392,7 @@ def install_museglimmer_vllm_strict(*, force_fallback: bool | None = None) -> St
     _patch_model(state)
     _patch_sampler(state)
     _patch_prompt_logprobs(state)
+    _patch_kv_page_writers(state)
     atexit.register(state.persist)
     state.persist()
     return state
@@ -1099,39 +1409,45 @@ def worker_provenance(_worker: Any = None) -> dict[str, Any]:
 def worker_load_lora(
     _worker: Any, state_dict: Mapping[str, torch.Tensor], sha256: str
 ) -> dict[str, Any]:
-    """``LLM.collective_rpc`` target: install strict unmerged LoRA slots on this rank."""
+    """``LLM.collective_rpc`` target: install strict unmerged LoRA slots on this rank.
+
+    The rank converts the received tensors to bf16 (a no-op for a valid package), RECOMPUTES the
+    canonical ``muse_glimmer_lora_sha256_v1`` hash over exactly those full tensors (the ones it
+    then shards and copies to the device), refuses the load if it differs from the declared
+    hash, and from then on reports the recomputed value (``provenance()["lora_sha256"]``), never
+    the declared string.  ``sha256 == ""`` with an empty state dict clears the slots.
+    """
+
+    from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
 
     state = require_state()
     if state.model is None:
         raise RuntimeError("LoRA can only be loaded after the Muse Glimmer model is bound")
     device = next(state.model.parameters()).device
     t0 = time.perf_counter()
-    if state_dict:
-        from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
-
-        received = lora_sha256(state_dict)
-        if received != str(sha256):
-            raise RuntimeError(
-                f"rank {state.tp_rank}: received LoRA hashes to {received}, declared {sha256} "
-                "(muse_glimmer_lora_sha256_v1; fail closed)"
-            )
+    loaded = {key: value.to(torch.bfloat16).contiguous() for key, value in state_dict.items()}
+    recomputed = lora_sha256(loaded) if loaded else None
     hash_ms = (time.perf_counter() - t0) * 1e3
-    pairs = parse_lora_state_dict(state_dict)
+    if loaded and recomputed != str(sha256):
+        raise RuntimeError(
+            f"rank {state.tp_rank}: the LoRA tensors it loaded hash to {recomputed}, declared "
+            f"{sha256} (muse_glimmer_lora_sha256_v1; fail closed, previous adapter kept)"
+        )
+    if not loaded and str(sha256):
+        raise RuntimeError(f"rank {state.tp_rank}: empty LoRA state dict declared as {sha256}")
+    pairs = parse_lora_state_dict(loaded)
     new_slots: dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]] = {}
     for (layer, name), (lora_a, lora_b) in pairs.items():
         a_local, b_local = shard_lora(
-            name,
-            lora_a.to(torch.bfloat16),
-            lora_b.to(torch.bfloat16),
-            tp_size=state.tp_size,
-            tp_rank=state.tp_rank,
+            name, lora_a, lora_b, tp_size=state.tp_size, tp_rank=state.tp_rank
         )
         new_slots.setdefault(layer, {})[name] = (
             a_local.to(device).contiguous(),
             b_local.to(device).contiguous(),
         )
     state.lora = new_slots
-    state.lora_sha256 = str(sha256) if pairs else None
+    state.lora_sha256 = recomputed if pairs else None
+    state.lora_sha256_declared = str(sha256) if pairs else None
     state.call_counts["load_lora"] += 1
     state.persist()
     return {
@@ -1139,8 +1455,11 @@ def worker_load_lora(
         "layers": len(new_slots),
         "slots": sum(len(v) for v in new_slots.values()),
         "sha256": state.lora_sha256,
+        "recomputed_sha256": state.lora_sha256,
+        "declared_sha256": state.lora_sha256_declared,
         "rehash_ms": hash_ms,
         "install_ms": (time.perf_counter() - t0) * 1e3,
+        "rl_engine_file": _rl_engine_file(),
     }
 
 
@@ -1170,8 +1489,13 @@ def worker_check_lora_rule(
 
     * ``binding``: the forward path the engine uses (``column_parallel_project`` /
       ``row_parallel_project``);
-    * ``formula``: ``bf16(acc32(W x) + loop_k B[:, k] z[k])`` with ``z = bf16(acc32(A x))``, the
-      fp32 loop written out here independently (exact bf16 products, sequential fp32 adds);
+    * ``formula``: ``bf16(acc32(W x) + loop_k B[:, k] z[k])`` with ``z = bf16(acc32(A x))``
+      written out here WITHOUT the binding's helpers: ``acc32`` and ``A x`` call the strict GEMM
+      module ``ops.det_gemm.fast_det_gemm`` directly (imported here, unpadded shapes, not the
+      binding's op table or ``_padded_partial``) and the rank loop is a Python loop of exact bf16
+      products and sequential fp32 adds;
+    * ``golden``: the same formula with the fp32 golden GEMM ``fallback_ops.det_gemm`` (a
+      different kernel: tolerance view, ``max_abs_vs_fp32_golden``, not expected bitwise);
     * ``megatron``: ``runtime.megatron_lora.StrictColumnLinear/StrictRowLinear.forward`` (the
       trainer's implementation, imported read-only; it has no Megatron dependency) on the same
       tensors at TP1.
@@ -1201,8 +1525,18 @@ def worker_check_lora_rule(
         "mlp.up_proj": w_up,
         "mlp.down_proj": mlp.down_proj.weight,
     }
+    from rl_engine.models.muse_glimmer.ops.det_gemm import fast_det_gemm
     from rl_engine.models.muse_glimmer.runtime import megatron_lora as ml
     from rl_engine.models.muse_glimmer.runtime.strict_kernels import TPComm
+
+    def formula(gemm: Callable[..., torch.Tensor], x, w, lora_a, lora_b) -> torch.Tensor:
+        acc = gemm(x, w, out_dtype=torch.float32)
+        z = gemm(x, lora_a, out_dtype=torch.float32).to(torch.bfloat16)
+        zf, bf = z.float(), lora_b.float()
+        loop = torch.zeros_like(acc)
+        for k in range(zf.shape[1]):
+            loop = loop + zf[:, k : k + 1] * bf[:, k].unsqueeze(0)
+        return (acc + loop).to(torch.bfloat16), loop
 
     comm = TPComm(None)
     device = w_q.device
@@ -1217,23 +1551,17 @@ def worker_check_lora_rule(
         if name in _COLUMN_PARALLEL:
             y_bind = column_parallel_project(state, x, w, (lora_a, lora_b))
             y_base = column_parallel_project(state, x, w)
-            acc = state.ops.det_gemm(x, w, out_dtype=torch.float32)
             y_meg = ml.StrictColumnLinear.apply(
                 x, lora_a.float(), lora_b.float(), comm, int(w.shape[0]), w
             )
         else:
             y_bind = row_parallel_project(state, x, w, (lora_a, lora_b))
             y_base = row_parallel_project(state, x, w)
-            acc = state.ops.det_gemm_partial(x, w, tuple(range(CANONICAL_TP)))
             y_meg = ml.StrictRowLinear.apply(
                 x, w, lora_a.float(), lora_b.float(), comm, int(w.shape[1])
             )
-        z = _padded_partial(state, x, lora_a, tuple(range(CANONICAL_TP))).to(torch.bfloat16)
-        zf, bf = z.float(), lora_b.float()
-        loop = torch.zeros_like(acc)
-        for k in range(zf.shape[1]):
-            loop = loop + zf[:, k : k + 1] * bf[:, k].unsqueeze(0)
-        y_formula = (acc + loop).to(torch.bfloat16)
+        y_formula, loop = formula(fast_det_gemm, x, w, lora_a, lora_b)
+        y_golden, _loop = formula(fb.det_gemm, x, w, lora_a, lora_b)
         ref64 = x.double() @ w.double().t() + (x.double() @ lora_a.double().t()) @ (
             lora_b.double().t()
         )
@@ -1243,6 +1571,8 @@ def worker_check_lora_rule(
             "rank": int(lora_a.shape[0]),
             "binding_equals_formula": bool(torch.equal(y_bind, y_formula)),
             "binding_equals_megatron": bool(torch.equal(y_bind, y_meg.to(torch.bfloat16))),
+            "binding_equals_fp32_golden_bits": bool(torch.equal(y_bind, y_golden)),
+            "max_abs_vs_fp32_golden": float((y_bind.double() - y_golden.double()).abs().max()),
             "lora_changed_elements": int((y_bind != y_base).sum().item()),
             "elements": int(y_bind.numel()),
             "max_abs_vs_fp64": float((y_bind.double() - ref64).abs().max().item()),
@@ -1270,15 +1600,24 @@ __all__ = [
     "all_gather_stack",
     "canonical_gate_up_slices",
     "canonical_qkv_slices",
+    "check_prompt_logprobs_request",
+    "check_sampling_request",
+    "check_strict_engine_config",
     "column_parallel_project",
     "get_state",
     "install_museglimmer_vllm_strict",
     "lm_head_tiles_for_rank",
+    "logp_from_z_tiles",
     "parse_lora_state_dict",
+    "rank_head_counts",
     "require_state",
     "row_parallel_project",
     "shard_lora",
+    "strict_attention_forward",
+    "strict_logits",
+    "strict_mlp_forward",
     "strict_selected_logp",
+    "strict_z_tiles",
     "tree_over_ranks",
     "lora_small_k",
     "worker_check_lora_rule",
