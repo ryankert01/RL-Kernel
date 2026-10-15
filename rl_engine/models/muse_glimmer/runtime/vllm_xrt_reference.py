@@ -28,6 +28,7 @@ import torch
 def main(argv: list[str] | None = None) -> int:
     from rl_engine.models.muse_glimmer.reference.strict_model import MuseGlimmerStrictModel
     from rl_engine.models.muse_glimmer.reference.weights import MuseGlimmerWeights
+    from rl_engine.models.muse_glimmer.runtime.run_vllm_strict import _git_head, _git_status
     from rl_engine.validation.operators.accelerator import disable_tf32
 
     args = sys.argv[1:] if argv is None else argv
@@ -63,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
             "tp": 1,
             "backend": f"rl_engine.models.muse_glimmer.reference triton backend, mode={mode}",
             "score_ms": (time.perf_counter() - t1) * 1e3,
+            "commit": _git_head(),
+            **_git_status(),
+            "command": "python -m rl_engine.models.muse_glimmer.runtime.vllm_xrt_reference "
+            + " ".join(args),
+            "checkpoint": checkpoint,
             "sequences": seqs,
         }
         target = Path(out_path.replace(".json", f"_{mode}.json"))
