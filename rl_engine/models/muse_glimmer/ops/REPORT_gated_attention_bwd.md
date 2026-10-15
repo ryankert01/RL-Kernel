@@ -1,5 +1,89 @@
 # REPORT — gated attention BACKWARD (rows `global_gated_attention`, `local_gated_attention_train`)
 
+## v2 update (wave A) — supersedes the v1 sections below where they disagree
+
+Kernel id `muse_glimmer.triton.gated_attention_bwd.v2`. Machine-readable results (raw mismatch
+counts, timing series, finding verdicts): `reports/muse_glimmer_poc/data/kernels_attention.json`.
+Measured on A100-SXM4-80GB, torch 2.13.0+cu130, Triton 3.7.1 (`~/envs/vllm`), GPUs from pool 4-5.
+
+| Gate | Result (observed this session) |
+|---|---|
+| Owned tests, one GPU (fwd + bwd + single-GPU CP tests) | 157 passed, 9 skipped (multi-GPU cases) |
+| TP2/4/8 rank call on its head shard == TP1 slice (y, o, lse, dq, dgate, delta, dK/dV group partials) | 0 bit-pattern mismatches (T=2100, packed [1500,600,333], T=8192; global + local) |
+| Replicated-KV dK/dV: rank nodes folded in the canonical TP tree == TP1 dk/dv | 0 at TP2/4/8 |
+| One-shot kernel == CP path (cp_attention CP1, simulated CP2/4/8, real CP2 on 2 GPUs) | 0 for dq/dk/dv/dgate, T in {2048, 2100, 4096, 8192} |
+| Forward bits vs the old forward (c88607f) | 66/66 digests identical |
+| Backward bits vs v1 | dq, dgate changed (sigmoid fix); dk, dv changed (query-chunk rule + sigmoid) |
+| Backward time vs v1 (7 alternating rounds, median) | +5..14 % at T >= 1024, +55 % at T = 512; 2.52x / 2.08x SDPA causal bwd at T = 4096 global / local |
+
+What changed versus v1:
+1. **dK/dV query-chunk rule (CP-invariant).** Leaves (query chunk c, Q-head group g):
+   chunk `c = [floor(c*Lk/8), floor((c+1)*Lk/8))` on absolute positions, 64-query tiles aligned
+   at the chunk start, heads of g ascending then tiles ascending; `P_g = ((c0+c1)+(c2+c3))+
+   ((c4+c5)+(c6+c7))`; KV head h = `(P_g0+P_g1)+(P_g2+P_g3)` over the 4 groups reading h -> bf16
+   once. A CP rank owns whole chunks, so its node is a sub-tree of the one-shot tree. v1 (one
+   ascending fold over all tiles) differed from its own CP1 path in 1557 / 5540 / 20440 dK
+   elements at T = 2048 / 4096 / 8192 (global).
+2. **Gate sigmoid = the forward's** (`sigmoid_rn = div_rn(1, 1 + exp(-g))`, shared helper). Probe
+   (`y = bf16(o*sg_fwd)` vs `do = bf16(o*sg_bwd)` on one-key sequences, 16.8M values): v2 0
+   mismatches, v1 59.
+3. **Head counts as parameters** (`num_q_heads`/`num_kv_heads` in (32,2), (16,1), (8,1), (4,1))
+   in the backward entries; the fused `strict_gated_attention_bwd` raises for TP4/TP8 shards
+   (partials only); `kv_partials_subtree` returns the rank's node of the per-KV-head tree.
+4. Autograd binds the strict forward (no golden fallback); one forward golden (the bwd golden is
+   a varlen adapter over `gated_attention_forward_fp32`); `dy` must be bf16;
+   `cu_seqlens_k[-1] == Tk` and device checks; `Tk == 1` compiles (v1: CompilationError);
+   `SequenceMeta` makes the direct backward and the autograd op (forward + backward) free of
+   host syncs (tested under `torch.cuda.set_sync_debug_mode("error")`).
+
+Bits changed versus v1 (bit-pattern mismatches / numel; "same do" feeds both kernels the same
+`do`/`delta`, isolating the dK/dV rule):
+
+| T | layer | dq | dk | dv | dgate | dq, same do | dk, same do | dv, same do |
+|---|---|---|---|---|---|---|---|---|
+| 2048 | global | 866/8.4M | 1830/524k | 1457/524k | 100/8.4M | 0 | 1560 | 1435 |
+| 4096 | global | 1552/16.8M | 6032/1.05M | 5422/1.05M | 248/16.8M | 0 | 5543 | 5370 |
+| 8192 | global | 3625/33.6M | 21546/2.1M | 20093/2.1M | 490/33.6M | 0 | 20438 | 19976 |
+| 2048 | local | 866/8.4M | 1830/524k | 1457/524k | 100/8.4M | 0 | 1560 | 1435 |
+| 4096 | local | 1645/16.8M | 4692/1.05M | 4022/1.05M | 232/16.8M | 0 | 4018 | 3973 |
+| 8192 | local | 3614/33.6M | 9034/2.1M | 7748/2.1M | 510/33.6M | 0 | 7746 | 7611 |
+
+dgate changes only through the sigmoid, dq only through `do`; the largest change is one bf16 ulp
+of the element (dk max |diff| 0.125 at |dk| ~ 16-32). Forward outputs: unchanged.
+
+Backward timing before/after (`gated_attention_bench bwd-ab`, ms, median of 7 alternating rounds
+x 10 iterations; SDPA = causal GQA backward without window or gate):
+
+| T | layer | v1 | v2 | v2/v1 | SDPA | v2/SDPA |
+|---|---|---|---|---|---|---|
+| 512 | global | 0.634 | 0.981 | 1.55 | 0.174 | 5.64 |
+| 1024 | global | 1.000 | 1.124 | 1.12 | 0.343 | 3.28 |
+| 2048 | global | 2.013 | 2.124 | 1.05 | 0.813 | 2.61 |
+| 4096 | global | 5.766 | 6.124 | 1.06 | 2.434 | 2.52 |
+| 8192 | global | 19.817 | 20.973 | 1.06 | 8.376 | 2.50 |
+| 512 | local | 0.622 | 0.983 | 1.58 | 0.202 | 4.86 |
+| 1024 | local | 0.891 | 1.009 | 1.13 | 0.316 | 3.19 |
+| 2048 | local | 2.050 | 2.156 | 1.05 | 0.814 | 2.65 |
+| 4096 | local | 4.440 | 5.048 | 1.14 | 2.431 | 2.08 |
+| 8192 | local | 9.547 | 10.818 | 1.13 | 8.407 | 1.29 |
+
+Transient backward memory 0.876 GiB at T = 8192 (v1 0.349 GiB): the fp32 chunk leaves
+`(8, H_Q/4, Tk, 128)` dominate. A fused in-kernel chunk loop with a register-resident tree would
+remove the extra programs, the leaf memory and the torch fold (not done).
+
+Per-rank call (TP t, rank r; `H_Q = 32//t`, `H_KV = 1` for t >= 2, KV head `(2r)//t`):
+`gated_attention_bwd_preprocess(dy_r, o_r, gate_r, num_q_heads=H_Q)` ->
+`strict_gated_attention_bwd_partials(q_r, k_r, v_r, do, lse, delta, cu_q, cu_k, q_pos,
+window=W, num_q_heads=H_Q, num_kv_heads=H_KV, seq_meta=meta)` -> `kv_partials_subtree(dkp)`;
+TP1/TP2: that node -> bf16 is final; TP4/TP8: all_gather the nodes of the t/2 replicas of the
+KV head in rank order, `combine_tree(nodes) -> bf16` (measured == TP1). Full text for the
+integrator (O5 wording, signatures): `kernels_attention.json` `requests_to_integrator`.
+
+Not run this session: CP4 / CP8 / TP2xCP2 (need more than the 2 leased GPUs); TP4/TP8 as
+multi-process NCCL jobs (proven with per-rank calls on one GPU).
+
+The sections below are the v1 report, kept for history; numbers there refer to v1.
+
 Contract: `docs/contracts/muse-glimmer-30b-strict-contract.md` O5 ("Backward" paragraph) + O3 tree.
 Scope: dQ, dK, dV and the gate gradient of the gated GQA attention, sliding-window and
 full-causal, as deterministic Triton kernels; the autograd Function that binds them to the

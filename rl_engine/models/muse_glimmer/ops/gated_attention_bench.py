@@ -9,6 +9,9 @@ kernels_attention.json``). Three modes, all single-GPU (run under ``~/bin/gpu-le
     python -m rl_engine.models.muse_glimmer.ops.gated_attention_bench bench --out b.json
     python -m rl_engine.models.muse_glimmer.ops.gated_attention_bench bwd-diff \
         --old-module /path/to/old_gated_attention_bwd.py --out diff.json
+    python -m rl_engine.models.muse_glimmer.ops.gated_attention_bench bwd-ab \
+        --old-module /path/to/old_gated_attention_bwd.py --out ab.json [--rounds 5]
+    python -m rl_engine.models.muse_glimmer.ops.gated_attention_bench parity --out p.json
 
 * ``digest``: sha256 of the forward outputs ``(y, o, lse)`` over a matrix of shapes and paths
   (one-shot varlen, TOKEN/HEAD tiles, packed batch, chunked prefill, paged prefill and decode)
@@ -19,7 +22,12 @@ kernels_attention.json``). Three modes, all single-GPU (run under ``~/bin/gpu-le
   memory in GiB; optional TP head-shard geometries when the wrappers accept head counts.
 * ``bwd-diff``: per shape, mismatch counts / max relative difference between the backward of an
   OLD module file (e.g. ``git show <sha>:rl_engine/.../triton/gated_attention_bwd.py``) and the
-  current one, on the same strict-forward ``o``/``lse``.
+  current one, on the same strict-forward ``o``/``lse`` (bit-pattern counts), split into the
+  preprocess (sigmoid) and the dK/dV-rule causes.
+* ``bwd-ab``: backward before/after timing, old and new module alternated in one process.
+* ``parity``: bit-pattern mismatch counts for TP head shards (TP2/4/8 vs TP1 slices, replica
+  tree), the CP1 runtime path and simulated CP2/4/8 ranks vs the one-shot kernel, plus
+  association controls (teeth).
 
 Only public wrappers are called; nothing here is part of the strict arithmetic.
 """
@@ -268,10 +276,19 @@ def bench_backward(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv:
     _y, o, lse = _fwd_varlen(inp, cu, cu, pos, window, **kw)
 
     def strict():
-        return bwd.strict_gated_attention_bwd(
-            inp["q"], inp["k"], inp["v"], inp["gate"], o, lse, inp["dy"], cu, cu, pos,
-            window=window, **kw,
+        if hq // hkv == HQ // HKV:  # TP1 / TP2: the rank owns whole KV heads, fused entry
+            return bwd.strict_gated_attention_bwd(
+                inp["q"], inp["k"], inp["v"], inp["gate"], o, lse, inp["dy"], cu, cu, pos,
+                window=window, **kw,
+            )
+        # TP4 / TP8 rank: its local work = preprocess + kernels + its node of the KV-head tree
+        # (the cross-rank fold of t/2 nodes is a few elementwise adds, not timed here)
+        _dg, do, delta = bwd.gated_attention_bwd_preprocess(inp["dy"], o, inp["gate"],
+                                                             num_q_heads=hq)
+        dq, dkp, dvp = bwd.strict_gated_attention_bwd_partials(
+            inp["q"], inp["k"], inp["v"], do, lse, delta, cu, cu, pos, window=window, **kw
         )
+        return dq, bwd.kv_partials_subtree(dkp), bwd.kv_partials_subtree(dvp)
 
     strict()
     torch.cuda.synchronize()
@@ -334,6 +351,48 @@ def _load_module(path: str):
     assert spec.loader is not None
     spec.loader.exec_module(mod)
     return mod
+
+
+def run_bwd_ab(old_path: str, iters: int, rounds: int) -> dict[str, Any]:
+    """Backward before/after in ONE process: old and new module timed alternately per round on
+    the same inputs and the same strict-forward o/lse (medians over rounds; robust to drift)."""
+    import statistics
+
+    old = _load_module(old_path)
+    records = []
+    for window in (None, W):
+        for n in (512, 1024, 2048, 4096, 8192):
+            inp = _inputs(n, seed=2)
+            cu = _i32([0, n])
+            pos = torch.arange(n, dtype=torch.int32, device=DEV)
+            _y, o, lse = _fwd_varlen(inp, cu, cu, pos, window)
+            args = (inp["q"], inp["k"], inp["v"], inp["gate"], o, lse, inp["dy"], cu, cu, pos)
+            runs = {"v1": [], "v2": []}
+            fns = {"v1": lambda: old.strict_gated_attention_bwd(*args, window=window),
+                   "v2": lambda: bwd.strict_gated_attention_bwd(*args, window=window)}
+            for _ in range(rounds):
+                for name in ("v1", "v2"):
+                    runs[name].append(_time_ms(fns[name], iters))
+            rec = {"T": n, "window": window, "iters": iters, "rounds": rounds,
+                   "v1_ms": runs["v1"], "v2_ms": runs["v2"],
+                   "v1_median_ms": statistics.median(runs["v1"]),
+                   "v2_median_ms": statistics.median(runs["v2"])}
+            rec["v2_over_v1"] = rec["v2_median_ms"] / rec["v1_median_ms"]
+            qs = inp["q"].permute(1, 0, 2).unsqueeze(0).contiguous().requires_grad_(True)
+            ks = inp["k"].permute(1, 0, 2).unsqueeze(0).contiguous().requires_grad_(True)
+            vs = inp["v"].permute(1, 0, 2).unsqueeze(0).contiguous().requires_grad_(True)
+            out = F.scaled_dot_product_attention(qs, ks, vs, is_causal=True, enable_gqa=True)
+            dout = inp["dy"].view(n, HQ, D).permute(1, 0, 2).unsqueeze(0).contiguous()
+            sdpa = [
+                _time_ms(lambda: torch.autograd.grad(out, (qs, ks, vs), grad_outputs=dout,
+                                                     retain_graph=True), iters)
+                for _ in range(rounds)
+            ]
+            rec["sdpa_causal_bwd_median_ms"] = statistics.median(sdpa)
+            rec["v1_ratio_to_sdpa"] = rec["v1_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
+            rec["v2_ratio_to_sdpa"] = rec["v2_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
+            records.append(rec)
+    return {"records": records, "old_module": old_path}
 
 
 def run_bwd_diff(old_path: str) -> dict[str, Any]:
@@ -665,9 +724,10 @@ def _diff_into(rec: dict[str, Any], prefix: str, names, new, old) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["digest", "bench", "bwd-diff", "parity"])
+    ap.add_argument("mode", choices=["digest", "bench", "bwd-diff", "bwd-ab", "parity"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--iters", type=int, default=20)
+    ap.add_argument("--rounds", type=int, default=5, help="bwd-ab: alternating rounds")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--old-module", default=None)
     ap.add_argument("--sections", nargs="+", choices=SECTIONS, default=list(SECTIONS),
@@ -684,8 +744,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         payload = run_parity()
     else:
         if not args.old_module:
-            ap.error("bwd-diff needs --old-module")
-        payload = run_bwd_diff(args.old_module)
+            ap.error(f"{args.mode} needs --old-module")
+        if args.mode == "bwd-ab":
+            payload = run_bwd_ab(args.old_module, args.iters, args.rounds)
+        else:
+            payload = run_bwd_diff(args.old_module)
     payload["env"] = _env()
     payload["modules"] = {"forward": ga.__file__, "backward": bwd.__file__,
                           "backward_kernel_id": getattr(bwd, "KERNEL_ID", None)}

@@ -1,5 +1,38 @@
 # REPORT — WS2 context parallel: `cp_global_attention`, `cp_local_attention` (RFC #501)
 
+## Wave A update — the O5 CP defect is resolved in the kernel (supersedes deviation 1 below)
+
+- **Backward redesigned.** The query-chunk rule now lives inside
+  `triton/gated_attention_bwd.py` (kernel id v2): dK/dV leaves per (canonical query chunk
+  `c = [floor(cT/8), floor((c+1)T/8))`, Q-head group), chunk tree, then per KV head the tree over
+  its 4 groups. A CP rank makes ONE kernel call on its rows against the gathered K/V; the chunks
+  it does not own are exact zero leaves, so each group partial is its sub-tree root. Rank roots
+  `(G, T, 128)` travel by a rank-ordered all_gather and are folded in the same tree, then the
+  per-KV-head group tree, one bf16 rounding. The old per-chunk launches, the head-shard launcher
+  `_strict_fwd_head_shard` and the labelled torch fallback are gone (the WS1 wrappers take
+  `num_q_heads` / `num_kv_heads`; strict ops fail closed).
+- **One-shot == CP1 == CP2, bitwise.** Real CP2 on two GPUs (torchrun, NCCL, this session,
+  `check_cp_parity.py --backward --lengths 2048 2100 4096 8192`), every rank, global + local:
+  y / o / lse / dq / dk / dv / dgate mismatches vs CP1 = 0, vs the one-shot kernel = 0, and the
+  CP1 path vs the one-shot kernel = 0 (bit-pattern counts). One GPU (`gated_attention_bench
+  parity`): `cp_gated_attention_backward` at CP1 and simulated CP2/4/8 ranks vs the one-shot
+  kernel = 0 at T in {8, 300, 2048, 2100, 4096, 8192}. In v1 the one-shot kernel differed from
+  the CP1 path in 1557 / 5540 / 20440 dK elements at T = 2048 / 4096 / 8192.
+- **Tests (this session).** 2 GPUs: `tests/models/muse_glimmer/distributed/test_cp_*.py` ->
+  CP2 forward + backward, global + local, pass; the CP4 and TP2 x CP2 cases skip (need 4 GPUs).
+  The harness and `check_cp_parity.py` now count mismatches on bit patterns (`-0.0 != +0.0`)
+  and report "CP1 vs one-shot" explicitly.
+- **CP2 cost (T = 8192, A100 NVLink, NCCL all_gather_into_tensor):** AG of K+V 0.280 ms (global)
+  / 0.343 ms (local) vs a 5.1-6.3 ms (global) / 3.0-3.2 ms (local) rank forward; CP2 fwd+bwd
+  27 ms (global) / 13 ms (local) per rank at T = 8192.
+- **Not run this session:** CP4 (pytest or torchrun), CP8, TP2 x CP2 on 4 GPUs; the backward at
+  TP2 x CP2 (the CP backward accepts 16/1 shards; TP4/TP8 shards raise because their dK/dV are
+  partials that need the cross-TP replica tree first).
+
+The sections below are the original report; its deviation 1 ("O5 backward order is not
+CP-invariant") is fixed by the kernel change above, and its integration request for head
+shards is done.
+
 STATUS: complete for the briefed scope on the REAL sibling kernels (forward
 `ops/gated_attention.strict_gated_attention_fwd_varlen`, backward
 `triton/gated_attention_bwd` partials, `ops/canonical_tree.combine_tree`). Not run before the

@@ -1,5 +1,54 @@
 # REPORT — `gated_attention` forward (contract O5; RFC #501 rows `global_gated_attention`, `local_gated_attention_train`, `local_gated_attention_rollout`)
 
+## Wave A update — head-count parameters (supersedes "Open issues 5" below)
+
+Machine-readable results: `reports/muse_glimmer_poc/data/kernels_attention.json`. Measured on
+A100-SXM4-80GB, torch 2.13.0+cu130, Triton 3.7.1 (`~/envs/vllm`), GPUs from pool 4-5.
+
+- **New parameters** `num_q_heads` / `num_kv_heads` on `strict_gated_attention_fwd_varlen` and
+  `strict_gated_attention_fwd_paged` (defaults 32 / 2, existing callers unchanged). Accepted
+  per-rank geometries: `SUPPORTED_HEAD_GEOMETRIES = (32,2) TP1, (16,1) TP2, (8,1) TP4, (4,1) TP8`;
+  anything else raises (`check_head_geometry`). Rank r of TP t passes `q[:, 32r/t:32(r+1)/t]`,
+  `k/v[:, kvh:kvh+1]` with `kvh = (2r)//t` (cache `(pages, 16, 1, 128)` on the paged path),
+  `gate[:, 4096r/t:4096(r+1)/t]`; the outputs are the rank's `(Tq, H_Q*128)` / `(Tq, H_Q)` slices.
+- **HEAD tile at TP4/TP8**: the tile keeps `BLOCK_M = 16` rows and 4 warps; a group of 8 / 4
+  heads fills the first rows, the others are masked (zeros loaded, `-inf` scores, never stored),
+  so the valid rows run the same instruction stream as at TP1.
+- **Gate sigmoid** moved into the shared Triton helper `sigmoid_rn` (same operations:
+  `div_rn(1, 1 + exp(-g))`), which the backward preprocess now also calls.
+- **Forward bits unchanged**: 66 / 66 `(y, o, lse)` digests identical to the forward at c88607f
+  (varlen TOKEN / HEAD / auto tiles at T = 1..8192, packed batch, chunked prefill, paged prefill,
+  paged decode B = 1..8 at ctx up to 4096; global and local).
+- **TP shard parity (bit patterns)**: rank call == TP1 slice for y, o, lse at TP2/4/8, every rank,
+  on T = 2100, packed [1500, 600, 333], T = 8192 (TOKEN tiles) and paged decode B = 8 ctx 2049
+  (HEAD tiles): 0 mismatches, global and local. Tests: `test_tp_head_shard_varlen_bitwise`,
+  `test_tp_head_shard_paged_decode_bitwise` (TOKEN + HEAD tiles, chunked prefill, paged decode).
+
+Timing (CUDA events, 30 iterations; SDPA = `F.scaled_dot_product_attention` with GQA + the same
+gate; the local SDPA baseline is a dense bool mask, not a windowed flash kernel):
+
+| case | strict ms | SDPA ms | strict/SDPA |
+|---|---|---|---|
+| prefill T=512 global | 0.105 | 0.134 | 0.79 |
+| prefill T=1024 global | 0.226 | 0.250 | 0.90 |
+| prefill T=2048 global | 0.636 | 0.612 | 1.04 |
+| prefill T=4096 global | 2.058 | 1.570 | 1.31 |
+| prefill T=8192 global | 6.051 | 3.940 | 1.54 |
+| prefill T=4096 local | 1.326 | 30.152 (masked) | 0.04 |
+| prefill T=8192 local | 2.903 | 121.923 (masked) | 0.02 |
+| paged decode B=1 ctx 4096 global | 0.334 | 0.101 | 3.31 |
+| paged decode B=16 ctx 4096 global | 0.414 | 0.105 | 3.96 |
+| paged decode B=64 ctx 4096 global | 0.338 | 0.203 | 1.67 |
+| paged decode B=256 ctx 4096 global | 0.829 | 0.927 | 0.89 |
+| paged decode B=64 ctx 4096 local | 0.350 | 18.044 (masked) | 0.02 |
+
+Per-rank prefill forward at T = 4096 (global / local, ms): TP1 32/2 1.700 / 1.325, TP2 16/1
+0.939 / 0.710, TP4 8/1 0.673 / 0.480, TP8 4/1 0.430 / 0.282. (The TP1 global call measured
+1.70 ms in this series and 2.06 ms in the prefill series of the same run, same inputs; the gap
+reproduced in two runs and is a measurement-position effect, not investigated.) Decode at small
+batch is 3-4x SDPA: one program per (token, KV head) leaves most SMs idle at B <= 16 (no
+split-KV by contract); adequate for the POC, a fixed split-KV tree would be the fix.
+
 Agent scope: FORWARD only (kernel, wrappers, fp32 golden, paged KV test utility, tests,
 benchmark). The deterministic backward and the autograd `Function` are owned by another agent
 and import `strict_gated_attention_fwd_varlen`, `strict_gated_attention_fwd_paged` and
