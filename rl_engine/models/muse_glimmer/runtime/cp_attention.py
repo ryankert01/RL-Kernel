@@ -184,6 +184,11 @@ for _module_name in (
     except (ImportError, AttributeError):  # pragma: no cover - depends on the sibling worktree
         continue
 
+try:  # the sibling kernel body itself, for TP head shards the WS1 wrapper does not accept
+    from rl_engine.models.muse_glimmer.triton import gated_attention_fwd as _fwd_kernel_module
+except ImportError:  # pragma: no cover - depends on the sibling worktree
+    _fwd_kernel_module = None
+
 _strict_bwd_partials = None
 BACKWARD_IMPL = (
     "FALLBACK:cp_attention.fallback_gated_attention_bwd_partials (pure torch fp32, FA2 order)"
@@ -730,6 +735,70 @@ def fallback_gated_attention_bwd_partials(
     )
 
 
+def _strict_fwd_head_shard(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    gate_logits: torch.Tensor,
+    cu_seqlens_q: torch.Tensor,
+    cu_seqlens_k: torch.Tensor,
+    q_pos: torch.Tensor,
+    *,
+    window: Optional[int],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """TOKEN-tile launch of the sibling kernel body for a TP head shard (one sequence).
+
+    The WS1 wrapper pins ``(Tq, 32, 128)`` / ``(Tk, 2, 128)``; a TP rank holds ``32/tp`` Q heads
+    and ``2/tp`` KV heads. This launches the SAME ``_gated_attention_fwd_kernel`` with the same
+    ``BLOCK_M/BLOCK_N/num_warps/num_stages`` as the wrapper's token tiles; only the ``H_Q``/
+    ``H_KV`` constexprs (row strides and grid) change and the GQA group stays 16, so a row's
+    arithmetic is bitwise the wrapper's (verified by test_cp_tp_topology).
+    """
+    kernel = _fwd_kernel_module
+    tq, hq, d = q.shape
+    hkv = k.shape[1]
+    if hq // hkv != GQA_GROUP or d != HEAD_DIM:
+        raise ValueError(f"head shard must keep the GQA group of 16, got Hq={hq}, Hkv={hkv}")
+    if cu_seqlens_q.numel() != 2:
+        raise NotImplementedError("the head-shard launcher handles one sequence per call")
+    y = torch.empty((tq, hq * d), dtype=torch.bfloat16, device=q.device)
+    o = torch.empty_like(y)
+    lse = torch.empty((tq, hq), dtype=torch.float32, device=q.device)
+    if tq == 0:
+        return y, o, lse
+    dummy = torch.zeros((1,), dtype=torch.int32, device=q.device)
+    grid = (-(-tq // kernel.BLOCK_M_TOKEN), 1, hq)
+    kernel._gated_attention_fwd_kernel[grid](
+        q.contiguous(),
+        gate_logits.contiguous(),
+        k.contiguous(),
+        v.contiguous(),
+        y,
+        o,
+        lse,
+        q_pos.contiguous(),
+        cu_seqlens_q.contiguous(),
+        cu_seqlens_k.contiguous(),
+        dummy,
+        dummy,
+        float(d**-0.5),
+        int(window) if window is not None else 0,
+        0,
+        H_Q=hq,
+        H_KV=hkv,
+        D=d,
+        PAGE=kernel.PAGE_SIZE,
+        BLOCK_M=kernel.BLOCK_M_TOKEN,
+        BLOCK_N=kernel.BLOCK_N,
+        LOCAL=window is not None,
+        PAGED=False,
+        HEAD_TILE=False,
+        num_warps=kernel.NUM_WARPS_TOKEN,
+        num_stages=kernel.NUM_STAGES,
+    )
+    return y, o, lse
+
+
 def gated_attention_rows(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -742,12 +811,19 @@ def gated_attention_rows(
     """Strict kernel (sibling) or fallback on ONE sequence: ``(y, o, lse)`` for the given rows.
 
     ``q``/``gate``/``q_pos`` hold any subset of the sequence's query rows (ABSOLUTE positions);
-    ``k``/``v`` hold the full key sequence. This is exactly the call a CP rank makes.
+    ``k``/``v`` hold the full key sequence. This is exactly the call a CP rank makes. Full head
+    sets go through the WS1 wrapper, TP head shards through :func:`_strict_fwd_head_shard`
+    (same kernel body); both fall back to the fixed-shape torch kernel when absent.
     """
     device = q.device
     cu_q = torch.tensor([0, q.size(0)], dtype=torch.int32, device=device)
     cu_k = torch.tensor([0, k.size(0)], dtype=torch.int32, device=device)
-    fwd = _strict_fwd if _strict_fwd is not None else fallback_gated_attention_fwd
+    if q.size(1) == NUM_Q_HEADS and _strict_fwd is not None:
+        fwd = _strict_fwd
+    elif q.size(1) != NUM_Q_HEADS and _fwd_kernel_module is not None:
+        fwd = _strict_fwd_head_shard
+    else:
+        fwd = fallback_gated_attention_fwd
     return fwd(q, k, v, gate, cu_q, cu_k, q_pos.to(torch.int32), window=window)
 
 
@@ -1085,6 +1161,11 @@ def trace(plan: Optional[CPAttentionPlan] = None) -> dict[str, Any]:
         "tile_config": {"BLOCK_N": BLOCK_N, "BLOCK_M": BLOCK_M},
         "forward_impl": FORWARD_IMPL,
         "forward_is_fallback": _strict_fwd is None,
+        "tp_head_shard_launcher": (
+            "triton.gated_attention_fwd._gated_attention_fwd_kernel (token tiles)"
+            if _fwd_kernel_module is not None
+            else "FALLBACK:cp_attention.fallback_gated_attention_fwd"
+        ),
         "backward_impl": BACKWARD_IMPL,
         "backward_is_fallback": _strict_bwd_partials is None,
         "tree_impl": TREE_IMPL,
