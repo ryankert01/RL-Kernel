@@ -336,6 +336,7 @@ def run_bench(engine: Any, prompts: list[list[int]], *, batch: int, tokens: int)
         seconds = time.perf_counter() - t0
         return seconds, sum(len(o.outputs[0].token_ids) for o in outs)
 
+    load_before = os.getloadavg()
     timed(2)  # warm-up (Triton compile caches, allocator)
     llm.collective_rpc(tools.worker_memory, kwargs={"reset_peak": True})
     ttft_runs = [timed(1)[0] for _ in range(3)]
@@ -366,6 +367,8 @@ def run_bench(engine: Any, prompts: list[list[int]], *, batch: int, tokens: int)
         "decode_step_ms_p90": decode_ms[int(len(decode_ms) * 0.9)] if decode_ms else None,
         "prefill_steps_rank0": prefill_steps,
         "memory_per_rank": memory,
+        # Eager decode is CPU-launch bound: other processes on the host change these numbers.
+        "host_loadavg_1m_before_after": [load_before[0], os.getloadavg()[0]],
     }
 
 

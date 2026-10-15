@@ -989,7 +989,7 @@
   "checkpoint_revision": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68",
   "tokenizer_json_sha256": "c9dbee66967b58f31a7c27f723c3760da3526ccd0427578e8905b0abb0031c4d"
  },
- "score_ms": 1540.7118419989274,
- "commit": "0c5c597a0888812826642cad64318ffa0a720414",
+ "score_ms": 2245.2561059981235,
+ "commit": "d491fcaa671fc908a98f719fa44d0024a078fb0c",
  "lora_sha256": null
 }

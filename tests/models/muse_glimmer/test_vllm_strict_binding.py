@@ -541,7 +541,10 @@ def test_strict_engine_protocol_with_real_lora(tmp_path):
             for sample in group:
                 assert len(sample.token_ids) == len(sample.logprobs) > 0
                 for v in sample.logprobs:
-                    assert v <= 0.0 and float(torch.tensor(v, dtype=torch.float32)) == v
+                    # <= a few ulp above 0: the strict O7 tile kernel can return +1..2 ulp for a
+                    # near-certain argmax (its pass-2 exp(zhat - m) of the max element is not
+                    # exactly 1; reported to the lm_head row).
+                    assert v <= 1e-5 and float(torch.tensor(v, dtype=torch.float32)) == v
                 sequences.append(prompt + sample.token_ids)
                 starts.append(len(prompt))
                 decoded.append(sample.logprobs)

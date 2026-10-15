@@ -171,24 +171,34 @@ def _generate_records(run: dict) -> list[dict[str, Any]]:
     return out
 
 
+def _runs_in(directory: Path | None) -> list[dict]:
+    runs = []
+    if directory is None:
+        return runs
+    for path in sorted(directory.glob("*.json")):
+        doc = _load(path)
+        if doc.get("schema") == "muse_glimmer_vllm_run_v1":
+            doc["_file"] = f"{directory.name}/{path.name}"
+            runs.append(doc)
+    return runs
+
+
 def collect(
     runs_dir: Path,
     data_dir: Path,
     extra: dict[str, Any] | None,
     references: list[Path] | None = None,
+    bench_dir: Path | None = None,
 ) -> dict[str, Any]:
-    runs = []
-    for path in sorted(runs_dir.glob("*.json")):
-        doc = _load(path)
-        if doc.get("schema") == "muse_glimmer_vllm_run_v1":
-            doc["_file"] = path.name
-            runs.append(doc)
+    runs = _runs_in(runs_dir)
+    bench_runs = _runs_in(bench_dir)
+    perf_runs = bench_runs if bench_runs else runs
     result: dict[str, Any] = {
         "row": "vllm_runtime_adapter",
         "schema": "muse_glimmer_vllm_runtime_results_v1",
         "commits_measured": sorted({r.get("commit") for r in runs if r.get("commit")}),
         "env": next((r["env"] for r in runs if r.get("env")), {}),
-        "commands": [r["command"] for r in runs],
+        "commands": [r["command"] for r in runs + bench_runs],
         "runs": [
             {
                 "file": r["_file"],
@@ -200,8 +210,9 @@ def collect(
                 "command": r["command"],
                 "error": r.get("error"),
             }
-            for r in runs
+            for r in runs + bench_runs
         ],
+        "performance_source": "isolated bench runs" if bench_runs else "experiment runs",
     }
     result["generate"] = [g for r in runs for g in _generate_records(r)]
     result["lora_zero"] = [
@@ -272,7 +283,7 @@ def collect(
     xrt["comparisons"] = comparisons
     result["xrt"] = xrt
     bench = []
-    for r in runs:
+    for r in perf_runs:
         if not r.get("bench"):
             continue
         b = dict(r["bench"])
@@ -280,7 +291,7 @@ def collect(
         bench.append(b)
     result["throughput"] = bench or "NOT RUN"
     profiles = []
-    for r in runs:
+    for r in perf_runs:
         if not r.get("profile"):
             continue
         entry: dict[str, Any] = {"mode": r["mode"], "tp": r["tp"]}
@@ -327,6 +338,7 @@ def collect(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", required=True)
+    parser.add_argument("--bench-runs", default=None, help="isolated throughput/profile runs")
     parser.add_argument("--data", default="reports/muse_glimmer_poc/data")
     parser.add_argument("--extra", default=None, help="JSON merged at top level")
     parser.add_argument(
@@ -336,7 +348,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     extra = _load(Path(args.extra)) if args.extra else None
     result = collect(
-        Path(args.runs), Path(args.data), extra, [Path(p) for p in args.reference]
+        Path(args.runs),
+        Path(args.data),
+        extra,
+        [Path(p) for p in args.reference],
+        Path(args.bench_runs) if args.bench_runs else None,
     )
     Path(args.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps(result["xrt"].get("comparisons", {}), default=str)[:2000])
