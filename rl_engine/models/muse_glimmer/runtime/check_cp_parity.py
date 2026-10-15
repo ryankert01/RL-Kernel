@@ -50,8 +50,19 @@ def _inputs(total: int, seed: int, device: torch.device) -> dict[str, torch.Tens
     }
 
 
+def _bits(t: torch.Tensor) -> torch.Tensor:
+    """Integer view of a float tensor, so mismatches are counted on bit patterns."""
+    return t.contiguous().view({2: torch.int16, 4: torch.int32}[t.element_size()])
+
+
 def _mismatch(got: torch.Tensor, want: torch.Tensor) -> tuple[int, float]:
-    return int((got != want).sum().item()), float((got.float() - want.float()).abs().max())
+    """(bit-pattern mismatch count, max abs diff)."""
+    if got.shape != want.shape or got.dtype != want.dtype:
+        return -1, float("nan")
+    return (
+        int((_bits(got) != _bits(want)).sum().item()),
+        float((got.float() - want.float()).abs().max()),
+    )
 
 
 def _time_ms(fn, *, warmup: int = 3, iters: int = 10) -> float:
@@ -165,6 +176,11 @@ def _run(args: argparse.Namespace) -> list[dict[str, Any]]:
                     rec[f"d{name}_vs_one_shot_mismatch"] = _mismatch(
                         loc[name].grad, kernel_grad[rows]
                     )[0]
+                    # CP1 path (cp_attention at CP1, full sequence) vs the one-shot kernel
+                    rec[f"d{name}_cp1_vs_one_shot_mismatch"] = _mismatch(
+                        leaves[name].grad, kernel_grad
+                    )[0]
+                    rec[f"d{name}_numel_local"] = int(loc[name].grad.numel())
             records.append(rec)
     if world > 1:
         gathered: list[Any] = [None] * world
@@ -178,7 +194,8 @@ def _run(args: argparse.Namespace) -> list[dict[str, Any]]:
 def _table(records: list[dict[str, Any]], backward: bool) -> str:
     head = ["layer", "T", "cp", "rank", "y!=", "o!=", "lse!=", "repeat", "fwd ms", "AG K/V ms"]
     if backward:
-        head += ["dq!=", "dk!=", "dv!=", "dgate!=", "vs one-shot dk!=/dv!=", "fwd+bwd ms"]
+        head += ["dq!=", "dk!=", "dv!=", "dgate!=", "vs one-shot dq/dk/dv/dgate !=",
+                 "CP1 vs one-shot dq/dk/dv/dgate !=", "fwd+bwd ms"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for r in sorted(records, key=lambda r: (r["layer"], r["T"], r["rank"])):
         row = [
@@ -191,7 +208,10 @@ def _table(records: list[dict[str, Any]], backward: bool) -> str:
             row += [
                 str(r["dq_mismatch"]), str(r["dk_mismatch"]), str(r["dv_mismatch"]),
                 str(r["dgate_mismatch"]),
-                f"{r['dk_vs_one_shot_mismatch']}/{r['dv_vs_one_shot_mismatch']}",
+                "/".join(str(r[f"d{n}_vs_one_shot_mismatch"]) for n in ("q", "k", "v", "gate")),
+                "/".join(
+                    str(r[f"d{n}_cp1_vs_one_shot_mismatch"]) for n in ("q", "k", "v", "gate")
+                ),
                 f"{r['cp_fwd_bwd_ms']:.0f}",
             ]
         lines.append("| " + " | ".join(row) + " |")
@@ -222,7 +242,9 @@ def main() -> int:
         )
         if args.backward:
             all_ok = all_ok and all(
-                r[f"d{n}_mismatch"] == 0 and r[f"d{n}_vs_one_shot_mismatch"] == 0
+                r[f"d{n}_mismatch"] == 0
+                and r[f"d{n}_vs_one_shot_mismatch"] == 0
+                and r[f"d{n}_cp1_vs_one_shot_mismatch"] == 0
                 for r in records
                 for n in ("q", "k", "v", "gate")
             )

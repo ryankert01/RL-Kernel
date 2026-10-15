@@ -50,11 +50,12 @@ def strict_forward(
     q_pos: torch.Tensor,
     *,
     window: Optional[int],
+    max_seqlen_q: Optional[int] = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """``(y bf16 (Tq,H_Q*128), o bf16 (Tq,H_Q*128), lse fp32 (Tq,H_Q))`` - the strict kernel."""
     return _fwd.strict_gated_attention_fwd_varlen(
         q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window=window,
-        num_q_heads=q.shape[1], num_kv_heads=k.shape[1],
+        max_seqlen_q=max_seqlen_q, num_q_heads=q.shape[1], num_kv_heads=k.shape[1],
     )
 
 
@@ -78,8 +79,14 @@ class GatedAttentionFn(torch.autograd.Function):
         k_c = k.contiguous()
         v_c = v.contiguous()
         g_c = gate_logits.contiguous()
+        max_seqlen_q = None
+        if seq_meta is not None:
+            # fail closed on a meta built for other tensors; no host sync (identity + versions)
+            _bwd._resolve_meta(seq_meta, cu_seqlens_q, cu_seqlens_k, q_pos, k_c.shape[0])
+            max_seqlen_q = seq_meta.max_seqlen_q
         y, o, lse = strict_forward(
-            q_c, k_c, v_c, g_c, cu_seqlens_q, cu_seqlens_k, q_pos, window=window
+            q_c, k_c, v_c, g_c, cu_seqlens_q, cu_seqlens_k, q_pos, window=window,
+            max_seqlen_q=max_seqlen_q,
         )
         ctx.save_for_backward(q_c, k_c, v_c, g_c, o, lse, cu_seqlens_q, cu_seqlens_k, q_pos)
         ctx.window = None if window is None else int(window)
@@ -122,7 +129,9 @@ def gated_attention(
     """Convenience wrapper: ``y bf16 (Tq, H_Q*128)`` with the strict backward attached.
 
     ``seq_meta`` (optional, from ``triton.gated_attention_bwd.prepare_sequence_meta`` on the same
-    ``cu_seqlens``/``q_pos`` tensors) removes the backward's host synchronisation.
+    ``cu_seqlens``/``q_pos`` tensors) removes every host synchronisation of the op: the forward
+    takes its grid size (``max_seqlen_q``) from it and the backward skips re-validation. A meta
+    built for other (or since modified) tensors raises.
     """
     return GatedAttentionFn.apply(
         q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window, seq_meta

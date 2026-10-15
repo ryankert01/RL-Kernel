@@ -99,8 +99,15 @@ def naive_reference(
     return y.reshape(tq, hq * d), o.reshape(tq, hq * d), torch.logsumexp(scores, -1).t()
 
 
+def _bits(t: torch.Tensor) -> torch.Tensor:
+    """Integer view of a float tensor: compares bit patterns (``-0.0 != +0.0``, NaN == NaN)."""
+    if not t.is_floating_point():
+        return t
+    return t.contiguous().view({2: torch.int16, 4: torch.int32, 8: torch.int64}[t.element_size()])
+
+
 def compare(name: str, got: torch.Tensor, want: torch.Tensor) -> dict[str, Any]:
-    """Bitwise comparison record (mismatch count and max abs diff) for one tensor."""
+    """Bitwise comparison record (bit-pattern mismatch count, max abs diff) for one tensor."""
     if got.shape != want.shape or got.dtype != want.dtype:
         return {
             "name": name,
@@ -113,7 +120,7 @@ def compare(name: str, got: torch.Tensor, want: torch.Tensor) -> dict[str, Any]:
             ),
         }
     diff = (got.float() - want.float()).abs()
-    mismatches = int((got != want).sum().item())
+    mismatches = int((_bits(got) != _bits(want)).sum().item())
     return {
         "name": name,
         "equal": mismatches == 0,

@@ -572,13 +572,24 @@ def test_seq_meta_removes_host_sync(mods, window):
             *args[:7], inp["cu_q"].clone(), inp["cu_k"], inp["pos"], window=window,
             seq_meta=meta,
         )
-    # autograd entry accepts the meta too
+    # autograd entry: forward (grid from meta.max_seqlen_q) + backward with no host sync at all
     q = inp["q"].clone().requires_grad_(True)
-    y = ag.gated_attention(
-        q, inp["k"], inp["v"], inp["gate"], inp["cu_q"], inp["cu_k"], inp["pos"], window, meta
-    )
-    y.backward(inp["dy"])
-    assert torch.equal(q.grad, ref[0])
+    k = inp["k"].clone().requires_grad_(True)
+    torch.cuda.synchronize()
+    torch.cuda.set_sync_debug_mode("error")
+    try:
+        y = ag.gated_attention(
+            q, k, inp["v"], inp["gate"], inp["cu_q"], inp["cu_k"], inp["pos"], window, meta
+        )
+        y.backward(inp["dy"])
+    finally:
+        torch.cuda.set_sync_debug_mode("default")
+    assert torch.equal(q.grad, ref[0]) and torch.equal(k.grad, ref[1])
+    with pytest.raises(ValueError, match="seq_meta"):
+        ag.gated_attention(
+            q, k, inp["v"], inp["gate"], inp["cu_q"].clone(), inp["cu_k"], inp["pos"], window,
+            meta,
+        )
 
 
 # ------------------------------------------------------------------------------- G5

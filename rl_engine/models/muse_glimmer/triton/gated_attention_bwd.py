@@ -37,13 +37,14 @@ Backward (FlashAttention-2 recompute style, no atomics):
           dK += tl.dot(dST -> bf16, Q_tile)
       leaf_dK = dK * scale (fp32), leaf_dV = dV (fp32)
     Group partial  P_g = tree_c(leaf (c, g)) = ((c0+c1)+(c2+c3))+((c4+c5)+(c6+c7)) fp32
-    dK/dV          = tree_g(P_g)  (O3 tree over the groups; the groups of the other KV head are
-                     exact zeros) -> bf16 once.
+    dK/dV (head h) = (P_g0+P_g1)+(P_g2+P_g3) over the 4 groups g0..g3 reading KV head h
+                     (O3 tree, fp32) -> bf16 once.
     Why: a CP rank holding the contiguous chunk(s) [8i/c, 8(i+1)/c) of the sequence computes
     the same leaves for its chunks and exact zero leaves for the others, so its tree value is
     the sub-tree root of its chunks; the rank roots combined in the same tree reproduce the
     one-shot value bit for bit (CP1 == CP2 == CP4 == this kernel). A TP rank holding groups
-    [8r/t, 8(r+1)/t) emits its P_g; the TP tree over ranks reproduces TP1 the same way.
+    [8r/t, 8(r+1)/t) emits its P_g folded into its node of the per-KV-head tree; the t/2
+    replicas of a KV head (TP4/TP8) fold their nodes in rank order and reproduce TP1.
 
   dQ, one program per (64-query tile, sequence, head), tiles aligned at the call's first query
   (per-row result independent of the tiling):
@@ -367,6 +368,9 @@ class SequenceMeta:
     max_q_blocks: int
     max_k_blocks: int
     num_k_tokens: int
+    #: ``max(len_q)`` over the sequences: the forward wrapper's ``max_seqlen_q`` (grid size), so
+    #: an autograd step given this object performs no host synchronisation at all.
+    max_seqlen_q: int
     qpos0: torch.Tensor
     cu_seqlens_q: torch.Tensor
     cu_seqlens_k: torch.Tensor
@@ -434,6 +438,7 @@ def prepare_sequence_meta(
         max_q_blocks=int(math.ceil(int(lens_q.max()) / BLOCK_M)) if batch else 0,
         max_k_blocks=int(math.ceil(int(lens_k.max()) / BLOCK_N)) if batch else 0,
         num_k_tokens=int(num_k_tokens),
+        max_seqlen_q=int(lens_q.max()) if batch else 0,
         qpos0=qpos0_cpu.to(q_pos.device),
         cu_seqlens_q=cu_seqlens_q,
         cu_seqlens_k=cu_seqlens_k,
@@ -705,18 +710,32 @@ def strict_gated_attention_bwd_partials(
 
 
 def kv_partials_subtree(partials: torch.Tensor) -> torch.Tensor:
-    """``(G, Tk, H_KV, 128)`` fp32 group partials -> fp32 sub-tree root (no rounding).
+    """``(G, Tk, H_KV, 128)`` fp32 group partials -> ``(Tk, H_KV, 128)`` fp32 node (no rounding).
 
-    ``G`` = 8 (TP1), 4 (TP2 rank), 2 (TP4 rank), 1 (TP8 rank): the canonical tree over the
-    rank's consecutive groups, i.e. the rank's node of the 8-leaf group tree.
+    Per KV head ``h``, the canonical tree over the ``G / H_KV`` consecutive groups that read
+    ``h`` (only those; the other head's exact-zero slices are never added): TP1 / TP2 rank ->
+    the 4-leaf tree ``(g0+g1)+(g2+g3)`` (final), TP4 rank -> its 2-leaf node, TP8 rank -> its
+    leaf. Replicas of a KV head (TP4 / TP8) fold their nodes in rank order with the same tree.
     """
     if partials.dtype != torch.float32 or partials.dim() != 4:
         raise ValueError("expected fp32 (G, Tk, H_KV, 128) group partials")
-    return combine_tree(list(partials.unbind(0)))
+    n_groups, _, hkv, _ = partials.shape
+    if hkv < 1 or n_groups % hkv:
+        raise ValueError(f"{n_groups} group partials do not split over {hkv} KV heads")
+    per_kv = n_groups // hkv
+    if hkv == 1:
+        return combine_tree(list(partials.unbind(0)))
+    return torch.stack(
+        [
+            combine_tree([partials[g, :, h] for g in range(h * per_kv, (h + 1) * per_kv)])
+            for h in range(hkv)
+        ],
+        dim=1,
+    )
 
 
 def combine_kv_partials(partials: torch.Tensor) -> torch.Tensor:
-    """(G, Tk, H_KV, 128) fp32 group partials -> (Tk, H_KV, 128) bf16 via the canonical tree."""
+    """(G, Tk, H_KV, 128) fp32 partials -> (Tk, H_KV, 128) bf16 (per-KV-head tree, one cast)."""
     return kv_partials_subtree(partials).to(torch.bfloat16)
 
 
@@ -773,7 +792,8 @@ def trace() -> dict:
             "then the chunk's 64-query tiles ascending (tiles aligned at the chunk start), "
             "tl.dot bf16->fp32, *scale (dK); chunks c = [floor(c*Lk/8), floor((c+1)*Lk/8)) on "
             "absolute positions; P_g = tree over the 8 chunk leaves ((0+1)+(2+3))+((4+5)+(6+7)); "
-            "dK/dV = same tree over the groups -> bf16 once. dQ: per 64-query tile, key blocks "
+            "dK/dV of KV head h = the same tree over the 4 groups reading h -> bf16 once. dQ: "
+            "per 64-query tile, key blocks "
             "of 64 ascending (first=floor(max(0,p-W+1)/64), last=floor(p/64)), tl.dot "
             "bf16->fp32 -> bf16. delta: tl.sum over 128 lanes per (token, head)."
         ),
@@ -806,7 +826,8 @@ def trace() -> dict:
         "head_geometries": [list(g) for g in SUPPORTED_HEAD_GEOMETRIES],
         "kv_grad_rule": (
             "per canonical Q-head group (4 heads = TP8 shard): P_g folded over 8 query chunks; "
-            "groups combined by the canonical tree at every TP (TP4/TP8 ranks: partials only)"
+            "per KV head its 4 groups folded by the canonical tree ((g0+g1)+(g2+g3)) at any TP; "
+            "TP4/TP8 replicas fold their rank nodes in rank order (ranks hold partials only)"
         ),
         "combine_tree_impl": "rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
         "host_sync": "prepare_sequence_meta (2 D2H copies) unless seq_meta= is passed",
