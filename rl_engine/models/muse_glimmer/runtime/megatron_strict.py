@@ -872,7 +872,10 @@ def binding_lora_parameters(binding: MuseGlimmerStrictBinding) -> list[nn.Parame
 
 def hex_bits(values: torch.Tensor) -> list[str]:
     """IEEE-754 fp32 bit patterns as 8 hex chars (the vLLM dump format)."""
-    return [f"{v:08x}" for v in values.detach().float().cpu().contiguous().view(torch.int32).tolist()]
+    return [
+        f"{v & 0xFFFFFFFF:08x}"
+        for v in values.detach().float().cpu().contiguous().view(torch.int32).tolist()
+    ]
 
 
 def load_bridge_model(
