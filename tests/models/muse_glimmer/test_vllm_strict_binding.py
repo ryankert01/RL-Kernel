@@ -949,16 +949,25 @@ def test_strict_engine_decode_equals_prefill():
     model = os.path.expanduser(
         os.getenv("RL_KERNEL_MUSEGLIMMER_MODEL", "~/models/Muse-Glimmer-30B")
     )
+    with open(_XRT, encoding="utf-8") as fh:
+        xrt = json.load(fh)
+    long_seq = next(s for s in xrt["sequences"] if s["id"] == "gsm8k_long_window")
+    long_prompt = long_seq["token_ids"][: long_seq["completion_start"]]
+    assert len(long_prompt) > 2048  # decode positions are past the 2048-key window
     engine = StrictRolloutEngine(
-        model, tensor_parallel_size=1, gpu_ids=[0], strict=True, max_model_len=512, seed=0
+        model, tensor_parallel_size=1, gpu_ids=[0], strict=True, max_model_len=2560, seed=0
     )
     try:
-        prompts = [[200000, 791, 6864, 315, 9822, 374]]
-        samples = engine.generate(prompts, n=1, max_tokens=4, temperature=0.0)
-        tokens = samples[0][0].token_ids
-        again = engine.logprobs([prompts[0] + tokens], [len(prompts[0])])
-        assert again[0] == samples[0][0].logprobs
+        prompts = [[200000, 791, 6864, 315, 9822, 374], long_prompt]
+        for temperature in (0.0, 1.0):
+            samples = engine.generate(prompts, n=1, max_tokens=24, temperature=temperature)
+            sequences = [p + s[0].token_ids for p, s in zip(prompts, samples)]
+            again = engine.logprobs(sequences, [len(p) for p in prompts])
+            for got, sample in zip(again, samples):
+                assert _bits(got) == _bits(sample[0].logprobs)
+                assert all(v <= 0.0 for v in got)
         prov = engine.provenance()
         assert prov["workers"][0]["hooks"]
+        assert prov["workers"][0]["call_counts"]["compute_logits.strict"] > 0
     finally:
         engine.close()
