@@ -75,3 +75,24 @@ re-run by the integrator after these merges — do that first when resuming (ste
   Findings inputs: scratchpad waveA/findings_{gemm,attention,rope}.json (35 findings from the dead wf_69e440c2-c46 review).
   Next: merge each owner branch, apply reviewer fixes, Wave B (switch bindings to per-rank heads, re-run chain + TP/CP suites,
   3-way xrt byte-diff), Wave C (E2E four modes on the whole node), Wave D (HTML blog report).
+
+## Update 2026-10-15 17:25 UTC: stopped at the session limit (auto-resume scheduled for ~20:35 UTC)
+Wave A (`wf_7b064961-36f`) was stopped by the integrator before any agent returned; reviewers never started and the
+read-only `review_fwd_norms` agent's findings were lost. All owner work is committed on these branches (WIP of the
+vLLM worktree auto-saved); worktrees under /home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-N:
+| N | row | branch | head | last commit (what was in progress) |
+|---|---|---|---|---|
+| 1 | vllm_runtime | worktree-wf_7b064961-36f-1 | 5854014 | line-length cleanup; data/vllm_runtime.json written |
+| 2 | megatron_runtime | worktree-wf_7b064961-36f-2 | 0bb1a6a | megatron_runtime.json with TP1+TP2 30B results |
+| 3 | e2e_bridge | worktree-wf_7b064961-36f-3 | 3c04c8f | bridge measurements (e2e_bridge.json) |
+| 4 | kernels_gemm | worktree-wf_7b064961-36f-4 | b5b77b0 | GEMM results JSON (probes, bit ledger) |
+| 5 | kernels_attention | worktree-wf_7b064961-36f-5 | 701fbf5 | attention driver parity mode (TP shards) |
+| 6 | kernels_rope | worktree-wf_7b064961-36f-6 | e891ecc | canonical rope table test |
+| 7 | ablation | worktree-wf_7b064961-36f-7 | 10a9a39 | ablation results complete |
+| 8 | reference_profile | worktree-wf_7b064961-36f-8 | 4d5e276 | reference_profile.json regenerated |
+Resume plan: (1) for each branch read its REPORT_*.md / data JSON and `git log 307fcf2..<branch>` to judge whether the
+row finished; (2) relaunch only the unfinished owners with a prompt that starts by merging their old branch
+(`git merge --no-edit worktree-wf_7b064961-36f-N`) and continues from its REPORT, plus the adversarial reviewers for
+every code row and a fresh `review_fwd_norms`; (3) merge into feat/museglimmer-poc, Wave B (per-rank heads in the
+bindings, full re-test incl. TP8, 3-way xrt byte-diff via tools/xrt_diff.py), Wave C (E2E four modes, whole node),
+Wave D (blog: python3 reports/muse_glimmer_poc/blog/build_blog.py, publish as Artifact, push).
