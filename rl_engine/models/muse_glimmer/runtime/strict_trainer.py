@@ -485,7 +485,9 @@ class _RankState:
             out["vision_drop"] = getattr(self, "vision_drop", None)
         if self.strict:
             out["lora_grad_rule"] = LORA_GRAD_RULE
-            out["recompute_check"] = "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)"
+            out["recompute_check"] = (
+                "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)"
+            )
         return out
 
 

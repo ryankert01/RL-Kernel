@@ -587,7 +587,9 @@ def _resolve_attention(mode: str) -> AttentionKernels:
         if mode == "strict":
             raise StrictOpsUnavailable(f"MUSE_STRICT_ATTN=strict but {missing} are absent")
         return AttentionKernels(
-            source=OpSource("gated_attention", False, fallback.source.detail + f"; missing {missing}"),
+            source=OpSource(
+                "gated_attention", False, fallback.source.detail + f"; missing {missing}"
+            ),
             fallback=_FallbackAttention.apply,
         )
     return AttentionKernels(
@@ -835,7 +837,9 @@ class StrictOps:
         return out
 
     def non_strict(self) -> list[str]:
-        return [f"{name} -> {src.label}" for name, src in self.all_sources().items() if not src.strict]
+        return [
+            f"{name} -> {src.label}" for name, src in self.all_sources().items() if not src.strict
+        ]
 
     def provenance(self) -> dict[str, Any]:
         out: dict[str, Any] = {name: src.label for name, src in self.all_sources().items()}

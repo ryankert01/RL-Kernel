@@ -976,7 +976,8 @@ def test_drop_vision_modules_releases_memory_held_by_setattr_cycles():
         def __init__(self):
             super().__init__()
             self.vision_tower = torch.nn.Sequential(
-                torch.nn.Linear(1024, 1024, device="cuda"), torch.nn.Linear(1024, 1024, device="cuda")
+                torch.nn.Linear(1024, 1024, device="cuda"),
+                torch.nn.Linear(1024, 1024, device="cuda"),
             )
             self.decoder = torch.nn.Linear(4, 4, device="cuda")
 
