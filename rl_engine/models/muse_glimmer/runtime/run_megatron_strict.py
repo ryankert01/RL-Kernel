@@ -152,7 +152,7 @@ def _sync_time() -> float:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=os.path.expanduser("~/models/Muse-Glimmer-30B"))
-    ap.add_argument("--tp", type=int, default=1, choices=(1, 2))
+    ap.add_argument("--tp", type=int, default=1, choices=(1, 2, 4, 8))
     ap.add_argument("--xrt-file", default=str(DEFAULT_XRT))
     ap.add_argument("--xrt-out-dir", default=str(DEFAULT_XRT_OUT))
     ap.add_argument("--results", required=True, help="JSON file with every measured number")

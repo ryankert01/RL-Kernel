@@ -196,7 +196,7 @@ def test_column_linear_lora_zero_is_bitwise_noop_and_repeatable():
 
 
 @requires_cuda
-def test_column_linear_tp2_matches_tp1_bitwise():
+def test_column_linear_tp_matches_tp1_bitwise():
     m, k, n, r = 64, 512, 512, 16
     x = torch.randn(m, k, device="cuda").to(torch.bfloat16)
     w = (torch.randn(n, k, device="cuda") * 0.05).to(torch.bfloat16)
@@ -215,16 +215,17 @@ def test_column_linear_tp2_matches_tp1_bitwise():
         return y, dx, da, db
 
     (y1, dx1, da1, db1) = _simulate(1, run)[0]
-    outs = _simulate(2, run)
-    assert torch.equal(torch.cat([o[0] for o in outs], dim=1), y1)
-    for o in outs:
-        assert torch.equal(o[1], dx1)
-        assert torch.equal(o[2], da1)
-    assert torch.equal(torch.cat([o[3] for o in outs], dim=0), db1)
+    for world in (2, 4, 8):
+        outs = _simulate(world, run)
+        assert torch.equal(torch.cat([o[0] for o in outs], dim=1), y1)
+        for o in outs:
+            assert torch.equal(o[1], dx1)
+            assert torch.equal(o[2], da1)
+        assert torch.equal(torch.cat([o[3] for o in outs], dim=0), db1)
 
 
 @requires_cuda
-def test_row_linear_tp2_matches_tp1_bitwise_and_lora_noop():
+def test_row_linear_tp_matches_tp1_bitwise_and_lora_noop():
     m, k, n, r = 64, 1024, 256, 16
     x = torch.randn(m, k, device="cuda").to(torch.bfloat16)
     w = (torch.randn(n, k, device="cuda") * 0.05).to(torch.bfloat16)
@@ -248,12 +249,13 @@ def test_row_linear_tp2_matches_tp1_bitwise_and_lora_noop():
         return y, dx, da, db
 
     (y1, dx1, da1, db1) = _simulate(1, run)[0]
-    outs = _simulate(2, run)
-    for o in outs:
-        assert torch.equal(o[0], y1)
-        assert torch.equal(o[3], db1)
-    assert torch.equal(torch.cat([o[1] for o in outs], dim=1), dx1)
-    assert torch.equal(torch.cat([o[2] for o in outs], dim=1), da1)
+    for world in (2, 4, 8):
+        outs = _simulate(world, run)
+        for o in outs:
+            assert torch.equal(o[0], y1)
+            assert torch.equal(o[3], db1)
+        assert torch.equal(torch.cat([o[1] for o in outs], dim=1), dx1)
+        assert torch.equal(torch.cat([o[2] for o in outs], dim=1), da1)
 
 
 # --------------------------------------------------------------------------------------
@@ -262,7 +264,7 @@ def test_row_linear_tp2_matches_tp1_bitwise_and_lora_noop():
 
 
 @requires_cuda
-def test_lm_head_tiles_tp2_equals_tp1_and_reference():
+def test_lm_head_tiles_tp_equals_tp1_and_reference():
     vocab, padded, hidden, m = 2000, 2048, 256, 24
     tile_rows = padded // 8
     mult, cap = 0.19611613513818404, 20.0
@@ -280,9 +282,10 @@ def test_lm_head_tiles_tp2_equals_tp1_and_reference():
         return lp, dh
 
     lp1, dh1 = _simulate(1, run)[0]
-    for lp2, dh2 in _simulate(2, run):
-        assert torch.equal(lp2, lp1)
-        assert torch.equal(dh2, dh1)
+    for world in (2, 4, 8):
+        for lp2, dh2 in _simulate(world, run):
+            assert torch.equal(lp2, lp1), world
+            assert torch.equal(dh2, dh1), world
     z = (h.float() @ w.float().t()) * mult
     zh = cap * torch.tanh(z / cap)
     ref = torch.log_softmax(zh, dim=-1).gather(1, targets[:, None]).squeeze(1)
@@ -436,6 +439,95 @@ def test_composed_strict_attention_matches_sibling_kernels():
         )
         for got, want in zip(grads, ref, strict=True):
             assert torch.equal(got, want)
+
+
+@requires_cuda
+@pytest.mark.parametrize("world", [2, 4, 8])
+def test_attention_block_tp_equals_tp1_with_canonical_qkv_reshard(world):
+    """The binding's attention half (canonical q/gate/k/v row shards, head all-gather, strict
+    O4/O5 on all heads, local-head slice, row-parallel o_proj, LoRA on all five projections) at
+    TP ``world`` equals TP1 bitwise: output, dX and every TP-gathered LoRA gradient. At TP 4/8
+    the k/v shards are 64/32-row halves/quarters of a KV head (the canonical re-shard the
+    binding builds when MCore splits the fused linear_qkv rows)."""
+    ops = sk.resolve_ops()
+    if not ops.sources["gated_attention"].strict:
+        pytest.skip("strict attention kernels unavailable")
+    from rl_engine.models.muse_glimmer.runtime.megatron_strict import fused_qkv_to_hf
+
+    hidden, r = 512, 4
+    lens = [96, 160]
+    t = sum(lens)
+    gen = torch.Generator().manual_seed(11)
+
+    def rnd(*shape, scale=1.0):
+        return (torch.randn(*shape, generator=gen) * scale).to(device="cuda", dtype=torch.bfloat16)
+
+    x = rnd(t, hidden)
+    # Build the FUSED Bridge weight, then un-fuse it exactly as the binding does.
+    fused = rnd(2 * (2 * 16 + 2) * 128, hidden, scale=0.05)
+    hf = fused_qkv_to_hf(fused, 32, 2, 128)
+    w_o = rnd(hidden, 4096, scale=0.02)
+    gy = rnd(t, hidden)
+    cu = torch.tensor([0, lens[0], t], dtype=torch.int32, device="cuda")
+    pos = torch.cat([torch.arange(n) for n in lens]).to(device="cuda", dtype=torch.int32)
+    cos, sin = ops.rope_table(pos.long(), theta=5e5, dim=128, device=torch.device("cuda"))
+    lora = {
+        name: (torch.randn(r, k_in, generator=gen).cuda() * 0.05, torch.randn(n_out, r, generator=gen).cuda() * 0.05)
+        for name, n_out, k_in in (
+            ("q_proj", 4096, hidden), ("gate_proj", 4096, hidden), ("k_proj", 256, hidden),
+            ("v_proj", 256, hidden), ("o_proj", hidden, 4096),
+        )
+    }
+
+    def block(comm):
+        w, rank = comm.world, comm.rank
+
+        def rows(tensor):
+            n_l = tensor.shape[0] // w
+            return tensor[rank * n_l : (rank + 1) * n_l]
+
+        xg = x.clone().requires_grad_(True)
+        params = {}
+        outs = {}
+        for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+            a, b = lora[name]
+            params[name] = (a.clone().requires_grad_(True), rows(b).clone().requires_grad_(True))
+            n_total = hf[name].shape[0]
+            outs[name] = StrictColumnLinear.apply(
+                xg, *params[name], comm, n_total, rows(hf[name]).contiguous()
+            )
+            outs[name] = GatherHeads.apply(outs[name], comm)
+        q3 = outs["q_proj"].view(t, 32, 128)
+        k3 = outs["k_proj"].view(t, 2, 128)
+        qh, kh = ops.qknorm_scaled_rope(q3, k3, cos, sin, eps=1e-5, qk_scale=3.87)
+        y = ops.gated_attention(
+            qh, kh, outs["v_proj"].view(t, 2, 128), outs["gate_proj"], cu, cu, pos, window=64
+        )
+        y_local = SliceLocalHeads.apply(y.reshape(t, 4096), comm)
+        k_l = 4096 // w
+        cols = slice(rank * k_l, (rank + 1) * k_l)
+        a_o, b_o = lora["o_proj"]
+        params["o_proj"] = (a_o[:, cols].clone().requires_grad_(True), b_o.clone().requires_grad_(True))
+        o = StrictRowLinear.apply(y_local, w_o[:, cols].contiguous(), *params["o_proj"], comm, 4096)
+        leaves = [xg] + [p for pair in params.values() for p in pair]
+        grads = torch.autograd.grad((o.float() * gy.float()).sum(), leaves)
+        named = {"dx": grads[0]}
+        for j, name in enumerate(params):
+            named[f"{name}.A"], named[f"{name}.B"] = grads[1 + 2 * j], grads[2 + 2 * j]
+        return o, named
+
+    o1, g1 = _simulate(1, block)[0]
+    outs = _simulate(world, block, max_passes=12)
+    for o_w, _g in outs:
+        assert torch.equal(o_w, o1)
+        assert torch.equal(_g["dx"], g1["dx"])
+    for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+        for o_w, g_w in outs:
+            assert torch.equal(g_w[f"{name}.A"], g1[f"{name}.A"]), name  # replicated A
+        assert torch.equal(torch.cat([g[f"{name}.B"] for _, g in outs], 0), g1[f"{name}.B"]), name
+    assert torch.equal(torch.cat([g["o_proj.A"] for _, g in outs], 1), g1["o_proj.A"])
+    for _o, g_w in outs:
+        assert torch.equal(g_w["o_proj.B"], g1["o_proj.B"])
 
 
 # --------------------------------------------------------------------------------------

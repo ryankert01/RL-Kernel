@@ -34,8 +34,11 @@ with ``attention_output_gate``), per local KV group ``g`` (4352 rows each, ``D=1
     [ q heads 16g..16g+15 (2048 rows) | gate heads 16g..16g+15 (2048) | k head g (128) | v head g (128) ]
 
 so HF ``q_proj`` = concat over g of the first block, ``gate_proj`` the second, ``k_proj``/``v_proj``
-the third/fourth. At TP ``t`` rank ``r`` owns groups ``[2r/t, 2(r+1)/t)``; TP > 2 (KV
-replication inside MCore) is rejected.
+the third/fourth. At TP ``t <= 2`` rank ``r``'s MCore shard is groups ``[2r/t, 2(r+1)/t)``
+and its canonical q/gate/k/v row chunks are views of it. At TP 4/8 MCore splits the fused rows
+evenly (no clean head partition); the binding re-shards them to canonical chunks at bind time
+(see ``MuseGlimmerStrictBinding._qkv_views``). Attention runs on all 32/2 heads on every rank
+(head shards all-gathered), so it is the TP1 computation at every TP.
 """
 
 from __future__ import annotations
@@ -73,6 +76,7 @@ from rl_engine.models.muse_glimmer.workload import (
 NATIVE_BRIDGE_MODEL_CLASS = "MuseGlimmerModel"
 NATIVE_BRIDGE_MODULE = "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer"
 _FINAL_NORM_HF_KEY = "model.language_model.norm.weight"
+SUPPORTED_TP = (1, 2, 4, 8)
 
 
 class StrictBindingError(MuseGlimmerWorkloadError):
@@ -202,10 +206,9 @@ def _check_config(cfg: Any, dims: ModelDims, tp_world: int) -> None:
     if int(cfg.context_parallel_size or 1) > 1 or getattr(cfg, "attention_cp_layout", "zigzag") != "zigzag":
         # CP>1 is rejected above; a non-zigzag layout with CP=1 is irrelevant but recorded.
         pass
-    if tp_world not in (1, 2):
+    if tp_world not in SUPPORTED_TP:
         raise StrictBindingError(
-            f"tp={tp_world}: MCore replicates KV heads when tp > num_query_groups=2 and the "
-            "fused linear_qkv shard no longer holds whole KV groups; strict binding supports TP 1/2"
+            f"tp={tp_world}: the strict binding supports TP {SUPPORTED_TP} (8 canonical chunks)"
         )
 
 
@@ -350,13 +353,7 @@ class MuseGlimmerStrictBinding:
         d = self.dims
         layer = self.model.decoder.layers[i]
         attn = layer.self_attention
-        qkv = attn.linear_qkv.weight
-        groups_local = d.kv_heads // self.tp_world
-        heads_per_group = d.heads // d.kv_heads
-        per_group = (2 * heads_per_group + 2) * d.head_dim
-        if tuple(qkv.shape) != (groups_local * per_group, d.hidden):
-            raise StrictBindingError(f"layer {i}: linear_qkv shape {tuple(qkv.shape)} unexpected")
-        qb, gb, kb, vb = fused_qkv_blocks(qkv, heads_per_group, d.head_dim, groups_local)
+        qb, gb, kb, vb = self._qkv_views(i, attn.linear_qkv.weight)
         fc1 = layer.mlp.linear_fc1.weight
         ffn_local = d.ffn // self.tp_world
         if tuple(fc1.shape) != (2 * ffn_local, d.hidden):
@@ -393,6 +390,44 @@ class MuseGlimmerStrictBinding:
             w_pre_ffn=layer.pre_mlp_layernorm.weight,
             w_post_ffn=layer.mlp.post_layernorm.weight,
         )
+
+    def _qkv_views(self, i: int, qkv: torch.Tensor):
+        """This rank's CANONICAL row blocks of q/gate/k/v (HF row order) from the fused shard.
+
+        Canonical ownership (contract O3 column rule): at TP ``t`` rank ``r`` owns output-row
+        chunks ``[8r/t, 8(r+1)/t)`` of EACH projection (q/gate: 512-row chunks = 4 heads,
+        k/v: 32-row chunks). For ``t <= num_kv_heads`` MCore's fused shard holds whole KV groups
+        and those chunks are exactly its blocks (zero-copy views). For ``t > num_kv_heads``
+        MCore (attention.py, ``num_query_groups < world_size``) splits the FUSED rows evenly, so a
+        shard holds e.g. "q heads 0-15 + 1 gate head" at TP4; the binding all-gathers the fused
+        weight once at bind time (data movement only), un-fuses it and keeps contiguous copies of
+        its canonical rows (same bytes as the checkpoint; memory equal to the MCore shard).
+        """
+        d = self.dims
+        t = self.tp_world
+        heads_per_group = d.heads // d.kv_heads
+        per_group = (2 * heads_per_group + 2) * d.head_dim
+        rows_total = d.kv_heads * per_group
+        if rows_total % t or tuple(qkv.shape) != (rows_total // t, d.hidden):
+            raise StrictBindingError(f"layer {i}: linear_qkv shape {tuple(qkv.shape)} unexpected")
+        if t <= d.kv_heads:
+            return fused_qkv_blocks(qkv, heads_per_group, d.head_dim, d.kv_heads // t)
+        full = torch.cat(self.comm.all_gather(qkv.detach().contiguous()), dim=0)
+        parts = fused_qkv_to_hf(full, d.heads, d.kv_heads, d.head_dim)
+        r = self.tp_rank
+        out = []
+        for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+            w = parts[name]
+            n_l = w.shape[0] // t
+            out.append((w[r * n_l : (r + 1) * n_l].contiguous(),))
+        del full, parts
+        if i == 0:
+            self.notes.append(
+                f"tp={t} > kv_heads={d.kv_heads}: fused linear_qkv re-sharded to canonical "
+                "per-projection row chunks at bind time (all-gather, data movement only)"
+            )
+        q_b, g_b, k_b, v_b = out
+        return q_b, g_b, k_b, v_b
 
     def _gather_embedding(self) -> torch.Tensor:
         emb = self.model.embedding.word_embeddings
@@ -501,8 +536,9 @@ class MuseGlimmerStrictBinding:
         v = self._col(x_n, lw.v_blocks, i, "v_proj", d.kv_width)
         g = self._col(x_n, lw.gate_blocks, i, "gate_proj", d.q_width)
         if self.tp_world > 1:
-            # The strict O4/O5 kernels take the full 32 Q / 2 KV heads: gather the head shards
-            # (data movement only), compute attention redundantly, keep the local head columns.
+            # The strict O4/O5 kernels take the full 32 Q / 2 KV heads: gather the canonical
+            # column shards (data movement only), compute attention redundantly (= TP1 bits and
+            # TP1 dQ/dK/dV on every rank), keep the local head columns.
             q = GatherHeads.apply(q, self.comm)
             k = GatherHeads.apply(k, self.comm)
             v = GatherHeads.apply(v, self.comm)

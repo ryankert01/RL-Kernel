@@ -14,8 +14,8 @@ It satisfies ``rl_engine.models.muse_glimmer.e2e.engines.TrainerLike`` exactly::
     trainer.provenance(); trainer.close()
 
 Process model (no torchrun): the CALLING process is TP rank 0 and the only rank that returns
-results. For ``tensor_parallel_size=2`` it spawns one worker process (``torch.multiprocessing``
-spawn context) for rank 1; the two ranks form an NCCL group over ``tcp://127.0.0.1:<free port>``
+results. For ``tensor_parallel_size=t > 1`` it spawns ``t-1`` worker processes
+(``torch.multiprocessing`` spawn context) for ranks 1..t-1; the ranks form an NCCL group over ``tcp://127.0.0.1:<free port>``
 and Megatron's model-parallel state is initialised with ``tensor_model_parallel_size=tp``.
 ``gpu_ids`` are CUDA ordinals as seen by the calling process (i.e. indices into its
 ``CUDA_VISIBLE_DEVICES``); rank ``r`` uses ``gpu_ids[r]``. Every public call is broadcast to the
@@ -59,6 +59,7 @@ from rl_engine.models.muse_glimmer.runtime.megatron_lora import (
     replicated_lora_grads_agree,
 )
 from rl_engine.models.muse_glimmer.runtime.megatron_strict import (
+    SUPPORTED_TP,
     StrictBindingError,
     binding_lora_parameters,
     export_binding_lora,
@@ -445,11 +446,8 @@ class StrictTrainer:
         lora_b_init_std: float = 0.0,
         weight_decay: float = 0.0,
     ) -> None:
-        if tensor_parallel_size not in (1, 2):
-            raise StrictBindingError(
-                "StrictTrainer supports tensor_parallel_size 1 or 2 (TP>2: MCore replicates the "
-                "2 KV heads and the fused linear_qkv shard no longer holds whole KV groups)"
-            )
+        if tensor_parallel_size not in SUPPORTED_TP:
+            raise StrictBindingError(f"StrictTrainer supports tensor_parallel_size in {SUPPORTED_TP}")
         if len(gpu_ids) != tensor_parallel_size:
             raise ValueError("gpu_ids must list one GPU per TP rank")
         self.tp = int(tensor_parallel_size)
