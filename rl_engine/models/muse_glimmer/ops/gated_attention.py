@@ -26,7 +26,8 @@ in O5, so a rank's ``(y, o, lse)`` equal the matching slices of the full call bi
 
 Numerics are defined in ``docs/contracts/muse-glimmer-30b-strict-contract.md`` section O5 and
 restated in :mod:`rl_engine.models.muse_glimmer.triton.gated_attention_fwd`. Summary of the
-reduction order and cast points (identical in kernel and golden):
+reduction order and cast points (same order in kernel and golden; the golden is a tolerance
+reference because the compiled exp/division/FMA differ, see ``trace()["compiled_arithmetic"]``):
 KV blocks of 64 keys aligned at absolute position 0, ascending; fp32 scores ``q.k * 128**-0.5``;
 online softmax ``m_new = max(m, rowmax)``, ``alpha = exp(m - m_new)``, ``p = exp(s - m_new)``,
 ``l = l*alpha + rowsum(p)``, ``acc = acc*alpha + (p -> bf16) @ V``; ``o = acc / l -> bf16``;
@@ -535,12 +536,18 @@ def gated_attention_forward_fp32(
     ``(y, o, lse)`` in ``dtype`` (unrounded; the kernel's bf16 outputs are compared to them
     with the WS1 attention tolerance).
 
-    Reduction order: identical to the kernel — KV blocks of 64 keys aligned at absolute
-    position 0, ascending, with the same online-softmax update order and the same casts
-    (``p -> bf16`` before the PV product, ``o -> bf16`` before the gate). The two inner
-    contractions (``sum over d`` of ``q*k`` and ``sum over the 64 keys`` of ``p*v``) are
-    torch reductions over a fixed-size trailing axis: deterministic for a given shape and
-    device, accumulated in ``dtype``. No matmul / SDPA.
+    Reduction order: the kernel's — KV blocks of 64 keys aligned at absolute position 0,
+    ascending, with the same online-softmax update order and the same casts (``p -> bf16``
+    before the PV product, ``o -> bf16`` before the gate). The two inner contractions (``sum
+    over d`` of ``q*k`` and ``sum over the 64 keys`` of ``p*v``) are torch reductions over a
+    fixed-size trailing axis: deterministic for a given shape and device, accumulated in
+    ``dtype``. No matmul / SDPA.
+
+    Not the kernel's instruction sequence (tolerance reference, not bitwise): the kernel's
+    ``tl.exp`` is ``ex2.approx(x * log2 e)`` (here ``torch.exp``), its divisions flush
+    subnormals (``div.rn.ftz``), ``l*alpha + rowsum`` is one fused multiply-add, and the PV
+    products accumulate into ``acc*alpha`` inside the MMA (here ``acc*alpha + sum(p*v)``).
+    See ``trace()["compiled_arithmetic"]``.
     """
     _check(q.dim() == 3 and k.dim() == 3 and v.dim() == 3, "golden expects 3-D q/k/v")
     tq, hq, d = q.shape
@@ -635,9 +642,39 @@ def trace() -> dict[str, Any]:
         "casts": [
             "scores fp32 (tl.dot bf16xbf16->fp32, K=128), scaled in fp32",
             "p -> bf16 before the PV dot (K=64)",
-            "o = div_rn(acc, l) fp32 -> bf16",
+            "o = div_rn(acc, l) fp32 (div.rn.ftz.f32) -> bf16",
             "y = (o_bf16->fp32) * sigmoid(g->fp32) fp32 -> bf16 (elementwise over 4096)",
         ],
+        # What the compiled kernel executes (Triton 3.7.1, sm80, enable_fp_fusion=True default;
+        # PTX/TTGIR inspected in wave B, review gated_attention_fwd:R5). Kernel-vs-kernel parity
+        # (tiles, TP shards, paged/varlen, chunking) holds because every variant compiles the same
+        # sequence; the torch golden differs in these points and is a tolerance reference only.
+        "compiled_arithmetic": {
+            "exp": "tl.exp(x) = ex2.approx.f32(x * log2(e)) (the exp2 form; golden: torch.exp)",
+            "log": "tl.log = libdevice __nv_logf with FTZ (fma.rn.ftz polynomial)",
+            "division": (
+                "libdevice.div_rn -> div.rn.ftz.f32: IEEE round-to-nearest, subnormal operands "
+                "and results flushed to zero (o = acc/l and the gate sigmoid)"
+            ),
+            "l_update": "l = l*alpha + rowsum(p) contracts to one fma.rn.f32 (single rounding)",
+            "acc_update": (
+                "acc*alpha is a separate mul.f32; the PV tl.dot accumulates into it inside the "
+                "MMA (tt.dot %p_bf16, %v, %acc_scaled), not dot-then-add"
+            ),
+            "rowsum": "tl.sum over 64 keys: warps split along keys (warpsPerCTA=[1,4])",
+        },
+        "window_values": (
+            "the wrappers accept window None or any positive int (tiny-model tests use small "
+            "windows); Muse-Glimmer-30B bindings must pass exactly 2048 (= SLIDING_WINDOW)"
+        ),
+        "validation": (
+            "fail closed: cu_seqlens (start 0, monotone, end = rows), grid coverage "
+            "(max_seqlen_q), 0 <= q_pos < len_k, len_q <= seq_lens <= max_pages*16 and every "
+            "visible key's page id in [0, num_pages): host ValueError when the wrapper syncs "
+            "anyway (max_seqlen_q None) or a SequenceMeta is given, otherwise in-kernel checks "
+            "+ torch._assert_async (one 4-byte fill + one assert launch per call, no sync)"
+        ),
+        "paged_positions": "derived in the kernel: seq_lens[b] - len_q + t",
         "gqa": "q head h reads kv head h // 16 (rank-local: h_local // (H_Q // H_KV))",
         "head_geometries": [list(g) for g in SUPPORTED_HEAD_GEOMETRIES],
         "head_tile_rows": (
@@ -657,7 +694,7 @@ def trace() -> dict[str, Any]:
         "_gated_attention_fwd_kernel",
         "autotune": False,
         "tf32": False,
-        "exp": "tl.exp fp32",
+        "exp": "tl.exp fp32 (ex2.approx.f32(x * log2 e), see compiled_arithmetic)",
         "split_kv": "disabled",
     }
 

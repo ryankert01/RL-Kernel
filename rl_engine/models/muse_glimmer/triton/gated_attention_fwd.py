@@ -29,6 +29,13 @@ Reduction order (per query row, fp32 unless stated):
   flattened channels of the gate projection; ``lse = m + log(l)`` fp32.
 * GQA: query head ``h`` reads KV head ``h // 16``.
 
+Compiled form (Triton 3.7.1, sm80, default ``enable_fp_fusion=True``; PTX/TTGIR inspected):
+``tl.exp(x)`` is ``ex2.approx.f32(x * log2 e)`` (the exp2 form), ``tl.log`` is libdevice
+``__nv_logf`` with FTZ, ``libdevice.div_rn`` is ``div.rn.ftz.f32`` (round-to-nearest, subnormals
+flushed), ``l * alpha + rowsum(p)`` contracts to one ``fma.rn.f32``, and the PV ``tl.dot``
+accumulates into ``acc * alpha`` inside the MMA. Every tile / TP / paged variant compiles the
+same sequence (bitwise parity); the torch golden does not (tolerance reference only).
+
 Cast points: inputs bf16; scores/p/l/acc fp32; ``p`` rounded to bf16 once before the PV dot;
 ``o`` rounded to bf16 once; ``y`` rounded to bf16 once. No other rounding.
 
@@ -103,8 +110,9 @@ INT32_MAX = tl.constexpr(2147483647)
 def sigmoid_rn(x):
     """Output-gate sigmoid shared by the forward and the backward: ``1 / (1 + exp(-x))`` fp32.
 
-    ``tl.exp`` fp32 and an IEEE round-to-nearest division (``libdevice.div_rn``): Triton's
-    default fp32 ``/`` may lower to the approximate ``div.full.f32``. Both kernels must call this
+    ``tl.exp`` fp32 (``ex2.approx(x * log2 e)``) and a round-to-nearest division
+    (``libdevice.div_rn`` = ``div.rn.ftz.f32``): Triton's default fp32 ``/`` may lower to the
+    approximate ``div.full.f32``. Both kernels must call this
     helper so the gradient differentiates the same function that produced ``y``.
     """
     one = tl.zeros_like(x) + 1.0
@@ -289,8 +297,8 @@ def _gated_attention_fwd_kernel(
         acc = acc * alpha[:, None] + tl.dot(p.to(tl.bfloat16), v, allow_tf32=False)
         m_i = m_new
 
-    # IEEE round-to-nearest divisions (libdevice div_rn) so the golden's torch division is
-    # the same operation; Triton's default fp32 `/` may lower to the approximate div.full.
+    # Round-to-nearest divisions (libdevice div_rn -> div.rn.ftz.f32: IEEE-RN except that
+    # subnormals flush to zero); Triton's default fp32 `/` may lower to the approximate div.full.
     l_b = tl.broadcast_to(l_i[:, None], (BLOCK_M, D))
     o = libdevice.div_rn(acc, l_b)
     o_bf16 = o.to(tl.bfloat16)

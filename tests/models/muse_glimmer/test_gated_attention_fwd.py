@@ -619,6 +619,28 @@ def test_g5_trace():
     json.dumps(t1)  # serializable
 
 
+def test_trace_matches_compiled_ptx():
+    """trace()["compiled_arithmetic"] states what the PTX does (review gated_attention_fwd:R5):
+    exp2-form exp, FTZ round-to-nearest division, a contracted fma for l. Fails if a Triton
+    upgrade changes the lowering, so the record cannot silently drift."""
+    q, k, v, gate = _inputs(70, seed=4)
+    _one_shot(q, k, v, gate, W, tile_mode="head")
+    caches = kern._gated_attention_fwd_kernel.device_caches[torch.cuda.current_device()][0]
+    rec = ga.trace()["compiled_arithmetic"]
+    for compiled in caches.values():
+        ptx = compiled.asm["ptx"]
+        assert "ex2.approx.f32" in ptx and "ex2.approx.f32" in rec["exp"]
+        assert "div.rn.ftz.f32" in ptx and "div.rn.ftz.f32" in rec["division"]
+        assert "div.full.f32" not in ptx and "div.approx" not in ptx
+        assert "fma.rn.f32" in ptx and "fma.rn.f32" in rec["l_update"]
+    ttgir = next(iter(caches.values())).asm["ttgir"]
+    pv = [ln for ln in ttgir.splitlines() if "tt.dot" in ln and "%acc" in ln.split("=")[0]]
+    for ln in pv:  # %acc_new = tt.dot %p, %v, %acc_scaled : ... (accumulator operand is acc)
+        operands = ln.split("tt.dot", 1)[1].split(":", 1)[0].split(",")
+        assert len(operands) == 3 and operands[2].strip().startswith("%acc"), ln
+    assert pv, "no PV tt.dot found in the TTGIR"
+
+
 def test_rejects_bad_inputs():
     q, k, v, gate = _inputs(8, seed=1)
     cu = _i32([0, 8])
