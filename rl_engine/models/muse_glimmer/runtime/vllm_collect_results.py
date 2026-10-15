@@ -231,6 +231,18 @@ def _contract_records(run: dict) -> list[dict[str, Any]]:
     return out
 
 
+def _code_dirty(run: dict) -> Any:
+    """True if a run's tree had modified files outside ``reports/`` (data-only edits are not
+    code changes: the runs themselves rewrite the xrt dumps)."""
+
+    if "git_dirty_code" in run:
+        return run["git_dirty_code"]
+    lines = run.get("git_status_porcelain")
+    if lines is None:
+        return run.get("git_dirty")
+    return any(not line[3:].startswith("reports/") for line in lines)
+
+
 def _runs_in(directory: Path | None) -> list[dict]:
     runs = []
     if directory is None:
@@ -409,11 +421,11 @@ def collect(
         "row": "vllm_runtime_adapter",
         "schema": "muse_glimmer_vllm_runtime_results_v2",
         "commits_measured": sorted({r.get("commit") for r in runs if r.get("commit")}),
-        "dirty_runs": [r["_file"] for r in runs if r.get("git_dirty_code", r.get("git_dirty"))],
+        "dirty_runs": [r["_file"] for r in runs if _code_dirty(r)],
         "dirty_runs_data_only": [
             {"run": r["_file"], "modified": r.get("git_status_porcelain")}
             for r in runs
-            if r.get("git_dirty") and not r.get("git_dirty_code", True)
+            if r.get("git_dirty") and not _code_dirty(r)
         ],
         "env": next((r["env"] for r in runs if r.get("env")), {}),
         "commands": [r["command"] for r in runs],
@@ -425,7 +437,7 @@ def collect(
                 "status": r.get("status"),
                 "commit": r.get("commit"),
                 "git_dirty": r.get("git_dirty"),
-                "git_dirty_code": r.get("git_dirty_code"),
+                "git_dirty_code": _code_dirty(r),
                 "git_status_porcelain": r.get("git_status_porcelain"),
                 "engine_load_s": r.get("engine_load_s"),
                 "engine": _engine_flags(r),
