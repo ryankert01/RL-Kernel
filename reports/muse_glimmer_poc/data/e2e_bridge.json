@@ -1,6 +1,6 @@
 {
  "row": "final_e2e_lora (cross-environment trainer bridge + timeline instrumentation)",
- "commit": "dccc68af0c33b202ac9d3eae7d6829321d1615ae",
+ "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7",
  "env": {
   "trainer_server": {
    "python": "/home/ubuntu/envs/megatron/bin/python",
@@ -34,7 +34,12 @@
    "cpu_count": 240,
    "triton": "3.7.1",
    "vllm": "0.31.0",
-   "transformers": "5.17.0"
+   "transformers": "5.17.0",
+   "load_average_1_5_15_at_start": [
+    260.98388671875,
+    355.5009765625,
+    235.49951171875
+   ]
   }
  },
  "commands": [
@@ -44,7 +49,8 @@
   "[a8ef05d, GPU 7] W=<worktree>; cd $W; ~/bin/gpu-lease -n 1 --pool 6-7 --timeout 1800 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_e2e_bridge_gpu.py -q -p no:cacheprovider   -> 3 passed",
   "[33a86ad, CPU, no lease] W=<worktree>; cd $W; PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --cpu --hash-check --startup-overlap --overlap-label after_fix --import-e2e-run <scratch>/e2e/smoke_strict <scratch>/e2e/smoke_native --e2e-run-commit c3650ed... --work-dir <scratch>",
   "[dccc68a, CPU, no lease] W=<worktree>; cd $W; PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --transport-only --work-dir <scratch>",
-  "[pre-fix tree = git archive 87a4cd2 (old bridge/trainer_server, mocks with build_delay_s) + bench_bridge.py of 33a86ad; CPU, no lease] ~/envs/vllm/bin/python <scratch>/run_overlap_before.py"
+  "[pre-fix tree = git archive 87a4cd2 (old bridge/trainer_server, mocks with build_delay_s) + bench_bridge.py of 33a86ad; CPU, no lease] ~/envs/vllm/bin/python <scratch>/run_overlap_before.py",
+  "[a1966a5, GPU from pool 3,7] W=<worktree>; cd $W; ~/bin/gpu-lease -n 1 --pool 3,7 --timeout 900 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --gpu --work-dir <scratch>"
  ],
  "surrogate_exactness": {
   "cpu": {
@@ -3900,7 +3906,7 @@
     "all_bit_exact_vs_inprocess_cuda": true
    }
   ],
-  "commit": "a8ef05d145f4639bb96c9d13aeb5d4130494dbea"
+  "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7"
  },
  "hash_schema_check": {
   "rows": [

@@ -642,6 +642,11 @@ def gpu_smoke(work: Path, steps: int = 3) -> dict[str, Any]:
             }
         )
     out["cuda_mock_trainer_through_bridge"] = variants
+    out["gated_by"] = (
+        "tests/models/muse_glimmer/test_e2e_bridge_gpu.py::"
+        "test_cuda_trainer_through_bridge_sees_exactly_the_leased_gpu asserts placement and bit "
+        "equality with the in-process CUDA mock for BOTH variants (megatron_env and same_env)"
+    )
     return out
 
 
