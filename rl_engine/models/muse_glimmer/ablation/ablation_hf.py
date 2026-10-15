@@ -500,6 +500,137 @@ def hidden_padded(
 DRIVERS = ("alone", "prefill_minus_last", "chunked", "decode", "padded_right", "padded_left")
 
 
+# --------------------------------------------------------------------------------------------
+# Per-layer drift (where in the network do the bits start to differ, and how fast it grows)
+# --------------------------------------------------------------------------------------------
+class LayerTap:
+    """Forward hooks copying the residual stream of ONE batch row to CPU after the embedding,
+    after every decoder layer and after the final norm.  Repeated calls (chunked prefill,
+    decode steps) are concatenated along the token axis."""
+
+    def __init__(self, model: nn.Module, batch_row: int = 0):
+        self.row = int(batch_row)
+        n = len(model.layers)
+        self.names = ["embedding"] + [f"layer_{i}" for i in range(n)] + ["final_norm"]
+        self.parts: dict[str, list[torch.Tensor]] = {k: [] for k in self.names}
+        mods = [model.embed_tokens, *model.layers, model.norm]
+        self.handles = [m.register_forward_hook(self._hook(k)) for k, m in zip(self.names, mods)]
+
+    def _hook(self, name: str):
+        def fn(_m: Any, _i: Any, out: Any) -> None:
+            t = out[0] if isinstance(out, tuple) else out
+            self.parts[name].append(t[self.row].detach().to("cpu", copy=True))
+
+        return fn
+
+    def close(self) -> dict[str, torch.Tensor]:
+        for h in self.handles:
+            h.remove()
+        return {k: torch.cat(v, dim=0) for k, v in self.parts.items()}
+
+
+@torch.no_grad()
+def layer_trace(
+    model: nn.Module,
+    seqs: Sequence[SeqSpec],
+    target: int,
+    driver: str = "alone",
+    chunk: int | None = None,
+) -> dict[str, torch.Tensor]:
+    """Residual stream of ``seqs[target]`` at rows ``0 .. L-2`` (the rows every driver
+    computes) for one driver; padded drivers run the whole batch and keep the target row."""
+    s = seqs[target]
+    if driver in ("padded_right", "padded_left"):
+        side = driver.split("_")[1]
+        lmax = max(x.length for x in seqs)
+        off = 0 if side == "right" else lmax - s.length
+        tap = LayerTap(model, batch_row=target)
+        try:
+            hidden_padded(model, seqs, side)
+        finally:
+            got = tap.close()
+        return {k: v[off : off + s.length - 1] for k, v in got.items()}
+    tap = LayerTap(model, 0)
+    try:
+        if driver == "alone":
+            hidden_alone(model, s)
+        elif driver == "prefill_minus_last":
+            hidden_prefill_minus_last(model, s)
+        elif driver == "chunked":
+            hidden_chunked(model, s, int(chunk))
+        elif driver == "decode":
+            hidden_decode(model, s)
+        else:
+            raise ValueError(f"unknown driver {driver!r}")
+    finally:
+        got = tap.close()
+    return {k: v[: s.length - 1] for k, v in got.items()}
+
+
+def layer_diff(base: dict[str, torch.Tensor], var: dict[str, torch.Tensor],
+               completion_start: int | None = None) -> list[dict[str, Any]]:
+    """Per tapped point: bf16 elements with different bits, mean/max |delta| (fp32) and the
+    baseline rms, over all rows and over the completion rows (``>= completion_start - 1``)."""
+    out = []
+    for name in base:
+        b, v = base[name], var[name]
+        if b.shape != v.shape:
+            raise ValueError(f"{name}: {tuple(b.shape)} vs {tuple(v.shape)}")
+        diff_bits = b.contiguous().view(torch.int16) != v.contiguous().view(torch.int16)
+        d = (v.float() - b.float()).abs()
+        rows_any = diff_bits.any(dim=-1)
+        rec = {
+            "point": name,
+            "n_rows": int(b.shape[0]),
+            "frac_elems_differ": float(diff_bits.float().mean()),
+            "rows_with_any_diff": int(rows_any.sum()),
+            "first_row_with_diff": int(torch.nonzero(rows_any)[0]) if bool(rows_any.any())
+            else None,
+            "mean_abs": float(d.mean()),
+            "max_abs": float(d.max()),
+            "ref_rms": float(b.float().pow(2).mean().sqrt()),
+        }
+        if completion_start is not None:
+            c = completion_start - 1
+            rec["completion_frac_elems_differ"] = float(diff_bits[c:].float().mean())
+            rec["completion_mean_abs"] = float(d[c:].mean())
+        out.append(rec)
+    return out
+
+
+def tf32_probe(device: torch.device | str, seq_len: int = 2439) -> dict[str, Any]:
+    """Does TF32 reach the only fp32 GEMM of the bf16 model (the RoPE ``inv_freq @ positions``
+    batched GEMM with K = 1)?  Compares bits with TF32 off/on for that GEMM and for a square
+    fp32 GEMM (control that TF32 is really switched on)."""
+    from transformers.models.muse_glimmer import modeling_muse_glimmer as hf  # noqa: F401
+
+    dev = torch.device(device)
+    gen = torch.Generator(device="cpu").manual_seed(0)
+    a = torch.randn(1024, 1024, generator=gen).to(dev)
+    b = torch.randn(1024, 1024, generator=gen).to(dev)
+    base = 1.0 / (500000.0 ** (torch.arange(0, 128, 2, dtype=torch.float) / 128))
+    inv = base[None, :, None].to(dev)
+    pos = torch.arange(seq_len, device=dev)[None, None, :].float()
+    res: dict[str, Any] = {}
+    outs = {}
+    for flag in (False, True):
+        with tf32(flag):
+            res[f"fp32_precision_tf32_{'on' if flag else 'off'}"] = str(
+                getattr(torch.backends.cuda.matmul, "fp32_precision", "n/a"))
+            outs[flag] = (a @ b, (inv @ pos).transpose(1, 2))
+            torch.cuda.synchronize(dev)
+    elem = (pos.transpose(1, 2) * base.to(dev)[None, None, :])
+    res["square_gemm_1024_elems_differ"] = int((outs[False][0] != outs[True][0]).sum())
+    res["square_gemm_1024_max_abs"] = float((outs[False][0] - outs[True][0]).abs().max())
+    res["rope_gemm_k1_elems_differ_tf32_on_vs_off"] = int((outs[False][1] != outs[True][1]).sum())
+    res["rope_gemm_k1_elems_differ_matmul_vs_elementwise"] = int((outs[False][1] != elem).sum())
+    res["rope_gemm_k1_shape"] = [1, 64, 1, seq_len]
+    tf = 1.0 / (500000.0 ** (torch.arange(0, 128, 2, dtype=torch.float) / 128))
+    tf_bits = tf.view(torch.int32) & ~0x1FFF  # what a TF32 operand rounding (truncation) keeps
+    res["inv_freq_entries_with_low13_mantissa_bits"] = int((tf.view(torch.int32) != tf_bits).sum())
+    return res
+
+
 def score_all(
     model: nn.Module,
     lm_head: torch.Tensor,
@@ -729,6 +860,7 @@ def env_info(device: torch.device | str | None = None) -> dict[str, Any]:
 __all__ = [
     "DEFAULT_PAD_ID",
     "DRIVERS",
+    "LayerTap",
     "HEAD_MODES",
     "HF_SETTINGS",
     "SKIPPED_SETTINGS",
@@ -748,6 +880,8 @@ __all__ = [
     "hidden_decode",
     "hidden_padded",
     "hidden_prefill_minus_last",
+    "layer_diff",
+    "layer_trace",
     "load_text_model",
     "load_xrt_tokens",
     "make_records",
@@ -756,5 +890,6 @@ __all__ = [
     "run_setting",
     "score_all",
     "tf32",
+    "tf32_probe",
 ]
 

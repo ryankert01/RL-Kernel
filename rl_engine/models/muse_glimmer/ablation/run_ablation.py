@@ -171,6 +171,72 @@ def cmd_hf(args: argparse.Namespace, baseline_only: bool = False) -> int:
 
 
 # --------------------------------------------------------------------------------------------
+# HF per-layer drift + TF32 probe
+# --------------------------------------------------------------------------------------------
+LAYER_SETTINGS = (
+    # name, factor, factor_id, driver, chunk, contexts
+    ("repeat_immediate", "repeat_null", 9, "alone", None, ()),
+    ("padded_batch9_right", "batch_composition", 1, "padded_right", None, ()),
+    ("padded_batch9_left", "batch_composition", 1, "padded_left", None, ()),
+    ("kv_cache_decode", "prefill_vs_decode", 2, "decode", None, ()),
+    ("prefill_L_minus_1", "chunked_prefill", 3, "prefill_minus_last", None, ()),
+    ("chunked_prefill_256", "chunked_prefill", 3, "chunked", 256, ()),
+    ("sdpa", "attention_impl", 4, "alone", None, ("sdpa",)),
+    ("tf32_on", "tf32", 5, "alone", None, ("tf32_on",)),
+    ("bf16_reduced_reduction_off", "gemm_reduction", 10, "alone", None, ("bf16_rr_off",)),
+)
+LAYER_SEQUENCES = ("gsm8k_test_0", "gsm8k_long_window")
+
+
+def cmd_hf_layers(args: argparse.Namespace) -> int:
+    from rl_engine.validation.operators.accelerator import disable_tf32
+
+    device = torch.device(args.device)
+    disable_tf32(device.type)
+    seqs, tmeta = A.load_xrt_tokens(args.tokens)
+    out = pathlib.Path(args.out)
+    part = _part_header("hf_layers", args, device, tmeta)
+    part["tf32_probe"] = A.tf32_probe(device)
+    _log(f"tf32 probe: {part['tf32_probe']}")
+    t0 = time.perf_counter()
+    model, _lm_head, _cfg = A.load_text_model(args.checkpoint, device, attn="eager")
+    part["load_s"] = time.perf_counter() - t0
+    part["layer_records"] = []
+    _write(out, part)
+    by_id = {s.id: i for i, s in enumerate(seqs)}
+    for sid in LAYER_SEQUENCES:
+        target = by_id[sid]
+        base = A.layer_trace(model, seqs, target, "alone")
+        for name, factor, fid, driver, chunk, ctx in LAYER_SETTINGS:
+            if args.settings and name not in set(args.settings):
+                continue
+            torch.cuda.synchronize(device)
+            t1 = time.perf_counter()
+            with A.enter_contexts(model, ctx):
+                var = A.layer_trace(model, seqs, target, driver, chunk)
+            torch.cuda.synchronize(device)
+            layers = A.layer_diff(base, var, seqs[target].completion_start)
+            first = next((r["point"] for r in layers if r["frac_elems_differ"] > 0), None)
+            part["layer_records"].append({
+                "engine": "hf", "setting": name, "factor": factor, "factor_id": fid,
+                "sequence": sid, "first_point_with_diff": first,
+                "wall_ms": (time.perf_counter() - t1) * 1e3, "layers": layers,
+            })
+            fin = layers[-1]
+            _log(f"{sid} {name}: first diff at {first}; final_norm frac "
+                 f"{fin['frac_elems_differ']:.3f} mean|d| {fin['mean_abs']:.3e}")
+            del var
+            _write(out, part)
+        del base
+        gc.collect()
+    part["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    part["status"] = "complete"
+    _write(out, part)
+    _log(f"wrote {out}")
+    return 0
+
+
+# --------------------------------------------------------------------------------------------
 # Strict reference
 # --------------------------------------------------------------------------------------------
 STRICT_SETTINGS = (
@@ -326,6 +392,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
             records.append(r)
         settings.extend(dict(s, setting=f"{s['setting']}_gpu_{gpu_b}")
                         for s in other["settings"])
+    layer_parts = by_kind.get("hf_layers", [])
     strict_parts = by_kind.get("strict", [])
     for st in strict_parts:
         records.extend(st["records"])
@@ -375,6 +442,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "rope_inv_freq_hex": hf.get("rope_inv_freq_hex"),
         "strict_ops": strict_parts[0].get("ops") if strict_parts else None,
         "skipped": hf.get("skipped", []),
+        "tf32_probe": layer_parts[0].get("tf32_probe") if layer_parts else None,
+        "layer_records": [r for p in layer_parts for r in p.get("layer_records", [])],
         "settings": settings,
         "records": records,
     }
@@ -430,7 +499,7 @@ def markdown_matrix(records: list[dict[str, Any]], key: str = "n_bits_differ") -
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("hf", "hf-baseline", "strict"):
+    for name in ("hf", "hf-baseline", "hf-layers", "strict"):
         q = sub.add_parser(name)
         q.add_argument("--checkpoint", default=DEFAULT_CKPT)
         q.add_argument("--tokens", default=str(REPO_ROOT / DEFAULT_TOKENS))
@@ -450,12 +519,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.cmd in ("hf", "hf-baseline", "strict"):
+    if args.cmd in ("hf", "hf-baseline", "hf-layers", "strict"):
         args.checkpoint = str(pathlib.Path(args.checkpoint).expanduser())
     if args.cmd == "hf":
         return cmd_hf(args)
     if args.cmd == "hf-baseline":
         return cmd_hf(args, baseline_only=True)
+    if args.cmd == "hf-layers":
+        return cmd_hf_layers(args)
     if args.cmd == "strict":
         return cmd_strict(args)
     return cmd_merge(args)

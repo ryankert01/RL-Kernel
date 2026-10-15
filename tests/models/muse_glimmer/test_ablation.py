@@ -157,6 +157,20 @@ def test_score_all_and_head_modes(tiny_hf):
     torch.testing.assert_close(zb, zf, atol=0.2, rtol=0)
 
 
+def test_layer_trace_rows_and_diff(tiny_hf):
+    model, _lm, seqs = tiny_hf
+    base = A.layer_trace(model, seqs, 1, "alone")
+    assert list(base) == ["embedding"] + [f"layer_{i}" for i in range(4)] + ["final_norm"]
+    assert all(v.shape == (seqs[1].length - 1, 128) for v in base.values())
+    same = A.layer_diff(base, A.layer_trace(model, seqs, 1, "alone"), seqs[1].completion_start)
+    assert all(r["frac_elems_differ"] == 0.0 and r["first_row_with_diff"] is None for r in same)
+    for driver, chunk in (("padded_left", None), ("chunked", 8), ("decode", None)):
+        var = A.layer_trace(model, seqs, 1, driver, chunk)
+        rows = A.layer_diff(base, var, seqs[1].completion_start)
+        assert rows[0]["point"] == "embedding" and rows[0]["max_abs"] == 0.0  # row-local
+        assert all(r["max_abs"] < 1e-3 for r in rows), driver
+
+
 def test_rope_elementwise_matches_matmul_on_cpu(tiny_hf):
     model, _lm, _seqs = tiny_hf
     x = torch.zeros(1, dtype=torch.float32)
