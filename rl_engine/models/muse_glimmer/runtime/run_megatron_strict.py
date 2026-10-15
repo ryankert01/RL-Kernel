@@ -14,15 +14,18 @@ rewritten after each check so a crash keeps what finished)::
     native       Bridge native forward on the same tokens -> xrt_megatron_native_tp<k>.json + diff
     grad_repeat  B ~ N(0, std): two recompute backward passes of a fixed surrogate loss,
                  bitwise LoRA-grad comparison; grads saved to --grads-out for the TP diff
+    packing      the same backward at micro_batch_tokens 512 / default / 8192: LoRA grads and
+                 logprobs must be bitwise identical (packing-invariant gradient rule)
     step         one AdamW step on that loss; post-step LoRA hash and logprob change
     bench        strict vs native forward / forward+backward(+step) time and peak memory at
-                 several token counts
+                 several token counts; every phase warmed up at each size, then repeated
+                 (raw samples + median)
 
 Example (TP1; TP2 is the same with ``-n 2 --tp 2``)::
 
-    ~/bin/gpu-lease -n 1 --pool 2-3 -- env PYTHONPATH=$PWD ~/envs/megatron/bin/python -m \\
+    ~/bin/gpu-lease -n 1 --pool 0-2 -- env PYTHONPATH=$PWD ~/envs/megatron/bin/python -m \\
         rl_engine.models.muse_glimmer.runtime.run_megatron_strict --tp 1 \\
-        --checks identity,xrt,repeat,lora_noop,native,grad_repeat,step,bench \\
+        --checks identity,xrt,repeat,lora_noop,native,grad_repeat,packing,step,bench \\
         --results out/tp1.json --grads-out out/grads_tp1.pt
 """
 
@@ -33,6 +36,7 @@ import hashlib
 import json
 import os
 import platform
+import statistics
 import subprocess
 import sys
 import time
@@ -42,7 +46,10 @@ from typing import Any
 import torch
 
 from rl_engine.models.muse_glimmer.runtime.megatron_strict import hex_bits
-from rl_engine.models.muse_glimmer.runtime.strict_trainer import StrictTrainer
+from rl_engine.models.muse_glimmer.runtime.strict_trainer import (
+    DEFAULT_MICRO_BATCH_TOKENS,
+    StrictTrainer,
+)
 
 _REPO = Path(__file__).resolve().parents[4]
 DEFAULT_XRT = _REPO / "reports" / "muse_glimmer_poc" / "data" / "xrt_tokens.json"
@@ -55,6 +62,21 @@ def _git_sha() -> str:
         return subprocess.check_output(["git", "-C", str(_REPO), "rev-parse", "HEAD"], text=True).strip()
     except Exception:  # noqa: BLE001
         return "unknown"
+
+
+def _git_dirty() -> bool | None:
+    """True when tracked files differ from HEAD (the measured code is not exactly the commit)."""
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(_REPO), "status", "--porcelain", "--untracked-files=no"], text=True
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    return bool(out.strip())
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def env_info() -> dict[str, Any]:
@@ -158,19 +180,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--results", required=True, help="JSON file with every measured number")
     ap.add_argument("--grads-out", default=None, help="torch.save of the TP-gathered fp32 LoRA grads")
     ap.add_argument(
-        "--checks", default="identity,xrt,repeat,lora_noop,native,grad_repeat,step,bench",
+        "--checks", default="identity,xrt,repeat,lora_noop,native,grad_repeat,packing,step,bench",
         help="comma list (see module docstring)",
     )
     ap.add_argument("--lora-rank", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--grad-b-std", type=float, default=1e-3, help="LoRA B init for grad checks")
-    ap.add_argument("--micro-batch-tokens", type=int, default=4096)
-    ap.add_argument("--bench-tokens", default="512,1024,2048,4096")
+    ap.add_argument("--micro-batch-tokens", type=int, default=DEFAULT_MICRO_BATCH_TOKENS)
+    ap.add_argument("--packing-budgets", default="512,8192",
+                    help="extra micro_batch_tokens values compared by the packing check")
+    ap.add_argument("--bench-tokens", default="512,1024,2048,4096,8192")
+    ap.add_argument("--bench-warmup", type=int, default=1)
+    ap.add_argument("--bench-repeats", type=int, default=3)
     ap.add_argument("--no-checkpoint", action="store_true", help="disable per-layer recompute")
     args = ap.parse_args(argv)
     checks = [c.strip() for c in args.checks.split(",") if c.strip()]
-    known = {"identity", "xrt", "repeat", "lora_noop", "native", "grad_repeat", "step", "bench"}
+    known = {"identity", "xrt", "repeat", "lora_noop", "native", "grad_repeat", "packing", "step",
+             "bench"}
     if set(checks) - known:
         ap.error(f"unknown checks {sorted(set(checks) - known)}")
 
@@ -187,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             "tp": tp,
             "status": "running",
             "commit": _git_sha(),
+            "dirty": _git_dirty(),
             "env": env_info(),
             "command": " ".join([sys.executable, "-m", __spec__.name if __spec__ else __file__, *sys.argv[1:]]),
             "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
@@ -245,9 +273,13 @@ def main(argv: list[str] | None = None) -> int:
             if "xrt" in checks:
                 out = Path(args.xrt_out_dir) / f"xrt_megatron_strict_tp{tp}.json"
                 write_xrt(out, xrt, base, mode="strict", tp=tp, backend=strict_backend,
-                          extra={"commit": res.data["commit"], "ops": res.data["provenance"]["ops"],
+                          extra={"commit": res.data["commit"], "dirty": res.data["dirty"],
+                                 "ops": res.data["provenance"]["ops"],
+                                 "attention_heads_per_rank":
+                                     res.data["provenance"].get("attention_heads_per_rank"),
                                  "lora": "rank 16, B = 0 (exact no-op)"})
                 C["xrt_strict"]["file"] = str(out)
+                C["xrt_strict"]["file_sha256"] = file_sha256(out)
             res.flush()
             print(f"[xrt] strict scored {sum(spans)} tokens in {tb - ta:.2f}s", flush=True)
 
@@ -276,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
             tb = _sync_time()
             out = Path(args.xrt_out_dir) / f"xrt_megatron_native_tp{tp}.json"
             write_xrt(out, xrt, nat, mode="native", tp=tp, backend="megatron_bridge_te_native",
-                      extra={"commit": res.data["commit"],
+                      extra={"commit": res.data["commit"], "dirty": res.data["dirty"],
                              "note": "Bridge MuseGlimmerModel forward (TE kernels, bf16 logits, "
                                      "fp32 log_softmax), no LoRA"})
             per_seq = []
@@ -289,6 +321,7 @@ def main(argv: list[str] | None = None) -> int:
                 "seconds": tb - ta,
                 "memory": trainer.memory(reset=True),
                 "file": str(out),
+                "file_sha256": file_sha256(out),
                 "max_abs_vs_strict": max(p["max_abs"] for p in per_seq),
                 "mean_abs_vs_strict": float(
                     sum(p["mean_abs"] * p["n"] for p in per_seq) / sum(p["n"] for p in per_seq)
@@ -301,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"{C['native']['mean_abs_vs_strict']:.4g}", flush=True)
 
         weights = surrogate_weights(spans)
-        if "grad_repeat" in checks or "step" in checks:
+        if {"grad_repeat", "packing", "step"} & set(checks):
             trainer.reset_lora_b(args.grad_b_std, args.seed + 1)
             C["grad_setup"] = {"lora_b_std": args.grad_b_std, "lora_b_seed": args.seed + 1,
                                "loss": "sum_i sum_t lp[i,t] * g[i,t], g = (+1 if i even else -1)/n_i"}
@@ -355,6 +388,52 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[grad_repeat] mismatching elements {C['grad_repeat']['repeat_mismatching_elements']}"
                   f"/{C['grad_repeat']['elements']}", flush=True)
 
+        if "packing" in checks:
+            budgets = [args.micro_batch_tokens] + [
+                int(b) for b in args.packing_budgets.split(",") if b.strip()
+            ]
+            runs = []
+            for budget in budgets:
+                trainer.set_micro_batch_tokens(budget)
+                trainer.memory(reset=True)
+                lps = trainer.token_logprobs(seqs, starts)
+                info = trainer.backward(surrogate_loss(lps, weights))
+                g = trainer.lora_grads()["grads"]
+                trainer.zero_grad()
+                runs.append({"budget": budget, "lps": [lp.detach().cpu() for lp in lps], "grads": g,
+                             "info": info, "memory": trainer.memory(reset=True)})
+                print(f"[packing] budget {budget}: {info}", flush=True)
+            trainer.set_micro_batch_tokens(args.micro_batch_tokens)
+            ref = runs[0]
+            per_budget = []
+            for r in runs:
+                per_budget.append({
+                    "micro_batch_tokens": r["budget"],
+                    "micro_batches": r["info"]["micro_batches"],
+                    "recompute_logp_mismatches": r["info"]["recompute_logp_mismatches"],
+                    "grad_bit_mismatching_elements_vs_default": int(sum(
+                        bit_mismatches(r["grads"][k], ref["grads"][k]) for k in ref["grads"]
+                    )),
+                    "logprob_bit_mismatches_vs_default": int(sum(
+                        bit_mismatches(a, b) for a, b in zip(r["lps"], ref["lps"], strict=True)
+                    )),
+                    "aggregate_sha256": hashlib.sha256("".join(
+                        sha256_fp32(r["grads"][k]) for k in sorted(r["grads"])
+                    ).encode()).hexdigest(),
+                    "memory": r["memory"],
+                })
+            C["packing"] = {
+                "elements": int(sum(t.numel() for t in ref["grads"].values())),
+                "per_budget": per_budget,
+                "bitwise_invariant": all(
+                    b["grad_bit_mismatching_elements_vs_default"] == 0
+                    and b["logprob_bit_mismatches_vs_default"] == 0 for b in per_budget
+                ),
+            }
+            del runs, ref
+            res.flush()
+            print(f"[packing] bitwise invariant: {C['packing']['bitwise_invariant']}", flush=True)
+
         if "step" in checks:
             trainer.memory(reset=True)
             _, sha0 = trainer.export_lora()
@@ -380,62 +459,84 @@ def main(argv: list[str] | None = None) -> int:
         if "bench" in checks:
             trainer.reset_lora_b(0.0, 0)
             long_seq = max(seqs, key=len)
-            token_pool = (long_seq * (1 + 8192 // len(long_seq)))
             counts = [int(x) for x in args.bench_tokens.split(",") if x.strip()]
+            token_pool = long_seq * (1 + max(counts) // len(long_seq))
+            warm_n, reps = int(args.bench_warmup), int(args.bench_repeats)
             rows = []
-            warm = token_pool[: min(counts)]
-            trainer.score([warm], [1])
-            lp = trainer.token_logprobs([warm], [1])
-            trainer.step(-lp[0].mean())
-            for n in counts:
-                seq = token_pool[:n]
-                row: dict[str, Any] = {"tokens": n}
-                trainer.memory(reset=True)
-                trainer.score([seq], [1])  # warm the M-dependent shape classes
-                trainer.memory(reset=True)
+
+            def peak() -> float:
+                return max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
+
+            def strict_forward(seq):
                 ta = _sync_time()
                 trainer.score([seq], [1])
-                row["strict_forward_ms"] = (_sync_time() - ta) * 1e3
-                row["strict_forward_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
-                try:
-                    ta = _sync_time()
-                    lp = trainer.token_logprobs([seq], [1])
-                    tb = _sync_time()
-                    info = trainer.step(-lp[0].mean())
-                    tc = _sync_time()
-                    row["strict_train_logprobs_ms"] = (tb - ta) * 1e3
-                    row["strict_recompute_fwd_bwd_ms"] = info["fwd_bwd_s"] * 1e3
-                    row["strict_optimizer_ms"] = info["optimizer_s"] * 1e3
-                    row["strict_step_total_ms"] = (tc - ta) * 1e3
-                    row["strict_recompute_mismatches"] = info["recompute_logp_mismatches"]
-                except torch.OutOfMemoryError as exc:  # TP1 only; recorded, run continues
-                    if tp > 1:
-                        raise
-                    row["strict_train_error"] = repr(exc)[:300]
-                    trainer.zero_grad()
-                    torch.cuda.empty_cache()
-                row["strict_train_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
-                trainer.native_logprobs([seq], [1])
-                trainer.memory(reset=True)
+                return {"strict_forward_ms": (_sync_time() - ta) * 1e3}
+
+            def strict_step(seq):
+                ta = _sync_time()
+                lp = trainer.token_logprobs([seq], [1])
+                tb = _sync_time()
+                info = trainer.step(-lp[0].mean())
+                tc = _sync_time()
+                return {
+                    "strict_train_logprobs_ms": (tb - ta) * 1e3,
+                    "strict_recompute_fwd_bwd_ms": info["fwd_bwd_s"] * 1e3,
+                    "strict_optimizer_ms": info["optimizer_s"] * 1e3,
+                    "strict_step_total_ms": (tc - ta) * 1e3,
+                    "strict_recompute_mismatches": info["recompute_logp_mismatches"],
+                }
+
+            def native_forward(seq):
                 ta = _sync_time()
                 trainer.native_logprobs([seq], [1])
-                row["native_forward_ms"] = (_sync_time() - ta) * 1e3
-                row["native_forward_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
-                try:
-                    nb = trainer.native_fwd_bwd(seq)
-                    row["native_fwd_bwd_forward_ms"] = nb["forward_s"] * 1e3
-                    row["native_fwd_bwd_backward_ms"] = nb["backward_s"] * 1e3
-                    row["native_fwd_bwd_peak_gib"] = max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
-                except Exception as exc:  # noqa: BLE001 - record and continue
-                    row["native_fwd_bwd_error"] = repr(exc)[:500]
-                    torch.cuda.empty_cache()
+                return {"native_forward_ms": (_sync_time() - ta) * 1e3}
+
+            def native_fwd_bwd(seq):
+                nb = trainer.native_fwd_bwd(seq)
+                return {"native_fwd_bwd_forward_ms": nb["forward_s"] * 1e3,
+                        "native_fwd_bwd_backward_ms": nb["backward_s"] * 1e3}
+
+            phases = [("strict_forward", strict_forward), ("strict_step", strict_step),
+                      ("native_forward", native_forward), ("native_fwd_bwd", native_fwd_bwd)]
+            for n in counts:
+                seq = token_pool[:n]
+                row: dict[str, Any] = {"tokens": n, "warmup": warm_n, "repeats": reps,
+                                       "samples": {}, "median": {}, "peak_gib": {}, "errors": {}}
+                for phase, fn in phases:
+                    trainer.memory(reset=True)
+                    try:
+                        for it in range(warm_n + reps):
+                            out = fn(seq)
+                            if it < warm_n:
+                                continue
+                            for key, value in out.items():
+                                row["samples"].setdefault(key, []).append(value)
+                        row["peak_gib"][phase] = peak()
+                    except torch.OutOfMemoryError as exc:
+                        if tp > 1:  # a worker may have died with it: do not continue blind
+                            raise
+                        row["errors"][phase] = repr(exc)[:300]
+                        row["peak_gib"][phase] = peak()
+                        trainer.zero_grad()
+                        torch.cuda.empty_cache()
+                    except Exception as exc:  # noqa: BLE001 - recorded; the row continues
+                        if tp > 1:
+                            raise
+                        row["errors"][phase] = repr(exc)[:500]
+                        trainer.zero_grad()
+                        torch.cuda.empty_cache()
+                for key, values in row["samples"].items():
+                    row["median"][key] = statistics.median(values)
                 rows.append(row)
-                print(f"[bench] {row}", flush=True)
-                C["bench"] = {"rows": rows, "note": (
-                    "strict_step_total = no-grad strict forward (token_logprobs) + recompute "
-                    "forward/backward with per-layer activation recompute + AdamW; native_fwd_bwd = "
-                    "Bridge forward + backward of activation grads through all layers with full "
-                    "per-layer recompute (frozen base weights, no LoRA)")}
+                print(f"[bench] {n} tokens: median {row['median']} errors {row['errors']}",
+                      flush=True)
+                C["bench"] = {"rows": rows, "commit": res.data["commit"], "note": (
+                    "every phase warmed up (bench_warmup runs) at each size, then bench_repeats "
+                    "timed runs: raw samples + median; strict_step_total = no-grad strict forward "
+                    "(token_logprobs) + recompute forward/backward with per-layer activation "
+                    "recompute + AdamW; native_fwd_bwd = Bridge forward + backward of activation "
+                    "grads through all layers with full per-layer recompute (frozen base weights, "
+                    "no LoRA); peak_gib = max over ranks of the phase's peak allocation")}
                 res.flush()
         res.data["status"] = "complete"
     except BaseException as exc:
