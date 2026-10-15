@@ -8,7 +8,7 @@ Measured on A100-SXM4-80GB, torch 2.13.0+cu130, Triton 3.7.1 (`~/envs/vllm`), GP
 
 | Gate | Result (observed this session) |
 |---|---|
-| Owned tests, one GPU (fwd + bwd + single-GPU CP tests) | 157 passed, 9 skipped (multi-GPU cases) |
+| Owned tests, final code, 2 leased GPUs | fwd + bwd files 143 passed; CP files 18 passed, 5 skipped (CP4 / TP2xCP2 need 4 GPUs) |
 | TP2/4/8 rank call on its head shard == TP1 slice (y, o, lse, dq, dgate, delta, dK/dV group partials) | 0 bit-pattern mismatches (T=2100, packed [1500,600,333], T=8192; global + local) |
 | Replicated-KV dK/dV: rank nodes folded in the canonical TP tree == TP1 dk/dv | 0 at TP2/4/8 |
 | One-shot kernel == CP path (cp_attention CP1, simulated CP2/4/8, real CP2 on 2 GPUs) | 0 for dq/dk/dv/dgate, T in {2048, 2100, 4096, 8192} |
@@ -48,8 +48,11 @@ Bits changed versus v1 (bit-pattern mismatches / numel; "same do" feeds both ker
 | 4096 | local | 1645/16.8M | 4692/1.05M | 4022/1.05M | 232/16.8M | 0 | 4018 | 3973 |
 | 8192 | local | 3614/33.6M | 9034/2.1M | 7748/2.1M | 510/33.6M | 0 | 7746 | 7611 |
 
-dgate changes only through the sigmoid, dq only through `do`; the largest change is one bf16 ulp
-of the element (dk max |diff| 0.125 at |dk| ~ 16-32). Forward outputs: unchanged.
+dgate changes only through the sigmoid, dq only through `do`. Size of the changes over all 15
+lengths (T = 2..8192): max |diff| dq 0.0039, dk 0.125, dv 0.0625, dgate 0.0039, i.e. at most
+5.1e-3 of max |old| (dk); dgate and `do` differ by at most 1 bf16 ulp per element, but dq / dk /
+dv also flip near-zero elements produced by cancellation (max ulp distance ~3e4 there), so the
+change is not a last-bit change of every element. Forward outputs: unchanged.
 
 Backward timing before/after (`gated_attention_bench bwd-ab`, ms, median of 7 alternating rounds
 x 10 iterations; SDPA = causal GQA backward without window or gate):

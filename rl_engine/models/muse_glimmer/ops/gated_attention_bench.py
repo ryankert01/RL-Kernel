@@ -719,6 +719,20 @@ def _diff_into(rec: dict[str, Any], prefix: str, names, new, old) -> None:
         rec[f"{key}_max_rel_diff"] = float(
             (diff.max() / b.float().abs().max().clamp_min(1e-30)).item()
         )
+        rec[f"{key}_max_ulp"] = _max_ulp(a, b)
+
+
+def _max_ulp(a: torch.Tensor, b: torch.Tensor) -> int:
+    """Largest distance in units in the last place (bf16 / fp32), over all elements."""
+    if a.shape != b.shape or a.dtype != b.dtype or not a.is_floating_point():
+        return -1
+    width = a.element_size() * 8
+    ia, ib = _bits(a).to(torch.int64), _bits(b).to(torch.int64)
+    mag = (1 << (width - 1)) - 1
+    # sign-magnitude -> monotonic integer line (+0 and -0 both map to 0)
+    ka = torch.where(ia < 0, -(ia & mag), ia & mag)
+    kb = torch.where(ib < 0, -(ib & mag), ib & mag)
+    return int((ka - kb).abs().max().item()) if a.numel() else 0
 
 
 def main(argv: Optional[list[str]] = None) -> int:
