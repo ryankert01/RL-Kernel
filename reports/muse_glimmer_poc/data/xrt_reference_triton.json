@@ -1972,6 +1972,8 @@
    "prefill",
    "decode",
    "chunked:prompt_boundary",
+   "chunked:block64",
+   "chunked:ragged",
    "chunked:window_boundary_2047",
    "chunked:window_boundary_2048",
    "chunked:window_boundary_2049"
@@ -1983,10 +1985,10 @@
     "length": 191,
     "completion_start": 136,
     "n_tokens": 55,
-    "train_seconds": 1.0313490939988696,
+    "train_seconds": 0.938313353999547,
     "modes": {
      "prefill": {
-      "seconds": 0.2671817339996778,
+      "seconds": 0.25428133200330194,
       "equal_tokens": 55,
       "n_tokens": 55,
       "byte_equal": true,
@@ -1994,7 +1996,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 7.7014480680009,
+      "seconds": 6.955166010997345,
       "equal_tokens": 55,
       "n_tokens": 55,
       "byte_equal": true,
@@ -2002,7 +2004,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.36253457800012256,
+      "seconds": 0.2878238090015657,
+      "equal_tokens": 55,
+      "n_tokens": 55,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.35987865700008115,
+      "equal_tokens": 55,
+      "n_tokens": 55,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5979843770001025,
       "equal_tokens": 55,
       "n_tokens": 55,
       "byte_equal": true,
@@ -2025,10 +2043,10 @@
     "length": 146,
     "completion_start": 99,
     "n_tokens": 47,
-    "train_seconds": 0.1446944240015,
+    "train_seconds": 0.13565158499841345,
     "modes": {
      "prefill": {
-      "seconds": 0.18521886300004553,
+      "seconds": 0.16484870400017826,
       "equal_tokens": 47,
       "n_tokens": 47,
       "byte_equal": true,
@@ -2036,7 +2054,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 7.020592802000465,
+      "seconds": 6.4063540030001604,
       "equal_tokens": 47,
       "n_tokens": 47,
       "byte_equal": true,
@@ -2044,7 +2062,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.3200930100010737,
+      "seconds": 0.2961022759991465,
+      "equal_tokens": 47,
+      "n_tokens": 47,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.414540832000057,
+      "equal_tokens": 47,
+      "n_tokens": 47,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.4212115669979539,
       "equal_tokens": 47,
       "n_tokens": 47,
       "byte_equal": true,
@@ -2067,10 +2101,10 @@
     "length": 251,
     "completion_start": 122,
     "n_tokens": 129,
-    "train_seconds": 0.1653472599991801,
+    "train_seconds": 0.16424965600162977,
     "modes": {
      "prefill": {
-      "seconds": 0.2045871279988205,
+      "seconds": 0.20040463199984515,
       "equal_tokens": 129,
       "n_tokens": 129,
       "byte_equal": true,
@@ -2078,7 +2112,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 14.847752767000202,
+      "seconds": 15.060952104002354,
       "equal_tokens": 129,
       "n_tokens": 129,
       "byte_equal": true,
@@ -2086,7 +2120,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.26510316700114345,
+      "seconds": 0.26674420700146584,
+      "equal_tokens": 129,
+      "n_tokens": 129,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.4688914459984517,
+      "equal_tokens": 129,
+      "n_tokens": 129,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5986024689991609,
       "equal_tokens": 129,
       "n_tokens": 129,
       "byte_equal": true,
@@ -2109,10 +2159,10 @@
     "length": 146,
     "completion_start": 107,
     "n_tokens": 39,
-    "train_seconds": 0.13556408399927022,
+    "train_seconds": 0.13596722399961436,
     "modes": {
      "prefill": {
-      "seconds": 0.15938899399952788,
+      "seconds": 0.1593281970017415,
       "equal_tokens": 39,
       "n_tokens": 39,
       "byte_equal": true,
@@ -2120,7 +2170,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 4.392065664998881,
+      "seconds": 4.403339241001959,
       "equal_tokens": 39,
       "n_tokens": 39,
       "byte_equal": true,
@@ -2128,7 +2178,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.24235683799997787,
+      "seconds": 0.24435787000038545,
+      "equal_tokens": 39,
+      "n_tokens": 39,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.35026290800306015,
+      "equal_tokens": 39,
+      "n_tokens": 39,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.3611851639980159,
       "equal_tokens": 39,
       "n_tokens": 39,
       "byte_equal": true,
@@ -2151,10 +2217,10 @@
     "length": 273,
     "completion_start": 181,
     "n_tokens": 92,
-    "train_seconds": 0.19240704900039418,
+    "train_seconds": 0.19299983800010523,
     "modes": {
      "prefill": {
-      "seconds": 0.22330263500043657,
+      "seconds": 0.21890821399938432,
       "equal_tokens": 92,
       "n_tokens": 92,
       "byte_equal": true,
@@ -2162,7 +2228,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 10.470465615000649,
+      "seconds": 10.402424756000983,
       "equal_tokens": 92,
       "n_tokens": 92,
       "byte_equal": true,
@@ -2170,7 +2236,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.28564299599929655,
+      "seconds": 0.2863129659999686,
+      "equal_tokens": 92,
+      "n_tokens": 92,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.5930582670007425,
+      "equal_tokens": 92,
+      "n_tokens": 92,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5986170719988877,
       "equal_tokens": 92,
       "n_tokens": 92,
       "byte_equal": true,
@@ -2193,10 +2275,10 @@
     "length": 274,
     "completion_start": 125,
     "n_tokens": 149,
-    "train_seconds": 0.18913408299886214,
+    "train_seconds": 0.18931245100247907,
     "modes": {
      "prefill": {
-      "seconds": 0.21276873299939325,
+      "seconds": 0.21320876900063013,
       "equal_tokens": 149,
       "n_tokens": 149,
       "byte_equal": true,
@@ -2204,7 +2286,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 16.684146611998585,
+      "seconds": 16.793892767000216,
       "equal_tokens": 149,
       "n_tokens": 149,
       "byte_equal": true,
@@ -2212,7 +2294,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.2855983749996085,
+      "seconds": 0.2865131409998867,
+      "equal_tokens": 149,
+      "n_tokens": 149,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.5832681369975035,
+      "equal_tokens": 149,
+      "n_tokens": 149,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5994172659993637,
       "equal_tokens": 149,
       "n_tokens": 149,
       "byte_equal": true,
@@ -2235,10 +2333,10 @@
     "length": 202,
     "completion_start": 114,
     "n_tokens": 88,
-    "train_seconds": 0.15707081799882872,
+    "train_seconds": 0.15728789800050436,
     "modes": {
      "prefill": {
-      "seconds": 0.18020885400073894,
+      "seconds": 0.18046710500129848,
       "equal_tokens": 88,
       "n_tokens": 88,
       "byte_equal": true,
@@ -2246,7 +2344,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 9.87944079800036,
+      "seconds": 9.955516017998889,
       "equal_tokens": 88,
       "n_tokens": 88,
       "byte_equal": true,
@@ -2254,7 +2352,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.2526689049991546,
+      "seconds": 0.25704328100255225,
+      "equal_tokens": 88,
+      "n_tokens": 88,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.47050825399855967,
+      "equal_tokens": 88,
+      "n_tokens": 88,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5912285710001015,
       "equal_tokens": 88,
       "n_tokens": 88,
       "byte_equal": true,
@@ -2277,10 +2391,10 @@
     "length": 294,
     "completion_start": 138,
     "n_tokens": 156,
-    "train_seconds": 0.18968271000085224,
+    "train_seconds": 0.1907002129992179,
     "modes": {
      "prefill": {
-      "seconds": 0.21350431800055958,
+      "seconds": 0.2141563410004892,
       "equal_tokens": 156,
       "n_tokens": 156,
       "byte_equal": true,
@@ -2288,7 +2402,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 19.35083707800004,
+      "seconds": 17.588847489998443,
       "equal_tokens": 156,
       "n_tokens": 156,
       "byte_equal": true,
@@ -2296,7 +2410,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 0.3345252920007624,
+      "seconds": 0.3178164540004218,
+      "equal_tokens": 156,
+      "n_tokens": 156,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 0.582114567001554,
+      "equal_tokens": 156,
+      "n_tokens": 156,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 0.5983145140016859,
       "equal_tokens": 156,
       "n_tokens": 156,
       "byte_equal": true,
@@ -2319,10 +2449,10 @@
     "length": 2439,
     "completion_start": 2261,
     "n_tokens": 178,
-    "train_seconds": 1.1605205119994935,
+    "train_seconds": 1.1626420149987098,
     "modes": {
      "prefill": {
-      "seconds": 1.1929375399995479,
+      "seconds": 1.193921189998946,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2330,7 +2460,7 @@
       "max_abs_diff": 0.0
      },
      "decode": {
-      "seconds": 24.037344080001276,
+      "seconds": 29.269928937999794,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2338,7 +2468,23 @@
       "max_abs_diff": 0.0
      },
      "chunked:prompt_boundary": {
-      "seconds": 1.2643005050013016,
+      "seconds": 1.2922459289984545,
+      "equal_tokens": 178,
+      "n_tokens": 178,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:block64": {
+      "seconds": 5.78309314100261,
+      "equal_tokens": 178,
+      "n_tokens": 178,
+      "byte_equal": true,
+      "first_mismatch": null,
+      "max_abs_diff": 0.0
+     },
+     "chunked:ragged": {
+      "seconds": 7.624459389997355,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2346,7 +2492,7 @@
       "max_abs_diff": 0.0
      },
      "chunked:window_boundary_2047": {
-      "seconds": 1.2678967829997418,
+      "seconds": 1.2949622230007662,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2354,7 +2500,7 @@
       "max_abs_diff": 0.0
      },
      "chunked:window_boundary_2048": {
-      "seconds": 1.277400934999605,
+      "seconds": 1.3026197959989076,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2362,7 +2508,7 @@
       "max_abs_diff": 0.0
      },
      "chunked:window_boundary_2049": {
-      "seconds": 1.2940934910002397,
+      "seconds": 1.3128912369975296,
       "equal_tokens": 178,
       "n_tokens": 178,
       "byte_equal": true,
@@ -2374,8 +2520,8 @@
   ]
  },
  "commit": {
-  "sha": "69b4409cf16e43ae2fa3df9d854e86b4ddc0b3d2",
-  "dirty": true
+  "sha": "f7d372318231bff7b7e4d8fdb1bdc8210c92481a",
+  "dirty": false
  },
  "ops_provenance": {
   "normalized_embedding": "rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
@@ -2393,7 +2539,7 @@
  },
  "device": "NVIDIA A100-SXM4-80GB",
  "torch": "2.13.0+cu130",
- "seconds": 128.05908838600044,
+ "seconds": 151.97510565099947,
  "checkpoint_revision_loaded": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68",
  "peak_allocated_gib": 54.483548164367676
 }

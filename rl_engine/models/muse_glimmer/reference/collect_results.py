@@ -240,6 +240,12 @@ def profile_record(strict: dict[str, Any] | None, hf: dict[str, Any] | None) -> 
     return out
 
 
+def _gate_record(gate: dict[str, Any] | None) -> dict[str, Any]:
+    if not gate:
+        return {"status": "NOT RUN"}
+    return {"status": "PASS" if gate.get("all_equal") else "FAIL", **gate}
+
+
 def _repeat_record(first: dict[str, Any] | None, final: dict[str, Any] | None) -> dict[str, Any]:
     """Two separate processes scoring the same file with the same backend: byte-equal?"""
     if first is None or final is None:
@@ -299,8 +305,7 @@ def main(argv=None) -> int:
             "xrt_triton_repeat": _repeat_record(_load(runs / "xrt_reference_triton_first.json"),
                                                 triton),
             "profile": profile_record(strict, hf),
-            "decode_batch_invariance": (strict or {}).get("decode_batch_invariance",
-                                                          {"status": "NOT RUN"}),
+            "decode_batch_invariance": _gate_record((strict or {}).get("decode_batch_invariance")),
         },
     }
     pathlib.Path(args.out).write_text(json.dumps(result, indent=1))
