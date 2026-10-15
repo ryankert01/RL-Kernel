@@ -383,6 +383,10 @@ def cmd_merge(args: argparse.Namespace) -> int:
     out.write_text(json.dumps(payload, indent=1))
     _log(f"wrote {out}: {len(records)} records, {len(settings)} settings, status {status}")
     print(markdown_table(settings))
+    print()
+    print(markdown_matrix(records))
+    print()
+    print(markdown_matrix(records, "max_abs_dlogp"))
     return 0
 
 
@@ -399,6 +403,28 @@ def markdown_table(settings: list[dict[str, Any]]) -> str:
             f"{s['mean_abs_dlogp']:.3g} | {s['mean_k3']:.3g} | {flips} | "
             f"{'-' if wall is None else f'{wall:.0f}'} |")
     return "\n".join(rows)
+
+
+def markdown_matrix(records: list[dict[str, Any]], key: str = "n_bits_differ") -> str:
+    """(engine/setting) x sequence matrix of ``key`` (the heatmap the report draws)."""
+    seq_ids: list[str] = []
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in records:
+        if r["sequence"] not in seq_ids:
+            seq_ids.append(r["sequence"])
+        rows.setdefault((r["engine"], r["setting"]), {})[r["sequence"]] = r
+    short = [s.replace("gsm8k_test_", "t").replace("gsm8k_long_window", "long") for s in seq_ids]
+    out = ["| engine/setting | " + " | ".join(short) + " |",
+           "|---|" + "---|" * len(seq_ids)]
+    for (eng, name), per in rows.items():
+        cells = []
+        for s in seq_ids:
+            r = per.get(s)
+            cells.append("-" if r is None else
+                         (f"{r[key]}/{r['n_tokens']}" if key == "n_bits_differ"
+                          else f"{r[key]:.2g}"))
+        out.append(f"| {eng}/{name} | " + " | ".join(cells) + " |")
+    return "\n".join(out)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
