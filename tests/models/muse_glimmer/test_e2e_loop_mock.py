@@ -167,6 +167,7 @@ def test_sidecar_recompute_matches_logged(tmp_path: Path) -> None:
 def test_sync_via_file_roundtrip_and_tamper(tmp_path: Path) -> None:
     cfg, summary, _ = _run(tmp_path, "strict/strict", steps=1, sync_via_file=True)
     assert summary["weight_sync"]["transport"] == "file"
+    assert summary["weight_sync"]["orchestrator_to_rollout"] == "file"
     files = sorted((cfg.run_dir / "lora").glob("*.pt"))
     assert [f.name for f in files] == ["step0000.pt", "step0001.pt"]
     package = sync.load_lora_package(files[1])
@@ -354,27 +355,49 @@ def test_load_lora_rejects_wrong_hash_and_lying_rollout() -> None:
     assert sync.weight_sync_identity(sha, sha) and not sync.weight_sync_identity(sha, None)
 
 
-def test_rollout_hash_from_tp_workers_when_engine_level_key_is_absent() -> None:
-    """StrictRolloutEngine (vLLM) reports the held LoRA hash per TP worker only."""
+def test_rollout_hash_only_from_the_engine_level_provenance_key() -> None:
+    """Only ``provenance()["lora_sha256"]`` counts (the rollout recomputes it on every TP rank);
+    per-worker declared values are never accepted, even when every worker agrees."""
 
     _, trainer = _engines("strict/strict")
     package = sync.export_lora_verified(trainer, step=0)
 
-    class WorkerReportingRollout:
-        def __init__(self, hashes):
-            self.hashes = hashes
+    class ReportingRollout:
+        def __init__(self, prov):
+            self.prov = prov
 
         def load_lora(self, state_dict, sha256):
             return None
 
         def provenance(self):
-            return {"engine": {}, "workers": [{"lora_sha256": h} for h in self.hashes]}
+            return self.prov
 
-    record = sync.transfer_lora(package, WorkerReportingRollout([package.sha256] * 2))
-    assert record["identity"] and record["rollout_sha256_source"].endswith("(2 ranks agree)")
-    for hashes in ([package.sha256, "0" * 64], [package.sha256, None], []):
-        with pytest.raises(sync.WeightSyncError):
-            sync.transfer_lora(package, WorkerReportingRollout(hashes))
+    agreeing_workers = [{"lora_sha256": package.sha256}] * 2
+    refused = (
+        {"engine": {}, "workers": agreeing_workers},  # per-worker only: the old fallback
+        {"lora_sha256": None, "workers": agreeing_workers},  # engine says "no identity"
+        {"lora_sha256": 123},  # not a hash string
+        {},
+    )
+    for prov in refused:
+        assert sync.rollout_lora_sha256(prov)[0] is None
+        with pytest.raises(sync.WeightSyncError, match="weight_sync_identity failed"):
+            sync.transfer_lora(package, ReportingRollout(prov))
+    # The engine-level value decides; worker entries are ignored.
+    prov = {"lora_sha256": package.sha256, "workers": [{"lora_sha256": "0" * 64}]}
+    record = sync.transfer_lora(package, ReportingRollout(prov))
+    assert record["identity"] and record["rollout_sha256_source"] == "provenance.lora_sha256"
+
+
+def test_sync_record_names_both_hops(tmp_path: Path) -> None:
+    """In process the LoRA never crosses a socket: transport is the rollout hop only."""
+
+    _, summary, records = _run(tmp_path, "strict/strict", steps=1)
+    assert summary["weight_sync"]["transport"] == "memory"
+    assert summary["weight_sync"]["trainer_to_orchestrator"] == "in_process"
+    assert summary["weight_sync"]["orchestrator_to_rollout"] == "memory"
+    assert records[0]["sync"]["trainer_to_orchestrator"] == "in_process"
+    assert summary["code"]["git_commit"]  # every run records the code it ran
 
 
 # ------------------------------------------------------------------------------------------
