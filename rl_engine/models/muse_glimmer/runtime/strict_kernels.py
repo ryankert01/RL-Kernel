@@ -432,6 +432,50 @@ def _fb_gated_attention(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos,
     return _FallbackAttention.apply(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, window)
 
 
+class _ComposedStrictAttention(torch.autograd.Function):
+    """Sibling strict varlen forward (``ops.gated_attention``) + sibling deterministic Triton
+    backward (``triton.gated_attention_bwd``), glued here because the sibling autograd wrapper
+    (``ops.gated_attention_autograd``) imports the forward from a module path that does not
+    export it and silently runs the fp32 golden forward instead (integration finding)."""
+
+    @staticmethod
+    def forward(ctx, q, k, v, gate, cu_q, cu_k, q_pos, window, fwd, bwd):
+        q_c, k_c, v_c, g_c = (t.contiguous() for t in (q, k, v, gate))
+        y, o, lse = fwd(q_c, k_c, v_c, g_c, cu_q, cu_k, q_pos, window=window)
+        ctx.save_for_backward(q_c, k_c, v_c, g_c, o, lse, cu_q, cu_k, q_pos)
+        ctx.window = window
+        ctx.bwd = bwd
+        return y
+
+    @staticmethod
+    def backward(ctx, dy):
+        q, k, v, g, o, lse, cu_q, cu_k, q_pos = ctx.saved_tensors
+        dq, dk, dv, dgate = ctx.bwd(
+            q, k, v, g, o, lse, dy.contiguous(), cu_q, cu_k, q_pos, window=ctx.window
+        )
+        return dq, dk, dv, dgate, None, None, None, None, None, None
+
+
+def _composed_strict_attention() -> Callable[..., torch.Tensor] | None:
+    fwd = _optional_attr(
+        _optional_module("rl_engine.models.muse_glimmer.ops.gated_attention"),
+        "strict_gated_attention_fwd_varlen",
+    )
+    bwd = _optional_attr(
+        _optional_module("rl_engine.models.muse_glimmer.triton.gated_attention_bwd"),
+        "strict_gated_attention_bwd",
+    )
+    if fwd is None or bwd is None:
+        return None
+
+    def gated_attention(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, *, window):
+        return _ComposedStrictAttention.apply(
+            q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window, fwd, bwd
+        )
+
+    return gated_attention
+
+
 # --------------------------------------------------------------------------------------
 # LM head tile statistics (fallback Triton kernel: one program per logical row, R3)
 # --------------------------------------------------------------------------------------
@@ -701,8 +745,20 @@ def resolve_ops() -> StrictOps:
     use_sibling_attention = att_fn is not None and (
         attention_mode == "sibling" or (attention_mode == "auto" and sibling_fwd_strict)
     )
-    if use_sibling_attention:
-        gated_attention: Callable[..., torch.Tensor] = att_fn
+    composed = (
+        _composed_strict_attention() if attention_mode in ("auto", "composed") else None
+    )
+    if attention_mode == "composed" and composed is None:
+        raise RuntimeError("MUSE_STRICT_ATTN=composed but the sibling fwd/bwd kernels are absent")
+    if not use_sibling_attention and composed is not None:
+        gated_attention: Callable[..., torch.Tensor] = composed
+        sources["gated_attention"] = OpSource(
+            "gated_attention", True,
+            "gated_attention.strict_gated_attention_fwd_varlen+gated_attention_bwd."
+            "strict_gated_attention_bwd (composed in the binding)",
+        )
+    elif use_sibling_attention:
+        gated_attention = att_fn
         sources["gated_attention"] = OpSource(
             "gated_attention", sibling_fwd_strict,
             "gated_attention_autograd.gated_attention"

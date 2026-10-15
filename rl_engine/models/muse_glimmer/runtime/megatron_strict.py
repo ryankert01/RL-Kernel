@@ -34,8 +34,11 @@ with ``attention_output_gate``), per local KV group ``g`` (4352 rows each, ``D=1
     [ q heads 16g..16g+15 (2048 rows) | gate heads 16g..16g+15 (2048) | k head g (128) | v head g (128) ]
 
 so HF ``q_proj`` = concat over g of the first block, ``gate_proj`` the second, ``k_proj``/``v_proj``
-the third/fourth. At TP ``t`` rank ``r`` owns groups ``[2r/t, 2(r+1)/t)``; TP > 2 (KV
-replication inside MCore) is rejected.
+the third/fourth. At TP ``t <= 2`` rank ``r``'s MCore shard is groups ``[2r/t, 2(r+1)/t)``
+and its canonical q/gate/k/v row chunks are views of it. At TP 4/8 MCore splits the fused rows
+evenly (no clean head partition); the binding re-shards them to canonical chunks at bind time
+(see ``MuseGlimmerStrictBinding._qkv_views``). Attention runs on all 32/2 heads on every rank
+(head shards all-gathered), so it is the TP1 computation at every TP.
 """
 
 from __future__ import annotations
@@ -73,6 +76,7 @@ from rl_engine.models.muse_glimmer.workload import (
 NATIVE_BRIDGE_MODEL_CLASS = "MuseGlimmerModel"
 NATIVE_BRIDGE_MODULE = "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer"
 _FINAL_NORM_HF_KEY = "model.language_model.norm.weight"
+SUPPORTED_TP = (1, 2, 4, 8)
 
 
 class StrictBindingError(MuseGlimmerWorkloadError):
@@ -202,10 +206,9 @@ def _check_config(cfg: Any, dims: ModelDims, tp_world: int) -> None:
     if int(cfg.context_parallel_size or 1) > 1 or getattr(cfg, "attention_cp_layout", "zigzag") != "zigzag":
         # CP>1 is rejected above; a non-zigzag layout with CP=1 is irrelevant but recorded.
         pass
-    if tp_world not in (1, 2):
+    if tp_world not in SUPPORTED_TP:
         raise StrictBindingError(
-            f"tp={tp_world}: MCore replicates KV heads when tp > num_query_groups=2 and the "
-            "fused linear_qkv shard no longer holds whole KV groups; strict binding supports TP 1/2"
+            f"tp={tp_world}: the strict binding supports TP {SUPPORTED_TP} (8 canonical chunks)"
         )
 
 
@@ -290,6 +293,7 @@ class MuseGlimmerStrictBinding:
         seed: int,
         checkpoint_layers: bool,
         drop_vision: bool,
+        lora_b_init_std: float = 0.0,
     ) -> None:
         self.model = model
         self.dims = _dims_from_manifest()
@@ -310,17 +314,24 @@ class MuseGlimmerStrictBinding:
 
         for p in model.parameters():
             p.requires_grad_(False)
+        gib = 2**30
+        self.memory_gib: dict[str, float] = {"bound_start": torch.cuda.memory_allocated() / gib}
         if drop_vision:
             for name in ("vision_tower", "vision_adapter", "vision_projection"):
                 if hasattr(model, name):
                     delattr(model, name)
                     self.notes.append(f"dropped {name} (text-only trainer)")
             torch.cuda.empty_cache()
+        self.memory_gib["after_vision_drop"] = torch.cuda.memory_allocated() / gib
 
         self.layers = [self._layer_weights(i) for i in range(self.dims.layers)]
         self.embed_full = self._gather_embedding()
         self.lm_tiles, self.lm_tile_ids = self._gather_lm_head_tiles()
         self.final_norm_weight = self._final_norm_weight(hf_path)
+        self.memory_gib["after_weight_views"] = torch.cuda.memory_allocated() / gib
+        self.memory_gib["model_params"] = sum(
+            p.numel() * p.element_size() for p in model.parameters()
+        ) / gib
         shapes = muse_glimmer_projection_shapes(
             hidden=self.dims.hidden,
             q_width=self.dims.q_width,
@@ -338,6 +349,7 @@ class MuseGlimmerStrictBinding:
                     tp_world=self.tp_world,
                     seed=self.seed,
                     device=self.device,
+                    b_init_std=lora_b_init_std,
                 )
                 for i in range(self.dims.layers)
             ]
@@ -348,13 +360,7 @@ class MuseGlimmerStrictBinding:
         d = self.dims
         layer = self.model.decoder.layers[i]
         attn = layer.self_attention
-        qkv = attn.linear_qkv.weight
-        groups_local = d.kv_heads // self.tp_world
-        heads_per_group = d.heads // d.kv_heads
-        per_group = (2 * heads_per_group + 2) * d.head_dim
-        if tuple(qkv.shape) != (groups_local * per_group, d.hidden):
-            raise StrictBindingError(f"layer {i}: linear_qkv shape {tuple(qkv.shape)} unexpected")
-        qb, gb, kb, vb = fused_qkv_blocks(qkv, heads_per_group, d.head_dim, groups_local)
+        qb, gb, kb, vb = self._qkv_views(i, attn.linear_qkv.weight)
         fc1 = layer.mlp.linear_fc1.weight
         ffn_local = d.ffn // self.tp_world
         if tuple(fc1.shape) != (2 * ffn_local, d.hidden):
@@ -391,6 +397,44 @@ class MuseGlimmerStrictBinding:
             w_pre_ffn=layer.pre_mlp_layernorm.weight,
             w_post_ffn=layer.mlp.post_layernorm.weight,
         )
+
+    def _qkv_views(self, i: int, qkv: torch.Tensor):
+        """This rank's CANONICAL row blocks of q/gate/k/v (HF row order) from the fused shard.
+
+        Canonical ownership (contract O3 column rule): at TP ``t`` rank ``r`` owns output-row
+        chunks ``[8r/t, 8(r+1)/t)`` of EACH projection (q/gate: 512-row chunks = 4 heads,
+        k/v: 32-row chunks). For ``t <= num_kv_heads`` MCore's fused shard holds whole KV groups
+        and those chunks are exactly its blocks (zero-copy views). For ``t > num_kv_heads``
+        MCore (attention.py, ``num_query_groups < world_size``) splits the FUSED rows evenly, so a
+        shard holds e.g. "q heads 0-15 + 1 gate head" at TP4; the binding all-gathers the fused
+        weight once at bind time (data movement only), un-fuses it and keeps contiguous copies of
+        its canonical rows (same bytes as the checkpoint; memory equal to the MCore shard).
+        """
+        d = self.dims
+        t = self.tp_world
+        heads_per_group = d.heads // d.kv_heads
+        per_group = (2 * heads_per_group + 2) * d.head_dim
+        rows_total = d.kv_heads * per_group
+        if rows_total % t or tuple(qkv.shape) != (rows_total // t, d.hidden):
+            raise StrictBindingError(f"layer {i}: linear_qkv shape {tuple(qkv.shape)} unexpected")
+        if t <= d.kv_heads:
+            return fused_qkv_blocks(qkv, heads_per_group, d.head_dim, d.kv_heads // t)
+        full = torch.cat(self.comm.all_gather(qkv.detach().contiguous()), dim=0)
+        parts = fused_qkv_to_hf(full, d.heads, d.kv_heads, d.head_dim)
+        r = self.tp_rank
+        out = []
+        for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+            w = parts[name]
+            n_l = w.shape[0] // t
+            out.append((w[r * n_l : (r + 1) * n_l].contiguous(),))
+        del full, parts
+        if i == 0:
+            self.notes.append(
+                f"tp={t} > kv_heads={d.kv_heads}: fused linear_qkv re-sharded to canonical "
+                "per-projection row chunks at bind time (all-gather, data movement only)"
+            )
+        q_b, g_b, k_b, v_b = out
+        return q_b, g_b, k_b, v_b
 
     def _gather_embedding(self) -> torch.Tensor:
         emb = self.model.embedding.word_embeddings
@@ -499,8 +543,9 @@ class MuseGlimmerStrictBinding:
         v = self._col(x_n, lw.v_blocks, i, "v_proj", d.kv_width)
         g = self._col(x_n, lw.gate_blocks, i, "gate_proj", d.q_width)
         if self.tp_world > 1:
-            # The strict O4/O5 kernels take the full 32 Q / 2 KV heads: gather the head shards
-            # (data movement only), compute attention redundantly, keep the local head columns.
+            # The strict O4/O5 kernels take the full 32 Q / 2 KV heads: gather the canonical
+            # column shards (data movement only), compute attention redundantly (= TP1 bits and
+            # TP1 dQ/dK/dV on every rank), keep the local head columns.
             q = GatherHeads.apply(q, self.comm)
             k = GatherHeads.apply(k, self.comm)
             v = GatherHeads.apply(v, self.comm)
@@ -602,6 +647,7 @@ class MuseGlimmerStrictBinding:
             "canonical_chunks": sk.CANONICAL_CHUNKS,
             "vocab_tiles": {"rows": d.tile_rows, "local": self.lm_tile_ids, "padded_vocab": d.padded_vocab},
             "final_norm_roundtrip_mismatches": getattr(self, "final_norm_roundtrip_mismatches", None),
+            "memory_gib": dict(self.memory_gib),
             "notes": list(self.notes),
         }
 
@@ -733,8 +779,13 @@ def install_museglimmer_megatron_strict(
     seed: int = 0,
     checkpoint_layers: bool = True,
     drop_vision: bool = True,
+    lora_b_init_std: float = 0.0,
 ) -> MuseGlimmerStrictBinding:
-    """Bind the strict operator set to a Bridge ``MuseGlimmerModel`` (fails closed)."""
+    """Bind the strict operator set to a Bridge ``MuseGlimmerModel`` (fails closed).
+
+    ``lora_b_init_std > 0`` draws LoRA ``B`` from ``N(0, std)`` (TP-invariant CPU generator)
+    instead of zeros; parity tests only (makes every LoRA gradient non-trivial).
+    """
     inner = _unwrap(model)
     binding = MuseGlimmerStrictBinding(
         inner,
@@ -743,6 +794,7 @@ def install_museglimmer_megatron_strict(
         seed=seed,
         checkpoint_layers=checkpoint_layers,
         drop_vision=drop_vision,
+        lora_b_init_std=lora_b_init_std,
     )
     inner._muse_strict_binding = binding
     return binding
@@ -802,8 +854,10 @@ def native_token_logprobs(model: Any, token_ids: torch.Tensor) -> torch.Tensor:
             logits = inner(input_ids=ids, position_ids=pos, attention_mask=mask, runtime_gather_output=True)
     finally:
         inner.train(was_training)
-    lp = torch.log_softmax(logits.float(), dim=-1)
-    return lp[:, :-1].gather(-1, ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+    from rl_engine.models.muse_glimmer.runtime.megatron_native_lora import chunked_token_logprobs
+
+    rows = [chunked_token_logprobs(logits[i, :-1], ids[i, 1:]) for i in range(b)]
+    return torch.stack(rows)
 
 
 def export_binding_lora(binding: MuseGlimmerStrictBinding) -> tuple[dict[str, torch.Tensor], str]:
@@ -818,7 +872,10 @@ def binding_lora_parameters(binding: MuseGlimmerStrictBinding) -> list[nn.Parame
 
 def hex_bits(values: torch.Tensor) -> list[str]:
     """IEEE-754 fp32 bit patterns as 8 hex chars (the vLLM dump format)."""
-    return [f"{v:08x}" for v in values.detach().float().cpu().contiguous().view(torch.int32).tolist()]
+    return [
+        f"{v & 0xFFFFFFFF:08x}"
+        for v in values.detach().float().cpu().contiguous().view(torch.int32).tolist()
+    ]
 
 
 def load_bridge_model(

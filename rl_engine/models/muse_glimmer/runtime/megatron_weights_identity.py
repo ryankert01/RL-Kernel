@@ -54,6 +54,10 @@ class IdentityReport:
     aggregate_sha256_megatron: str = ""
     aggregate_sha256_hf: str = ""
     tp: int = 1
+    per_tensor: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2)
@@ -154,7 +158,17 @@ def check_weight_identity(model: Any, hf_path: str | Path, comm: sk.TPComm | Non
         sha_h = sha256_bf16(hf)
         agg_m.update(sha_m.encode())
         agg_h.update(sha_h.encode())
-        if sha_m == sha_h and torch.equal(meg, hf):
+        same = sha_m == sha_h and torch.equal(meg, hf)
+        report.per_tensor.append(
+            {
+                "name": name,
+                "numel": int(meg.numel()),
+                "equal": bool(same),
+                "differing_elements": 0 if same else int((meg != hf).sum().item()),
+                "sha256": sha_h,
+            }
+        )
+        if same:
             report.equal += 1
         else:
             diff = meg.float() - hf.float()
