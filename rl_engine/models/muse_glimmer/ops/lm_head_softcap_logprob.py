@@ -155,6 +155,11 @@ class _FastDetGemmAdapter:
     def __call__(
         self, a: torch.Tensor, w: torch.Tensor, *, out_dtype: torch.dtype = torch.float32
     ) -> torch.Tensor:
+        # fast_det_gemm's 8-chunk tree needs K % 256 == 0; every model shape satisfies it
+        # (H=6656, and dW's K=T is tile-padded by callers), but tiny test shapes and
+        # short-T weight gradients fall back to the legacy fixed-order fp32 kernel.
+        if a.shape[-1] % 256 != 0:
+            return legacy_det_gemm_fp32(a, w, out_dtype=out_dtype)
         return self._fn(a.contiguous(), w.contiguous(), out_dtype=out_dtype)
 
 
