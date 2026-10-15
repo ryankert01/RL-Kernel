@@ -552,6 +552,10 @@ class TestF1RopeTableIdentity:
         bits; a torch/CUDA math-library change that alters cos/sin/pow is caught here."""
         assert op.CANONICAL_ROPE_TABLE_SHA256 == CANONICAL_SHA256
         assert op.rope_table_sha256(DEV) == CANONICAL_SHA256
+        c, _ = op.canonical_rope_table(DEV, verify=True)  # raises on a digest mismatch
+        assert c is op.canonical_rope_table(DEV)[0]
+        with pytest.raises(ValueError):
+            op.canonical_rope_table(DEV, theta=10000.0, verify=True)
 
     def test_rope_rows_gathers_the_canonical_table(self):
         pos = torch.tensor([0, 1, 2047, 2048, 4095, 777, ROPE_POSITIONS - 1], device=DEV)
