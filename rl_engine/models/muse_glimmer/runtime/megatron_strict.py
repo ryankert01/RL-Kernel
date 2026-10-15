@@ -230,6 +230,44 @@ def _dims_from_manifest() -> ModelDims:
     )
 
 
+def fused_qkv_blocks(
+    qkv: torch.Tensor, heads_per_group: int, head_dim: int, groups_local: int
+) -> tuple[tuple[torch.Tensor, ...], tuple[torch.Tensor, ...], tuple[torch.Tensor, ...], tuple[torch.Tensor, ...]]:
+    """Views ``(q_blocks, gate_blocks, k_blocks, v_blocks)`` of a Bridge fused ``linear_qkv`` shard.
+
+    Per local KV group ``g`` the fused rows are
+    ``[q heads (hpg*D) | gate heads (hpg*D) | k head (D) | v head (D)]``; concatenating a block
+    list over ``g`` gives the HF-ordered ``q_proj``/``gate_proj``/``k_proj``/``v_proj`` rows of the
+    rank's groups (no copy).
+    """
+    per_group = (2 * heads_per_group + 2) * head_dim
+    qw = heads_per_group * head_dim
+    if qkv.ndim != 2 or qkv.shape[0] != groups_local * per_group:
+        raise StrictBindingError(f"fused qkv shape {tuple(qkv.shape)} is not {groups_local} groups")
+    qb, gb, kb, vb = [], [], [], []
+    for g in range(groups_local):
+        base = g * per_group
+        qb.append(qkv[base : base + qw])
+        gb.append(qkv[base + qw : base + 2 * qw])
+        kb.append(qkv[base + 2 * qw : base + 2 * qw + head_dim])
+        vb.append(qkv[base + 2 * qw + head_dim : base + per_group])
+    return tuple(qb), tuple(gb), tuple(kb), tuple(vb)
+
+
+def fused_qkv_to_hf(
+    qkv_full: torch.Tensor, heads: int, kv_heads: int, head_dim: int
+) -> dict[str, torch.Tensor]:
+    """Un-fuse a FULL (all groups) Bridge ``linear_qkv`` weight into HF ``q/k/v/gate_proj``."""
+    hpg = heads // kv_heads
+    qb, gb, kb, vb = fused_qkv_blocks(qkv_full, hpg, head_dim, kv_heads)
+    return {
+        "q_proj": torch.cat(qb, dim=0),
+        "k_proj": torch.cat(kb, dim=0),
+        "v_proj": torch.cat(vb, dim=0),
+        "gate_proj": torch.cat(gb, dim=0),
+    }
+
+
 def _load_hf_tensor(hf_path: str | Path, name: str) -> torch.Tensor:
     from safetensors import safe_open
 
@@ -316,14 +354,7 @@ class MuseGlimmerStrictBinding:
         per_group = (2 * heads_per_group + 2) * d.head_dim
         if tuple(qkv.shape) != (groups_local * per_group, d.hidden):
             raise StrictBindingError(f"layer {i}: linear_qkv shape {tuple(qkv.shape)} unexpected")
-        qb, gb, kb, vb = [], [], [], []
-        for g in range(groups_local):
-            base = g * per_group
-            qw = heads_per_group * d.head_dim
-            qb.append(qkv[base : base + qw])
-            gb.append(qkv[base + qw : base + 2 * qw])
-            kb.append(qkv[base + 2 * qw : base + 2 * qw + d.head_dim])
-            vb.append(qkv[base + 2 * qw + d.head_dim : base + per_group])
+        qb, gb, kb, vb = fused_qkv_blocks(qkv, heads_per_group, d.head_dim, groups_local)
         fc1 = layer.mlp.linear_fc1.weight
         ffn_local = d.ffn // self.tp_world
         if tuple(fc1.shape) != (2 * ffn_local, d.hidden):
@@ -521,7 +552,18 @@ class MuseGlimmerStrictBinding:
 
     def logprobs(self, h: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """fp32 ``logp[row] = softcap(z)[target] - logsumexp(softcap(z))`` over the real vocab."""
-        return StrictLMHeadLogprob.apply(h, targets.to(device=h.device, dtype=torch.int64), self)
+        d = self.dims
+        return StrictLMHeadLogprob.apply(
+            h,
+            targets.to(device=h.device, dtype=torch.int64),
+            self.lm_tiles,
+            tuple(self.lm_tile_ids),
+            self.comm,
+            d.vocab,
+            d.tile_rows,
+            d.multiplier,
+            d.softcap,
+        )
 
     def forward_packed(
         self,
@@ -559,31 +601,35 @@ class MuseGlimmerStrictBinding:
 
 
 class StrictLMHeadLogprob(torch.autograd.Function):
-    """O7: canonical vocab tiles (8/t per rank), row stats, rank all-gather, fixed tree."""
+    """O7 at TP ``t``: this rank's ``8/t`` canonical vocab tiles → per-row ``(M_t, S_t)`` and the
+    target's soft-capped logit → rank-ordered all-gather (data movement) → fixed tree over the 8
+    tiles → ``logp = zhat[y] - (M + log S)``.  Backward recomputes each local tile's logits,
+    forms ``dz`` with the tile kernel, and reduces ``dh`` with the per-tile 8-chunk GEMM followed
+    by the same tile tree (bit-identical to the single-rank sibling op at TP1).
+
+    ``tiles`` is ``(len(tile_ids) * tile_rows, H)`` bf16 holding the rank's consecutive tiles.
+    """
 
     @staticmethod
-    def forward(ctx, h: torch.Tensor, targets: torch.Tensor, binding: MuseGlimmerStrictBinding):
-        d = binding.dims
-        rows = d.tile_rows
+    def forward(ctx, h, targets, tiles, tile_ids, comm, vocab, tile_rows, multiplier, softcap):
+        ops = sk.lm_head_tile_ops()
         m = h.shape[0]
-        stats = torch.empty(len(binding.lm_tile_ids), 2, m, dtype=torch.float32, device=h.device)
+        stats = torch.empty(len(tile_ids), 2, m, dtype=torch.float32, device=h.device)
         zy = torch.zeros(m, dtype=torch.float32, device=h.device)
-        for j, tile in enumerate(binding.lm_tile_ids):
-            w_t = binding.lm_tiles[j * rows : (j + 1) * rows]
+        for j, tile in enumerate(tile_ids):
+            w_t = tiles[j * tile_rows : (j + 1) * tile_rows]
             z = sk.gemm_fp32(h, w_t)
-            valid = min(rows, d.vocab - tile * rows)
-            mx, s = sk.tile_stats_fp32(z, valid, multiplier=d.multiplier, softcap=d.softcap)
+            mx, s, zy_t, hit = ops.tile_stats(
+                z, tile, targets, multiplier=multiplier, softcap=softcap, vocab_size=vocab,
+                tile_size=tile_rows,
+            )
             stats[j, 0] = mx
             stats[j, 1] = s
-            local = targets - tile * rows
-            hit = (local >= 0) & (local < valid)
-            if bool(hit.any()):
-                idx = hit.nonzero(as_tuple=True)[0]
-                picked = z[idx, local[idx]]
-                zy = zy.index_add(0, idx, sk.softcap_fp32(picked, multiplier=d.multiplier, softcap=d.softcap))
-        if binding.comm.world > 1:
-            gathered = torch.cat(binding.comm.all_gather(stats), dim=0)
-            zy_parts = binding.comm.all_gather(zy)
+            zy = torch.where(hit, zy_t, zy)
+            del z
+        if comm.world > 1:
+            gathered = torch.cat(comm.all_gather(stats), dim=0)
+            zy_parts = comm.all_gather(zy)
             zy_total = zy_parts[0]
             for part in zy_parts[1:]:
                 zy_total = zy_total + part  # exactly one non-zero contribution per row
@@ -591,39 +637,34 @@ class StrictLMHeadLogprob(torch.autograd.Function):
             gathered = stats
             zy_total = zy
         pairs = [(gathered[t, 0], gathered[t, 1]) for t in range(sk.CANONICAL_CHUNKS)]
-        mx_all, s_all = sk.combine_tile_stats_tree(pairs)
-        lse = mx_all + torch.log(s_all)
-        logp = zy_total - lse
-        ctx.save_for_backward(h, targets, lse)
-        ctx.binding = binding
+        mx_all, s_all = ops.merge(pairs)
+        logz = mx_all + torch.log(s_all)
+        logp = zy_total - logz
+        ctx.save_for_backward(h, targets, logz, tiles)
+        ctx.meta = (tuple(tile_ids), comm, int(vocab), int(tile_rows), float(multiplier), float(softcap))
         return logp
 
     @staticmethod
-    def backward(ctx, dlogp: torch.Tensor):
-        h, targets, lse = ctx.saved_tensors
-        binding: MuseGlimmerStrictBinding = ctx.binding
-        d = binding.dims
-        rows = d.tile_rows
-        dlogp = dlogp.to(torch.float32)
+    def backward(ctx, dlogp):
+        h, targets, logz, tiles = ctx.saved_tensors
+        tile_ids, comm, vocab, tile_rows, multiplier, softcap = ctx.meta
+        ops = sk.lm_head_tile_ops()
+        dlogp32 = dlogp.to(torch.float32).contiguous()
         parts = []
-        for j, tile in enumerate(binding.lm_tile_ids):
-            w_t = binding.lm_tiles[j * rows : (j + 1) * rows]
+        for j, tile in enumerate(tile_ids):
+            w_t = tiles[j * tile_rows : (j + 1) * tile_rows]
             z = sk.gemm_fp32(h, w_t)
-            valid = min(rows, d.vocab - tile * rows)
-            zh = sk.softcap_fp32(z, multiplier=d.multiplier, softcap=d.softcap)
-            p = torch.exp(zh - lse[:, None])
-            dzh = -p
-            local = targets - tile * rows
-            hit = (local >= 0) & (local < valid)
-            if bool(hit.any()):
-                idx = hit.nonzero(as_tuple=True)[0]
-                dzh[idx, local[idx]] += 1.0
-            dz = dzh * dlogp[:, None] * sk.tanh_softcap_grad(z, multiplier=d.multiplier, softcap=d.softcap)
-            if valid < rows:
-                dz[:, valid:] = 0.0
-            parts.append(sk.gemm_single_chunk_fp32(dz.to(torch.bfloat16), w_t.t().contiguous(), tile))
-        dh = binding.comm.all_gather_tree(sk.gemm_backend().combine(parts))
-        return dh.to(h.dtype), None, None
+            col_begin = tile * tile_rows
+            real = min(max(vocab - col_begin, 0), tile_rows)
+            dz = ops.tile_dz(
+                z, logz, dlogp32, targets, tile_size=tile_rows, real_cols=real,
+                col_begin=col_begin, multiplier=multiplier, softcap=softcap,
+            )
+            del z
+            parts.append(sk.gemm_fp32(dz, w_t.t()))  # 8-chunk tree inside the tile (sibling rule)
+            del dz
+        dh = comm.all_gather_tree(sk.gemm_backend().combine(parts))
+        return (dh.to(h.dtype), None, None, None, None, None, None, None, None)
 
 
 # ------------------------------------------------------------------------------------------
@@ -752,6 +793,8 @@ __all__ = [
     "StrictLMHeadLogprob",
     "binding_lora_parameters",
     "export_binding_lora",
+    "fused_qkv_blocks",
+    "fused_qkv_to_hf",
     "get_binding",
     "hex_bits",
     "install_museglimmer_megatron_strict",

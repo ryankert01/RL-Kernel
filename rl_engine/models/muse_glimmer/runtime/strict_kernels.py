@@ -180,7 +180,8 @@ class _GemmBackend:
         n_pad = -(-n // _TILE_PAD) * _TILE_PAD
         a_in = a if m_pad == m else torch.nn.functional.pad(a, (0, 0, 0, m_pad - m))
         w_in = w if n_pad == n else torch.nn.functional.pad(w, (0, 0, 0, n_pad - n))
-        out = self._partial(a_in.contiguous(), w_in.contiguous(), chunk_ids)
+        # The sibling kernel addresses ``w`` through strides, so transposed views cost nothing.
+        out = self._partial(a_in.contiguous(), w_in, chunk_ids)
         if out.dtype != torch.float32:
             raise TypeError("GEMM partial backend must return fp32")
         if m_pad != m or n_pad != n:
@@ -368,9 +369,11 @@ def _fb_silu_mul(g: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
 
 
 class _FallbackAttention(torch.autograd.Function):
-    """Per-sequence fp32 attention with the contract's casts (p→bf16 before PV, out→bf16).
+    """Per-(sequence, head) fp32 attention with the contract's casts (p→bf16 before PV, out→bf16).
 
-    Uses cuBLAS fp32 matmuls (TF32 off): repeatable for fixed shapes, not batch invariant.
+    Uses cuBLAS fp32 matmuls (TF32 off) of identical ``(s,128)x(128,s)`` shape for every head,
+    so the bits do not depend on how many heads a TP rank owns; repeatable for fixed shapes,
+    NOT batch invariant (a sequence's length selects the cuBLAS kernel).
     """
 
     @staticmethod
@@ -401,22 +404,25 @@ def _fb_attention_impl(q, k, v, gate, cu_q, cu_k, window, ctx):
     outs = []
     bounds = cu_q.tolist()
     for start, end in zip(bounds[:-1], bounds[1:], strict=True):
-        qs = q[start:end].float().transpose(0, 1)  # (hq, s, d)
-        ks = k[start:end].float().transpose(0, 1).repeat_interleave(group, dim=0)
-        vs = v[start:end].float().transpose(0, 1).repeat_interleave(group, dim=0)
         s = end - start
-        scores = torch.matmul(qs, ks.transpose(1, 2)) * scale
         pos = torch.arange(s, device=q.device)
         rel = pos[:, None] - pos[None, :]
         allowed = rel >= 0
         if window is not None:
             allowed &= rel < window
-        scores = scores.masked_fill(~allowed[None], _NEG_INF)
-        m = scores.amax(-1, keepdim=True)
-        p = torch.exp(scores - m)
-        l = p.sum(-1, keepdim=True)
-        o = torch.matmul(p.to(torch.bfloat16).float(), vs) / l
-        outs.append(o.transpose(0, 1).reshape(s, hq * d).to(torch.bfloat16))
+        heads = []
+        for h in range(hq):
+            qs = q[start:end, h].float()  # (s, d)
+            ks = k[start:end, h // group].float()
+            vs = v[start:end, h // group].float()
+            scores = torch.mm(qs, ks.t()) * scale
+            scores = scores.masked_fill(~allowed, _NEG_INF)
+            m = scores.amax(-1, keepdim=True)
+            p = torch.exp(scores - m)
+            l = p.sum(-1, keepdim=True)
+            o = torch.mm(p.to(torch.bfloat16).float(), vs) / l
+            heads.append(o.to(torch.bfloat16))
+        outs.append(torch.stack(heads, dim=1).reshape(s, hq * d))
     out = torch.cat(outs, dim=0)
     return (out.float() * torch.sigmoid(gate.float())).to(torch.bfloat16)
 
@@ -527,6 +533,91 @@ def softcap_fp32(z: torch.Tensor, *, multiplier: float, softcap: float) -> torch
     return softcap * torch.tanh(z * multiplier / softcap)
 
 
+def _fb_tile_stats(
+    z: torch.Tensor,
+    tile_id: int,
+    targets: torch.Tensor,
+    *,
+    multiplier: float,
+    softcap: float,
+    vocab_size: int,
+    tile_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Fallback ``(m_t, s_t, zhat[target], target_in_tile)`` for one fp32 logits tile."""
+    col_begin = tile_id * tile_size
+    valid = min(max(vocab_size - col_begin, 0), tile_size)
+    m, s = tile_stats_fp32(z, valid, multiplier=multiplier, softcap=softcap)
+    local = targets - col_begin
+    hit = (local >= 0) & (local < valid)
+    picked = z.gather(1, local.clamp(0, tile_size - 1).unsqueeze(1)).squeeze(1)
+    zy = torch.where(hit, softcap_fp32(picked, multiplier=multiplier, softcap=softcap), torch.zeros_like(picked))
+    return m, s, zy, hit
+
+
+def _fb_tile_dz(
+    z: torch.Tensor,
+    logz: torch.Tensor,
+    dlogp32: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    tile_size: int,
+    real_cols: int,
+    col_begin: int,
+    multiplier: float,
+    softcap: float,
+) -> torch.Tensor:
+    """Fallback ``dz = dlogp * (onehot - p) * d softcap/dz`` for one tile, bf16 (declared cast)."""
+    zh = softcap_fp32(z, multiplier=multiplier, softcap=softcap)
+    p = torch.exp(zh - logz[:, None])
+    dzh = -p
+    local = targets - col_begin
+    hit = (local >= 0) & (local < real_cols)
+    if bool(hit.any()):
+        idx = hit.nonzero(as_tuple=True)[0]
+        dzh[idx, local[idx]] += 1.0
+    dz = dzh * dlogp32[:, None] * tanh_softcap_grad(z, multiplier=multiplier, softcap=softcap)
+    if real_cols < tile_size:
+        dz[:, real_cols:] = 0.0
+    return dz.to(torch.bfloat16)
+
+
+class LMHeadTileOps:
+    """Tile-level LM-head primitives: sibling kernels when present, labelled fallbacks otherwise."""
+
+    def __init__(self) -> None:
+        lm = _optional_module("rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob")
+        kern = _optional_module("rl_engine.models.muse_glimmer.triton.softcap_logprob")
+        stats = _optional_attr(lm, "softcap_tile_stats")
+        dz = _optional_attr(kern, "launch_dz")
+        merge = _optional_attr(lm, "merge_tile_stats")
+        if stats is not None and dz is not None and merge is not None:
+            self.tile_stats = stats
+            self.tile_dz = dz
+            self.merge = merge
+            self.source = OpSource(
+                "lm_head_tile_stats", True,
+                "lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+            )
+        else:
+            self.tile_stats = _fb_tile_stats
+            self.tile_dz = _fb_tile_dz
+            self.merge = combine_tile_stats_tree
+            self.source = OpSource(
+                "lm_head_tile_stats", False,
+                "binding_triton_row_stats" if _HAVE_TRITON else "torch_fp32_rowwise",
+            )
+
+
+_LM_TILE_OPS: LMHeadTileOps | None = None
+
+
+def lm_head_tile_ops() -> LMHeadTileOps:
+    global _LM_TILE_OPS
+    if _LM_TILE_OPS is None:
+        _LM_TILE_OPS = LMHeadTileOps()
+    return _LM_TILE_OPS
+
+
 def combine_tile_stats_tree(
     stats: Sequence[tuple[torch.Tensor, torch.Tensor]],
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -594,7 +685,35 @@ def resolve_ops() -> StrictOps:
     qk = "rl_engine.models.muse_glimmer.ops.qknorm_rope"
     att = "rl_engine.models.muse_glimmer.ops.gated_attention_autograd"
     swi = "rl_engine.models.muse_glimmer.ops.swiglu_ffn"
-    lm = "rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob"
+
+    # Attention: the sibling autograd op is only taken when its FORWARD is the strict kernel
+    # (while it is the fixed-order golden it is >100x slower and hard-wired to 32 heads).
+    attention_mode = os.getenv("MUSE_STRICT_ATTN", "auto").strip().lower()
+    att_mod = _optional_module(att)
+    att_fn = _optional_attr(att_mod, "gated_attention")
+    att_tracer = _optional_attr(att_mod, "trace")
+    sibling_fwd_strict = False
+    if att_tracer is not None:
+        try:
+            sibling_fwd_strict = not bool(att_tracer().get("forward_is_fallback", True))
+        except Exception:  # noqa: BLE001
+            sibling_fwd_strict = False
+    use_sibling_attention = att_fn is not None and (
+        attention_mode == "sibling" or (attention_mode == "auto" and sibling_fwd_strict)
+    )
+    if use_sibling_attention:
+        gated_attention: Callable[..., torch.Tensor] = att_fn
+        sources["gated_attention"] = OpSource(
+            "gated_attention", sibling_fwd_strict,
+            "gated_attention_autograd.gated_attention"
+            + ("" if sibling_fwd_strict else " (forward is the golden fallback)"),
+        )
+    else:
+        gated_attention = _fb_gated_attention
+        sources["gated_attention"] = OpSource(
+            "gated_attention", False,
+            "binding_torch_fp32_cublas_per_head (TP-shape invariant, not batch invariant)",
+        )
     ops = StrictOps(
         normalized_embedding=pick(
             "normalized_embedding", norms, "normalized_embedding", _fb_normalized_embedding,
@@ -614,26 +733,11 @@ def resolve_ops() -> StrictOps:
         qknorm_scaled_rope=pick(
             "qknorm_scaled_rope", qk, "qknorm_scaled_rope", _fb_qknorm_scaled_rope, "torch_fp32_rowwise"
         ),
-        gated_attention=pick(
-            "gated_attention", att, "gated_attention", _fb_gated_attention,
-            "torch_fp32_cublas_per_sequence (not batch-invariant)",
-        ),
-        silu_mul=pick("silu_mul", swi, "silu_mul", _fb_silu_mul, "torch_fp32_elementwise"),
+        gated_attention=gated_attention,
+        silu_mul=pick("silu_mul", swi, "swiglu", _fb_silu_mul, "torch_fp32_elementwise"),
         sources=sources,
     )
-    lm_mod = _optional_module(lm)
-    if _optional_attr(lm_mod, "softcap_tile_stats") is not None:
-        # The sibling tile kernel exists but its exact signature is not pinned by the brief;
-        # the binding keeps its own composition so TP1 and TP>1 share one implementation.
-        sources["lm_head_tile_stats"] = OpSource(
-            "lm_head_tile_stats", False,
-            "binding_triton_row_stats (sibling softcap_tile_stats present but not bound)",
-        )
-    else:
-        sources["lm_head_tile_stats"] = OpSource(
-            "lm_head_tile_stats", False,
-            "binding_triton_row_stats" if _HAVE_TRITON else "torch_fp32_rowwise",
-        )
+    sources["lm_head_tile_stats"] = lm_head_tile_ops().source
     _OPS = ops
     return ops
 
@@ -665,6 +769,7 @@ def tanh_softcap_grad(z: torch.Tensor, *, multiplier: float, softcap: float) -> 
 
 __all__ = [
     "CANONICAL_CHUNKS",
+    "LMHeadTileOps",
     "OpSource",
     "StrictOps",
     "TPComm",
@@ -675,6 +780,7 @@ __all__ = [
     "gemm_backend",
     "gemm_fp32",
     "gemm_single_chunk_fp32",
+    "lm_head_tile_ops",
     "local_chunk_ids",
     "resolve_ops",
     "set_deterministic_torch",
