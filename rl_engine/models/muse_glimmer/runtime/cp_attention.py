@@ -57,9 +57,10 @@ Cast points: K/V/positions move as bits; the fp32 tree root of dK/dV is rounded 
 
 Sibling ops
 -----------
-The strict kernel is imported from the WS1 sibling
+The strict kernel is imported from the WS1 siblings
 (``rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen`` and
-``...gated_attention_autograd.strict_gated_attention_bwd_partials``). While they are absent
+``...triton.gated_attention_bwd.{gated_attention_bwd_preprocess,
+strict_gated_attention_bwd_partials}``). While they are absent
 this module runs :func:`fallback_gated_attention_fwd` /
 :func:`fallback_gated_attention_bwd_partials`: a pure-torch fp32 stand-in with FIXED tensor
 shapes (one GQA group x 8 query tiles of 64 rows per GEMM) that follows the O5 block order and
@@ -183,20 +184,50 @@ for _module_name in (
     except (ImportError, AttributeError):  # pragma: no cover - depends on the sibling worktree
         continue
 
-try:  # sibling backward emitting fp32 dK/dV partials per canonical 4-head group
-    from rl_engine.models.muse_glimmer.ops.gated_attention_autograd import (
-        strict_gated_attention_bwd_partials as _strict_bwd_partials,
-    )
+_strict_bwd_partials = None
+BACKWARD_IMPL = (
+    "FALLBACK:cp_attention.fallback_gated_attention_bwd_partials (pure torch fp32, FA2 order)"
+)
+try:  # sibling Triton backward: row-local preprocess + fp32 dK/dV partials per 4-head group
+    from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as _bwd_module
+
+    def _strict_bwd_partials(  # type: ignore[misc]
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        gate_logits: torch.Tensor,
+        o: torch.Tensor,
+        lse: torch.Tensor,
+        dy: torch.Tensor,
+        cu_seqlens_q: torch.Tensor,
+        cu_seqlens_k: torch.Tensor,
+        q_pos: torch.Tensor,
+        *,
+        window: Optional[int],
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Sibling kernels -> ``(dq, dk_partials (8,Tk,2,128) fp32, dv_partials, dgate)``."""
+        dgate, do, delta = _bwd_module.gated_attention_bwd_preprocess(dy, o, gate_logits)
+        dq, dk_partials, dv_partials = _bwd_module.strict_gated_attention_bwd_partials(
+            q, k, v, do, lse, delta, cu_seqlens_q, cu_seqlens_k, q_pos, window=window
+        )
+        return dq, dk_partials, dv_partials, dgate
 
     BACKWARD_IMPL = (
-        "rl_engine.models.muse_glimmer.ops.gated_attention_autograd."
-        "strict_gated_attention_bwd_partials"
+        "rl_engine.models.muse_glimmer.triton.gated_attention_bwd."
+        "gated_attention_bwd_preprocess + strict_gated_attention_bwd_partials"
     )
 except ImportError:  # pragma: no cover - depends on the sibling worktree
-    _strict_bwd_partials = None
-    BACKWARD_IMPL = (
-        "FALLBACK:cp_attention.fallback_gated_attention_bwd_partials (pure torch fp32, FA2 order)"
-    )
+    try:  # interface location named by the RFC brief
+        from rl_engine.models.muse_glimmer.ops.gated_attention_autograd import (
+            strict_gated_attention_bwd_partials as _strict_bwd_partials,
+        )
+
+        BACKWARD_IMPL = (
+            "rl_engine.models.muse_glimmer.ops.gated_attention_autograd."
+            "strict_gated_attention_bwd_partials"
+        )
+    except ImportError:
+        pass
 
 
 # --------------------------------------------------------------------------------------------
