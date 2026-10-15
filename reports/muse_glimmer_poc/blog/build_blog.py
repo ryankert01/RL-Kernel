@@ -705,6 +705,49 @@ def sec_e2e() -> str:
 </section>"""
 
 
+def sec_verdict() -> str:
+    x, v, m, e, a = load("xrt_summary.json"), load("vllm_runtime.json"), load("megatron_runtime.json"), load("e2e_run.json"), load("ablation.json")
+    tiles = []
+    if x and x.get("strict_groups"):
+        base = x["strict_groups"].get("base", [])
+        nat = [l for l in x["matrix"] if " native" in l]
+        nn = [x["matrix"][p][q] for i, p in enumerate(nat) for q in nat[i + 1:]]
+        tiles.append(("ok", f"{len(base)} 份严格结果，0 个 bit 不同", f"参考链、vLLM TP1/TP2、Megatron TP1/TP2 对同样 {x['n_scored_tokens']} 个 token 的 fp32 logprob 完全一样。"))
+        if nn:
+            tiles.append(("bad", f"原生：{min(nn)}–{max(nn)} / {x['n_scored_tokens']}", "vLLM、Megatron、HF 的原生实现两两比较，几乎每个 token 的 bit 都不同。"))
+    if m:
+        g = [m.get("runs", {}).get(t, {}).get("checks", {}).get("grad_repeat", {}).get("aggregate_sha256") for t in ("tp1", "tp2")]
+        if g[0] and g[0] == g[1]:
+            tiles.append(("ok", "训练梯度 TP2 == TP1", "LoRA 梯度 832 个张量、1.05 亿个元素逐 bit 相同，AdamW 一步后的权重哈希也相同。"))
+    if v:
+        gs = v.get("generate", [])
+        sd = [g.get("decode_vs_prefill", {}).get("mismatched", 0) for g in gs if g["mode"] == "strict"]
+        nd = [g.get("decode_vs_prefill", {}).get("mismatched", 0) for g in gs if g["mode"] == "native"]
+        if sd and nd:
+            tiles.append(("ok", f"rollout 自洽：{max(sd)} vs {min(nd)}–{max(nd)}", "同一序列 decode 时记下的 logprob 与事后 prefill 重算（每组 512 个 token）：严格 vs 原生。"))
+        thr = v.get("throughput", [])
+        r = [next((t["tokens_per_s"] for t in thr if t["mode"] == md and t["tp"] == tp), None) for md in ("strict", "native") for tp in (1, 2)]
+        if all(r):
+            tiles.append(("pend", f"代价：吞吐 {100 * r[0] / r[2]:.0f}% / {100 * r[1] / r[3]:.0f}%", "严格 vLLM 相对原生的吞吐（TP1 / TP2，batch 32 × 256）。训练一步约慢 2–3 倍。"))
+    if e and e.get("modes"):
+        ss = next((mm for mm in e["modes"] if mm["mode"] == "strict/strict"), None)
+        if ss:
+            dt = ss.get("drift_totals") or {}
+            tiles.append(("ok" if dt.get("bitwise_mismatch_count") == 0 else "bad", f"GRPO：{dt.get('bitwise_mismatch_count')}/{dt.get('token_count')} 漂移",
+                          f"严格/严格的 30B LoRA GRPO，{ss.get('steps_completed')} 步里 trainer 重算的 logprob 与 rollout 记下的逐 bit 比较。"))
+    else:
+        tiles.append(("pend", "GRPO：运行中", "四种模式的 30B LoRA GRPO 还没有结果。"))
+    if a:
+        tiles.append(("bad", "漂移来源：几乎任何执行细节", "拼 batch、KV cache、分块 prefill、注意力实现、logits 精度，任何一个都会让 98–99% 的 token 变 bit。"))
+    cards = "".join(f'<div class="vt vt-{k}"><b>{esc(t)}</b><span>{esc(d)}</span></div>' for k, t, d in tiles)
+    return f"""
+<section id="verdict">
+  <p class="eyebrow">一屏结论</p>
+  <h2>能做到：两个真实运行时，逐 bit 相同</h2>
+  <div class="vgrid">{cards}</div>
+</section>"""
+
+
 TIMELINE = [
     ("down", "版本三角", "vLLM 0.31 要 transformers<5.18，Megatron Bridge main 要 ≥5.15,<5.18 且 Python 3.12：只有 5.17.0 两边都接受，指纹的语义源从 5.19 改钉 5.17。"),
     ("down", "Bridge 的 PyPI 版没有这个模型", "PyPI 0.3.1 还钉着 transformers<5；改为从 git main 可编辑安装。"),
@@ -938,6 +981,13 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .tl-key { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; vertical-align: middle; margin-right: 0.2rem; }
 .tl-key.up { background: var(--ok); } .tl-key.down { background: var(--bad); }
 .checklist { padding-left: 1.2rem; }
+.vgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; }
+.vt { display: grid; gap: 0.35rem; align-content: start; padding: 1rem 1.1rem; border-radius: 10px; border: 1px solid var(--rule); background: var(--panel); border-left-width: 5px; }
+.vt b { font: 750 1.2rem/1.25 var(--font-display); font-stretch: 90%; }
+.vt span { font-size: 0.88rem; color: var(--muted); }
+.vt-ok { border-left-color: var(--ok); } .vt-ok b { color: var(--ok); }
+.vt-bad { border-left-color: var(--bad); } .vt-bad b { color: var(--bad); }
+.vt-pend { border-left-color: var(--pend); } .vt-pend b { color: var(--pend); }
 footer { padding-top: 2rem; font-size: 0.85rem; color: var(--muted); }
 @media (max-width: 640px) { body { font-size: 15px; } .fig { padding: 0.7rem; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
@@ -946,7 +996,7 @@ footer { padding-top: 2rem; font-size: 0.85rem; color: var(--muted); }
 
 
 
-TOC = [("why", "问题"), ("scope", "范围"), ("model", "模型"), ("contract", "契约"), ("ws1", "单卡算子"), ("chain", "全模型链"),
+TOC = [("verdict", "结论"), ("why", "问题"), ("scope", "范围"), ("model", "模型"), ("contract", "契约"), ("ws1", "单卡算子"), ("chain", "全模型链"),
        ("multi", "TP/CP"), ("runtimes", "运行时"), ("xrt", "逐字节比对"), ("e2e", "GRPO"), ("ablation", "消融"),
        ("profile", "Profiling"), ("timeline", "过程"), ("rfc", "RFC 修改"), ("left", "留给社区")]
 
@@ -961,7 +1011,7 @@ def build() -> str:
     )
     toc = '<nav class="toc" aria-label="目录">' + "".join(f'<a href="#{i}">{esc(t)}</a>' for i, t in TOC) + "</nav>"
     body = "".join([
-        hero(), toc, sec_why(), sec_scope(), sec_model(), sec_contract(), sec_ws1(), sec_chain(), sec_multi(), sec_runtimes(),
+        hero(), toc, sec_verdict(), sec_why(), sec_scope(), sec_model(), sec_contract(), sec_ws1(), sec_chain(), sec_multi(), sec_runtimes(),
         sec_xrt(), sec_e2e(), sec_ablation(), sec_profile(), sec_timeline(), sec_rfc(), sec_left(),
     ])
     foot = ('<footer>数据：<code>reports/muse_glimmer_poc/data/*.json</code>；构建：<code>python3 reports/muse_glimmer_poc/blog/build_blog.py</code>。'

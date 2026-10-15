@@ -142,6 +142,13 @@ td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .tl-key { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; vertical-align: middle; margin-right: 0.2rem; }
 .tl-key.up { background: var(--ok); } .tl-key.down { background: var(--bad); }
 .checklist { padding-left: 1.2rem; }
+.vgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem; }
+.vt { display: grid; gap: 0.35rem; align-content: start; padding: 1rem 1.1rem; border-radius: 10px; border: 1px solid var(--rule); background: var(--panel); border-left-width: 5px; }
+.vt b { font: 750 1.2rem/1.25 var(--font-display); font-stretch: 90%; }
+.vt span { font-size: 0.88rem; color: var(--muted); }
+.vt-ok { border-left-color: var(--ok); } .vt-ok b { color: var(--ok); }
+.vt-bad { border-left-color: var(--bad); } .vt-bad b { color: var(--bad); }
+.vt-pend { border-left-color: var(--pend); } .vt-pend b { color: var(--pend); }
 footer { padding-top: 2rem; font-size: 0.85rem; color: var(--muted); }
 @media (max-width: 640px) { body { font-size: 15px; } .fig { padding: 0.7rem; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
@@ -153,7 +160,12 @@ footer { padding-top: 2rem; font-size: 0.85rem; color: var(--muted); }
   <p class="dek">在一台 8×A100 上，用真实的 vLLM 0.31 做 rollout、真实的 Megatron Bridge 做 LoRA 训练，按一份数值契约把每一次加法的顺序钉死，再跑 GRPO 看两边的 logprob 是否逐 bit 相同。这篇是结果、过程，以及 RFC 需要怎么改。</p>
   <div class="chips"><span class="chip">8× A100-SXM4-80GB</span><span class="chip">vLLM 0.31.0</span><span class="chip">Megatron Bridge 0.7 (git d86a5c09)</span><span class="chip">Triton 3.7.1</span><span class="chip">transformers 5.17.0</span><span class="chip">checkpoint a4e59da5</span><span class="chip">分支 feat/museglimmer-poc</span></div>
   <div class="bitstrip"><div class="bscap">同一个 token（gsm8k_long_window 第 0 个答案 token）的 fp32 logprob，各实现输出的 bit 模式。严格路径 5 份、1 种结果。</div><div class="lab">参考链 Triton</div><div class="hx hx-s">0xc20758d0<span class="hv">-33.836730957</span></div><div class="lab">vLLM 严格 TP1</div><div class="hx hx-s">0xc20758d0<span class="hv">-33.836730957</span></div><div class="lab">vLLM 严格 TP2</div><div class="hx hx-s">0xc20758d0<span class="hv">-33.836730957</span></div><div class="lab">Megatron 严格 TP1</div><div class="hx hx-s">0xc20758d0<span class="hv">-33.836730957</span></div><div class="lab">Megatron 严格 TP2</div><div class="hx hx-s">0xc20758d0<span class="hv">-33.836730957</span></div><div class="lab">vLLM 原生 TP1</div><div class="hx hx-n">0xc2078000<span class="hv">-33.875000000</span></div><div class="lab">vLLM 原生 TP2</div><div class="hx hx-n">0xc2070000<span class="hv">-33.750000000</span></div><div class="lab">Megatron 原生 TP1</div><div class="hx hx-n">0xc2078000<span class="hv">-33.875000000</span></div><div class="lab">Megatron 原生 TP2</div><div class="hx hx-n">0xc2078000<span class="hv">-33.875000000</span></div></div>
-</header><nav class="toc" aria-label="目录"><a href="#why">问题</a><a href="#scope">范围</a><a href="#model">模型</a><a href="#contract">契约</a><a href="#ws1">单卡算子</a><a href="#chain">全模型链</a><a href="#multi">TP/CP</a><a href="#runtimes">运行时</a><a href="#xrt">逐字节比对</a><a href="#e2e">GRPO</a><a href="#ablation">消融</a><a href="#profile">Profiling</a><a href="#timeline">过程</a><a href="#rfc">RFC 修改</a><a href="#left">留给社区</a></nav>
+</header><nav class="toc" aria-label="目录"><a href="#verdict">结论</a><a href="#why">问题</a><a href="#scope">范围</a><a href="#model">模型</a><a href="#contract">契约</a><a href="#ws1">单卡算子</a><a href="#chain">全模型链</a><a href="#multi">TP/CP</a><a href="#runtimes">运行时</a><a href="#xrt">逐字节比对</a><a href="#e2e">GRPO</a><a href="#ablation">消融</a><a href="#profile">Profiling</a><a href="#timeline">过程</a><a href="#rfc">RFC 修改</a><a href="#left">留给社区</a></nav>
+<section id="verdict">
+  <p class="eyebrow">一屏结论</p>
+  <h2>能做到：两个真实运行时，逐 bit 相同</h2>
+  <div class="vgrid"><div class="vt vt-ok"><b>5 份严格结果，0 个 bit 不同</b><span>参考链、vLLM TP1/TP2、Megatron TP1/TP2 对同样 933 个 token 的 fp32 logprob 完全一样。</span></div><div class="vt vt-bad"><b>原生：921–933 / 933</b><span>vLLM、Megatron、HF 的原生实现两两比较，几乎每个 token 的 bit 都不同。</span></div><div class="vt vt-ok"><b>训练梯度 TP2 == TP1</b><span>LoRA 梯度 832 个张量、1.05 亿个元素逐 bit 相同，AdamW 一步后的权重哈希也相同。</span></div><div class="vt vt-ok"><b>rollout 自洽：0 vs 146–169</b><span>同一序列 decode 时记下的 logprob 与事后 prefill 重算（每组 512 个 token）：严格 vs 原生。</span></div><div class="vt vt-pend"><b>代价：吞吐 46% / 41%</b><span>严格 vLLM 相对原生的吞吐（TP1 / TP2，batch 32 × 256）。训练一步约慢 2–3 倍。</span></div><div class="vt vt-pend"><b>GRPO：运行中</b><span>四种模式的 30B LoRA GRPO 还没有结果。</span></div><div class="vt vt-bad"><b>漂移来源：几乎任何执行细节</b><span>拼 batch、KV cache、分块 prefill、注意力实现、logits 精度，任何一个都会让 98–99% 的 token 变 bit。</span></div></div>
+</section>
 <section id="why">
   <p class="eyebrow">问题</p>
   <h2>同一个模型，为什么训练和推理算出来的 logprob 不一样</h2>
