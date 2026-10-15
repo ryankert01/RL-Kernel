@@ -4,9 +4,13 @@
 """Strict operator resolution for the Muse Glimmer Megatron Bridge binding.
 
 The binding is written against the FIXED interfaces of the sibling strict ops
-(``rl_engine.models.muse_glimmer.ops.*``). Every op is resolved at import time; when a
-sibling op is missing, a clearly labelled pure-torch fallback is used instead. Fallbacks are
-reported as ``fallback:<detail>`` in :func:`provenance` and are NEVER labelled strict.
+(``rl_engine.models.muse_glimmer.ops.*`` and the attention / GEMM Triton modules). Every op is
+resolved once per process by :func:`resolve_ops`. Strict mode FAILS CLOSED: unless the caller
+passes ``allow_fallback=True`` (unit tests only), a missing or broken sibling op raises
+:class:`StrictOpsUnavailable` naming every non-strict op and the import error behind it. The
+labelled pure-torch fallbacks (``fallback:<detail>`` in :meth:`StrictOps.provenance`, never
+labelled strict) exist only for those tests. Unknown ``MUSE_STRICT_ATTN`` / ``MUSE_STRICT_GEMM``
+values raise.
 
 Numerical conventions shared by every path here (contract O3/O7):
 
@@ -16,6 +20,9 @@ Numerical conventions shared by every path here (contract O3/O7):
   with the fixed binary tree ``((0+1)+(2+3))+((4+5)+(6+7))``. At TP ``t`` a rank owns ``8/t``
   consecutive chunks, reduces them with the sub-tree, all-gathers the fp32 partials in rank
   order (data movement only; never a reducing NCCL collective) and applies the same tree.
+* Reductions over TOKENS (LoRA weight gradients) use the det_gemm dW rule
+  ``T_pad = roundup(T, 256)``, 8 chunks of ``T_pad/8`` rows, padded rows masked to zero
+  (``ops.det_gemm.DW_CHUNK_RULE``, via ``fast_det_gemm(..., ragged_k=True)``).
 """
 
 from __future__ import annotations
@@ -32,6 +39,17 @@ import torch.distributed as dist
 CANONICAL_CHUNKS = 8
 _TILE_PAD = 64
 _NEG_INF = float("-inf")
+TOKEN_PAD = 256  # det_gemm dW rule: T_pad = roundup(T, 256), 8 chunks of T_pad / 8 rows
+ATTENTION_MODES = ("auto", "strict", "fallback")
+GEMM_MODES = ("auto", "strict", "sibling", "triton_repo", "cublas")
+
+
+class StrictOpsUnavailable(RuntimeError):
+    """A strict op is missing or broken and the caller did not allow fallbacks (fail closed)."""
+
+
+# import path -> "ExcType: message" for every sibling module that failed to import
+_IMPORT_ERRORS: dict[str, str] = {}
 
 
 @dataclass(frozen=True)
@@ -48,9 +66,11 @@ class OpSource:
 
 
 def _optional_module(path: str) -> Any | None:
+    """Import a sibling module; on failure record the error (reported by the fail-closed check)."""
     try:
         return importlib.import_module(path)
-    except Exception:  # noqa: BLE001 - sibling ops may be absent or half-landed
+    except Exception as exc:  # noqa: BLE001 - reported, never silently used in strict mode
+        _IMPORT_ERRORS[path] = f"{type(exc).__name__}: {exc}"[:500]
         return None
 
 
@@ -81,6 +101,35 @@ def combine_tree_torch(partials: Sequence[torch.Tensor]) -> torch.Tensor:
     return items[0]
 
 
+class TreeAccumulator:
+    """Canonical fixed tree built while the leaves arrive (left to right).
+
+    ``push`` leaves 0..n-1 in order (n a power of two); equal-level neighbours are merged as
+    soon as both exist (``left + right``), so 8 leaves give exactly
+    ``((0+1)+(2+3))+((4+5)+(6+7))`` -- the bits of :func:`combine_tree_torch` and of the
+    sibling ``ops.canonical_tree.combine_tree`` -- while at most ``log2(n) + 1`` fp32 partials
+    are alive (the list form keeps all ``n``).
+    """
+
+    def __init__(self) -> None:
+        self._stack: list[tuple[int, torch.Tensor]] = []
+        self.count = 0
+
+    def push(self, leaf: torch.Tensor) -> None:
+        level, node = 0, leaf
+        while self._stack and self._stack[-1][0] == level:
+            _, left = self._stack.pop()
+            node = left + node
+            level += 1
+        self._stack.append((level, node))
+        self.count += 1
+
+    def result(self) -> torch.Tensor:
+        if self.count == 0 or self.count & (self.count - 1) or len(self._stack) != 1:
+            raise ValueError(f"TreeAccumulator needs a power-of-two leaf count, got {self.count}")
+        return self._stack[0][1]
+
+
 def chunk_slices(k_total: int, chunk_ids: Sequence[int]) -> list[slice]:
     if k_total % CANONICAL_CHUNKS:
         raise ValueError(f"K={k_total} is not divisible into {CANONICAL_CHUNKS} canonical chunks")
@@ -101,22 +150,41 @@ class _GemmBackend:
 
     def __init__(self) -> None:
         requested = os.getenv("MUSE_STRICT_GEMM", "auto").strip().lower()
+        if requested not in GEMM_MODES:
+            raise ValueError(f"MUSE_STRICT_GEMM={requested!r} is not one of {GEMM_MODES}")
         self.source: OpSource
         self._partial: Callable[..., torch.Tensor]
         self._combine: Callable[[Sequence[torch.Tensor]], torch.Tensor] = combine_tree_torch
         sibling = _optional_module("rl_engine.models.muse_glimmer.ops.det_gemm")
         tree_mod = _optional_module("rl_engine.models.muse_glimmer.ops.canonical_tree")
         sibling_partial = _optional_attr(sibling, "fast_det_gemm_partial")
+        sibling_full = _optional_attr(sibling, "fast_det_gemm")
         sibling_tree = _optional_attr(tree_mod, "combine_tree")
-        if requested in ("auto", "sibling") and sibling_partial is not None:
+        # Token-axis reductions (LoRA dA/dB): the det_gemm dW rule (ragged_k, 256-token unit).
+        if sibling_full is not None and requested in ("auto", "strict", "sibling"):
+            self._token_fn = sibling_full
+            self._token_grad = self._sibling_token_grad
+            self.token_source = OpSource(
+                "gemm_token_grad", True,
+                "ops.det_gemm.fast_det_gemm(ragged_k=True): T_pad=roundup(T,256), 8 chunks",
+            )
+        else:
+            self._token_grad = self._torch_token_grad
+            self.token_source = OpSource(
+                "gemm_token_grad", False, "torch_fp32_per_chunk_tree (256-token rule, cuBLAS)"
+            )
+        if requested in ("auto", "strict", "sibling") and sibling_partial is not None:
             self._partial = self._sibling_partial
             self._sibling_fn = sibling_partial
             if sibling_tree is not None:
                 self._combine = sibling_tree
             self.source = OpSource("gemm", True, "ops.det_gemm.fast_det_gemm_partial")
             return
-        if requested == "sibling":
-            raise RuntimeError("MUSE_STRICT_GEMM=sibling but ops.det_gemm.fast_det_gemm_partial is absent")
+        if requested in ("strict", "sibling"):
+            raise StrictOpsUnavailable(
+                f"MUSE_STRICT_GEMM={requested} but ops.det_gemm.fast_det_gemm_partial is absent "
+                f"({_IMPORT_ERRORS.get('rl_engine.models.muse_glimmer.ops.det_gemm', 'no error')})"
+            )
         repo = _optional_module("rl_engine.backends.shared.triton.gemm.det_gemm")
         repo_cls = getattr(repo, "TritonDetGemmOp", None) if repo is not None else None
         if requested in ("auto", "triton_repo") and repo_cls is not None:
@@ -139,6 +207,44 @@ class _GemmBackend:
             raise RuntimeError(f"MUSE_STRICT_GEMM=triton_repo but {detail}")
         self._partial = self._cublas_partial
         self.source = OpSource("gemm", False, "cublas_fp32_per_chunk_tree (not batch-invariant)")
+
+    # -- token-axis reduction (weight gradients) ------------------------------------------
+    def _sibling_token_grad(self, lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return self._token_fn(lhs.t(), rhs.t(), out_dtype=torch.float32, ragged_k=True)
+
+    @staticmethod
+    def _torch_token_grad(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+        t = lhs.shape[0]
+        t_pad = ceil_to(max(t, 1), TOKEN_PAD)
+        a = torch.nn.functional.pad(lhs.t().float(), (0, t_pad - t))
+        b = torch.nn.functional.pad(rhs.t().float(), (0, t_pad - t))
+        return _GemmBackend._cublas_partial_fp32(a, b)
+
+    @staticmethod
+    def _cublas_partial_fp32(a: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
+        parts = []
+        for sl in chunk_slices(a.shape[1], range(CANONICAL_CHUNKS)):
+            parts.append(torch.mm(a[:, sl], w[:, sl].t()))
+        return combine_tree_torch(parts)
+
+    def token_grad(self, lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+        """fp32 ``lhs.T @ rhs`` reduced over the token axis (dim 0 of both, ``T`` rows).
+
+        ``lhs (T, P)``, ``rhs (T, Q)`` bf16 -> ``(P, Q)`` fp32 with the det_gemm dW rule:
+        ``T_pad = roundup(T, 256)``, 8 chunks of ``T_pad/8`` rows (rows >= T masked to zero),
+        fp32 MMA accumulation inside a chunk, chunk partials in the canonical tree.
+        """
+        if lhs.dtype != torch.bfloat16 or rhs.dtype != torch.bfloat16:
+            raise TypeError("token_grad operands must be bf16")
+        if lhs.ndim != 2 or rhs.ndim != 2 or lhs.shape[0] != rhs.shape[0]:
+            raise ValueError(f"token_grad shape mismatch {tuple(lhs.shape)} / {tuple(rhs.shape)}")
+        if lhs.shape[0] == 0:
+            return torch.zeros(lhs.shape[1], rhs.shape[1], dtype=torch.float32, device=lhs.device)
+        out = self._token_grad(lhs, rhs)
+        if out.dtype != torch.float32:
+            raise TypeError("token_grad backend must return fp32")
+        return out
 
     # -- backends -------------------------------------------------------------------------
     def _sibling_partial(self, a: torch.Tensor, w: torch.Tensor, chunk_ids: Sequence[int]):
@@ -225,11 +331,14 @@ def small_k_fp32(z: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     if b.shape[1] != r:
         raise ValueError("small_k_fp32 rank mismatch")
     acc = torch.zeros(z.shape[0], b.shape[0], dtype=torch.float32, device=z.device)
+    prod = torch.empty_like(acc)
     zf = z.float()
     bf = b.float()
     for k in range(r):
-        prod = zf[:, k : k + 1] * bf[:, k].unsqueeze(0)
-        acc = acc + prod
+        # exact product, then one fp32 add per k in index order (same bits as acc = acc + prod;
+        # in place so the (M, N) fp32 working set is two buffers, not three)
+        torch.mul(zf[:, k : k + 1], bf[:, k].unsqueeze(0), out=prod)
+        acc.add_(prod)
     return acc
 
 
@@ -427,53 +536,69 @@ def _fb_attention_impl(q, k, v, gate, cu_q, cu_k, window, ctx):
     return (out.float() * torch.sigmoid(gate.float())).to(torch.bfloat16)
 
 
-def _fb_gated_attention(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, *, window):
-    del q_pos  # positions are implied by cu_seqlens in the fallback (one prefill per sequence)
-    return _FallbackAttention.apply(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, window)
+@dataclass(frozen=True)
+class AttentionKernels:
+    """The per-rank attention entry points (contract O5, head-count parameters).
+
+    Strict: ``fwd`` = ``ops.gated_attention.strict_gated_attention_fwd_varlen``, and the
+    backward pieces of ``triton.gated_attention_bwd`` (``preprocess``, ``partials``,
+    ``subtree``) with ``combine`` = ``ops.canonical_tree.combine_tree`` for the cross-rank fold
+    of replicated KV heads. ``runtime.megatron_attention.rank_gated_attention`` drives them.
+    Fallback (tests only, TP <= 2): ``fallback`` is the per-head fp32 torch attention.
+    """
+
+    source: OpSource
+    fwd: Callable[..., Any] | None = None
+    preprocess: Callable[..., Any] | None = None
+    partials: Callable[..., Any] | None = None
+    subtree: Callable[..., Any] | None = None
+    combine: Callable[..., Any] | None = None
+    fallback: Callable[..., Any] | None = None
+
+    @property
+    def strict(self) -> bool:
+        return self.source.strict
 
 
-class _ComposedStrictAttention(torch.autograd.Function):
-    """Sibling strict varlen forward (``ops.gated_attention``) + sibling deterministic Triton
-    backward (``triton.gated_attention_bwd``), glued here because the sibling autograd wrapper
-    (``ops.gated_attention_autograd``) imports the forward from a module path that does not
-    export it and silently runs the fp32 golden forward instead (integration finding)."""
-
-    @staticmethod
-    def forward(ctx, q, k, v, gate, cu_q, cu_k, q_pos, window, fwd, bwd):
-        q_c, k_c, v_c, g_c = (t.contiguous() for t in (q, k, v, gate))
-        y, o, lse = fwd(q_c, k_c, v_c, g_c, cu_q, cu_k, q_pos, window=window)
-        ctx.save_for_backward(q_c, k_c, v_c, g_c, o, lse, cu_q, cu_k, q_pos)
-        ctx.window = window
-        ctx.bwd = bwd
-        return y
-
-    @staticmethod
-    def backward(ctx, dy):
-        q, k, v, g, o, lse, cu_q, cu_k, q_pos = ctx.saved_tensors
-        dq, dk, dv, dgate = ctx.bwd(
-            q, k, v, g, o, lse, dy.contiguous(), cu_q, cu_k, q_pos, window=ctx.window
-        )
-        return dq, dk, dv, dgate, None, None, None, None, None, None
-
-
-def _composed_strict_attention() -> Callable[..., torch.Tensor] | None:
-    fwd = _optional_attr(
-        _optional_module("rl_engine.models.muse_glimmer.ops.gated_attention"),
-        "strict_gated_attention_fwd_varlen",
+def _resolve_attention(mode: str) -> AttentionKernels:
+    if mode not in ATTENTION_MODES:
+        raise ValueError(f"MUSE_STRICT_ATTN={mode!r} is not one of {ATTENTION_MODES}")
+    fallback = AttentionKernels(
+        source=OpSource(
+            "gated_attention", False,
+            "binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant)",
+        ),
+        fallback=_FallbackAttention.apply,
     )
-    bwd = _optional_attr(
-        _optional_module("rl_engine.models.muse_glimmer.triton.gated_attention_bwd"),
-        "strict_gated_attention_bwd",
-    )
-    if fwd is None or bwd is None:
-        return None
-
-    def gated_attention(q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, *, window):
-        return _ComposedStrictAttention.apply(
-            q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window, fwd, bwd
+    if mode == "fallback":
+        return fallback
+    fwd_mod = _optional_module("rl_engine.models.muse_glimmer.ops.gated_attention")
+    bwd_mod = _optional_module("rl_engine.models.muse_glimmer.triton.gated_attention_bwd")
+    tree_mod = _optional_module("rl_engine.models.muse_glimmer.ops.canonical_tree")
+    parts = {
+        "fwd": _optional_attr(fwd_mod, "strict_gated_attention_fwd_varlen"),
+        "preprocess": _optional_attr(bwd_mod, "gated_attention_bwd_preprocess"),
+        "partials": _optional_attr(bwd_mod, "strict_gated_attention_bwd_partials"),
+        "subtree": _optional_attr(bwd_mod, "kv_partials_subtree"),
+        "combine": _optional_attr(tree_mod, "combine_tree"),
+    }
+    missing = [k for k, v in parts.items() if v is None]
+    if missing:
+        if mode == "strict":
+            raise StrictOpsUnavailable(f"MUSE_STRICT_ATTN=strict but {missing} are absent")
+        return AttentionKernels(
+            source=OpSource("gated_attention", False, fallback.source.detail + f"; missing {missing}"),
+            fallback=_FallbackAttention.apply,
         )
-
-    return gated_attention
+    return AttentionKernels(
+        source=OpSource(
+            "gated_attention", True,
+            "gated_attention.strict_gated_attention_fwd_varlen(num_q_heads,num_kv_heads) + "
+            "gated_attention_bwd.{gated_attention_bwd_preprocess,strict_gated_attention_bwd_"
+            "partials,kv_partials_subtree} + canonical_tree.combine_tree (per-rank heads)",
+        ),
+        **parts,
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -693,28 +818,72 @@ class StrictOps:
     centered_rmsnorm: Callable[..., torch.Tensor]
     weighted_rmsnorm: Callable[..., torch.Tensor]
     fused_post_norm_residual_pre_norm: Callable[..., tuple[torch.Tensor, torch.Tensor]]
-    rope_table: Callable[..., tuple[torch.Tensor, torch.Tensor]]
+    rope_rows: Callable[..., tuple[torch.Tensor, torch.Tensor]]
     qknorm_scaled_rope: Callable[..., tuple[torch.Tensor, torch.Tensor]]
-    gated_attention: Callable[..., torch.Tensor]
+    attention: AttentionKernels
     silu_mul: Callable[..., torch.Tensor]
     sources: dict[str, OpSource]
+    rope_table_sha256: Callable[..., str] | None = None
+
+    def all_sources(self) -> dict[str, OpSource]:
+        out = dict(self.sources)
+        out["gated_attention"] = self.attention.source
+        backend = gemm_backend()
+        out["gemm"] = backend.source
+        out["gemm_token_grad"] = backend.token_source
+        out["lm_head_tile_stats"] = lm_head_tile_ops().source
+        return out
+
+    def non_strict(self) -> list[str]:
+        return [f"{name} -> {src.label}" for name, src in self.all_sources().items() if not src.strict]
 
     def provenance(self) -> dict[str, Any]:
-        gemm = gemm_backend().source
-        out = {name: src.label for name, src in self.sources.items()}
-        out["gemm"] = gemm.label
-        out["lm_head_tile_stats"] = self.sources["lm_head_tile_stats"].label
-        out["all_strict"] = all(s.strict for s in self.sources.values()) and gemm.strict
+        out: dict[str, Any] = {name: src.label for name, src in self.all_sources().items()}
+        out["all_strict"] = not self.non_strict()
         return out
 
 
 _OPS: StrictOps | None = None
 
 
-def resolve_ops() -> StrictOps:
+def _rope_rows_fallback(
+    positions: torch.Tensor, *, device: torch.device | str | int | None = None
+) -> tuple[torch.Tensor, torch.Tensor]:
+    dev = positions.device if device is None else torch.device(device)
+    return _fb_rope_table(positions, theta=500000.0, dim=128, device=dev)
+
+
+def reset_resolution() -> None:
+    """Forget the resolved ops (tests that simulate a missing sibling module)."""
+    global _OPS, _GEMM, _LM_TILE_OPS
+    _OPS = None
+    _GEMM = None
+    _LM_TILE_OPS = None
+    _IMPORT_ERRORS.clear()
+
+
+def resolve_ops(*, allow_fallback: bool = False) -> StrictOps:
+    """Resolve every op of the strict path; FAIL CLOSED unless ``allow_fallback=True``.
+
+    Raises :class:`StrictOpsUnavailable` listing each non-strict op (with the sibling import
+    errors) when a strict kernel is missing or broken. ``allow_fallback=True`` returns the
+    labelled fallbacks instead (unit tests only; their labels start with ``fallback:``).
+    """
     global _OPS
-    if _OPS is not None:
-        return _OPS
+    if _OPS is None:
+        _OPS = _build_ops()
+    if not allow_fallback:
+        bad = _OPS.non_strict()
+        if bad:
+            errors = "; ".join(f"{k}: {v}" for k, v in sorted(_IMPORT_ERRORS.items()))
+            raise StrictOpsUnavailable(
+                "strict mode requires every op to be a sibling strict kernel; non-strict: "
+                + ", ".join(bad) + (f" (import errors: {errors})" if errors else "")
+            )
+    return _OPS
+
+
+def _build_ops() -> StrictOps:
     sources: dict[str, OpSource] = {}
 
     def pick(name: str, module_path: str, attr: str, fallback: Callable[..., Any], detail: str):
@@ -727,49 +896,8 @@ def resolve_ops() -> StrictOps:
 
     norms = "rl_engine.models.muse_glimmer.ops.norms"
     qk = "rl_engine.models.muse_glimmer.ops.qknorm_rope"
-    att = "rl_engine.models.muse_glimmer.ops.gated_attention_autograd"
     swi = "rl_engine.models.muse_glimmer.ops.swiglu_ffn"
-
-    # Attention: the sibling autograd op is only taken when its FORWARD is the strict kernel
-    # (while it is the fixed-order golden it is >100x slower and hard-wired to 32 heads).
-    attention_mode = os.getenv("MUSE_STRICT_ATTN", "auto").strip().lower()
-    att_mod = _optional_module(att)
-    att_fn = _optional_attr(att_mod, "gated_attention")
-    att_tracer = _optional_attr(att_mod, "trace")
-    sibling_fwd_strict = False
-    if att_tracer is not None:
-        try:
-            sibling_fwd_strict = not bool(att_tracer().get("forward_is_fallback", True))
-        except Exception:  # noqa: BLE001
-            sibling_fwd_strict = False
-    use_sibling_attention = att_fn is not None and (
-        attention_mode == "sibling" or (attention_mode == "auto" and sibling_fwd_strict)
-    )
-    composed = (
-        _composed_strict_attention() if attention_mode in ("auto", "composed") else None
-    )
-    if attention_mode == "composed" and composed is None:
-        raise RuntimeError("MUSE_STRICT_ATTN=composed but the sibling fwd/bwd kernels are absent")
-    if not use_sibling_attention and composed is not None:
-        gated_attention: Callable[..., torch.Tensor] = composed
-        sources["gated_attention"] = OpSource(
-            "gated_attention", True,
-            "gated_attention.strict_gated_attention_fwd_varlen+gated_attention_bwd."
-            "strict_gated_attention_bwd (composed in the binding)",
-        )
-    elif use_sibling_attention:
-        gated_attention = att_fn
-        sources["gated_attention"] = OpSource(
-            "gated_attention", sibling_fwd_strict,
-            "gated_attention_autograd.gated_attention"
-            + ("" if sibling_fwd_strict else " (forward is the golden fallback)"),
-        )
-    else:
-        gated_attention = _fb_gated_attention
-        sources["gated_attention"] = OpSource(
-            "gated_attention", False,
-            "binding_torch_fp32_cublas_per_head (TP-shape invariant, not batch invariant)",
-        )
+    attention = _resolve_attention(os.getenv("MUSE_STRICT_ATTN", "auto").strip().lower())
     ops = StrictOps(
         normalized_embedding=pick(
             "normalized_embedding", norms, "normalized_embedding", _fb_normalized_embedding,
@@ -785,16 +913,17 @@ def resolve_ops() -> StrictOps:
             "fused_post_norm_residual_pre_norm", norms, "fused_post_norm_residual_pre_norm",
             _fb_fused_post_norm_residual_pre_norm, "torch_fp32_rowwise",
         ),
-        rope_table=pick("rope_table", qk, "rope_table", _fb_rope_table, "torch_fp32_table"),
+        rope_rows=pick("rope_rows", qk, "rope_rows", _rope_rows_fallback, "torch_fp32_table"),
         qknorm_scaled_rope=pick(
             "qknorm_scaled_rope", qk, "qknorm_scaled_rope", _fb_qknorm_scaled_rope, "torch_fp32_rowwise"
         ),
-        gated_attention=gated_attention,
+        attention=attention,
         silu_mul=pick("silu_mul", swi, "swiglu", _fb_silu_mul, "torch_fp32_elementwise"),
         sources=sources,
+        rope_table_sha256=_optional_attr(_optional_module(qk), "rope_table_sha256"),
     )
-    sources["lm_head_tile_stats"] = lm_head_tile_ops().source
-    _OPS = ops
+    gemm_backend()
+    lm_head_tile_ops()
     return ops
 
 
@@ -824,11 +953,17 @@ def tanh_softcap_grad(z: torch.Tensor, *, multiplier: float, softcap: float) -> 
 
 
 __all__ = [
+    "ATTENTION_MODES",
+    "AttentionKernels",
     "CANONICAL_CHUNKS",
+    "GEMM_MODES",
     "LMHeadTileOps",
     "OpSource",
     "StrictOps",
+    "StrictOpsUnavailable",
+    "TOKEN_PAD",
     "TPComm",
+    "TreeAccumulator",
     "ceil_to",
     "chunk_slices",
     "combine_tile_stats_tree",
@@ -838,6 +973,7 @@ __all__ = [
     "gemm_single_chunk_fp32",
     "lm_head_tile_ops",
     "local_chunk_ids",
+    "reset_resolution",
     "resolve_ops",
     "set_deterministic_torch",
     "small_k_fp32",
