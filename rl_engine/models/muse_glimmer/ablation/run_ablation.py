@@ -393,8 +393,10 @@ def cmd_merge(args: argparse.Namespace) -> int:
         settings.extend(dict(s, setting=f"{s['setting']}_gpu_{gpu_b}")
                         for s in other["settings"])
     layer_parts = by_kind.get("hf_layers", [])
-    strict_parts = by_kind.get("strict", [])
-    for st in strict_parts:
+    # The main strict part is the one with the most settings; others are null controls.
+    strict_parts = sorted(by_kind.get("strict", []), key=lambda p: -len(p["settings"]))
+    if strict_parts:
+        st = strict_parts[0]
         records.extend(st["records"])
         settings.extend(st["settings"])
         # Context: how far the strict reference sits from the HF baseline (not a factor).
@@ -406,6 +408,20 @@ def cmd_merge(args: argparse.Namespace) -> int:
             "cross", "strict_vs_hf_baseline", "engine_context", 0,
             "strict train-mode logp minus HF baseline logp (different numerics by design)",
             recs, {}))
+        for other in strict_parts[1:]:
+            gpu_a, gpu_b = st["env"].get("gpu_lease"), other["env"].get("gpu_lease")
+            same = gpu_a == gpu_b
+            name = f"new_process_same_gpu_{gpu_b}" if same else f"second_gpu_{gpu_b}_vs_{gpu_a}"
+            factor, fid = ("repeat_null", 9) if same else ("second_gpu_null", 8)
+            recs = A.make_records("strict", name, factor, fid, "strict_train_alone", seqs, sb,
+                                  _scores_from_baseline(other["baseline"]),
+                                  extra={"gpu_lease_variant": gpu_b, "gpu_lease_baseline": gpu_a})
+            records.extend(recs)
+            settings.append(_setting_summary(
+                "strict", name, factor, fid,
+                f"strict baseline in a separate process on GPU {gpu_b} (main ran on GPU {gpu_a})",
+                recs, {"wall_ms": other["baseline"]["wall_ms"],
+                       "peak_mem_gib": other["baseline"]["peak_mem_gib"]}))
     commits = sorted({p["commit"] for p in parts})
     status = "complete"
     if any(p.get("status") != "complete" for p in parts) or not strict_parts \
@@ -445,6 +461,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "tf32_probe": layer_parts[0].get("tf32_probe") if layer_parts else None,
         "layer_records": [r for p in layer_parts for r in p.get("layer_records", [])],
         "settings": settings,
+        "analysis": analysis(records, hf["baseline"]),
         "records": records,
     }
     out = pathlib.Path(args.out)
@@ -457,6 +474,55 @@ def cmd_merge(args: argparse.Namespace) -> int:
     print()
     print(markdown_matrix(records, "max_abs_dlogp"))
     return 0
+
+
+PROB_BUCKETS = ((0.9, "p>0.9"), (0.5, "0.5<p<=0.9"), (0.1, "0.1<p<=0.5"), (-1.0, "p<=0.1"))
+
+
+def analysis(records: list[dict[str, Any]], baseline: dict[str, Any]) -> dict[str, Any]:
+    """Derived views for the report: which HF settings produce identical bits on the same
+    token (pairwise), and |dlogp| by the baseline probability of the gold token."""
+    import math
+
+    hf_recs = [r for r in records if r["engine"] == "hf"]
+    by: dict[str, dict[str, dict[str, Any]]] = {}
+    for r in hf_recs:
+        by.setdefault(r["setting"], {})[r["sequence"]] = r
+    names = list(by)
+    seq_ids = list(by[names[0]]) if names else []
+    common = [s for s in seq_ids if all(s in by[n] for n in names)]
+    matrix = []
+    for a in names:
+        row = []
+        for b in names:
+            row.append(sum(x == y for s in common
+                           for x, y in zip(by[a][s]["logp_hex"], by[b][s]["logp_hex"])))
+        matrix.append(row)
+    base = {p["sequence"]: p for p in baseline["per_sequence"]}
+    buckets: dict[str, dict[str, dict[str, float]]] = {}
+    for r in records:
+        if r["sequence"] not in base:
+            continue
+        key = f"{r['engine']}/{r['setting']}"
+        acc = buckets.setdefault(key, {lab: {"n": 0, "sum": 0.0, "max": 0.0}
+                                       for _, lab in PROB_BUCKETS})
+        for lp, dd in zip(base[r["sequence"]]["logp"], r["dlogp"]):
+            p = math.exp(lp)
+            lab = next(lab for lo, lab in PROB_BUCKETS if p > lo)
+            a = acc[lab]
+            a["n"] += 1
+            a["sum"] += abs(dd)
+            a["max"] = max(a["max"], abs(dd))
+    by_bucket = {k: {lab: {"n": v["n"], "mean_abs_dlogp": v["sum"] / v["n"] if v["n"] else None,
+                           "max_abs_dlogp": v["max"]} for lab, v in acc.items()}
+                 for k, acc in buckets.items()}
+    return {
+        "hf_pairwise_identical_tokens": {"settings": names, "sequences": common,
+                                         "n_tokens": sum(len(base[s]["logp"]) for s in common),
+                                         "matrix": matrix},
+        "abs_dlogp_by_baseline_prob": by_bucket,
+        "prob_buckets": [lab for _, lab in PROB_BUCKETS],
+    }
 
 
 def markdown_table(settings: list[dict[str, Any]]) -> str:
