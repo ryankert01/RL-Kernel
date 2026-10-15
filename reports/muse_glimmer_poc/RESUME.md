@@ -1,7 +1,7 @@
 # Muse-Glimmer-30B POC — how to resume (state as of 2026-10-15 ~15:20 UTC)
 
-Branch: `feat/museglimmer-arch-fingerprint` (worktree `/home/ubuntu/RL-Kernel/.claude/worktrees/swift-oak-hsv7`).
-Never pushed. Target branch for the eventual PR: `test-museglimmer` (per the maintainer comment on #501).
+Branch: `feat/museglimmer-poc` (pushed to the fork ryankert01/RL-Kernel; worktree `/home/ubuntu/RL-Kernel/.claude/worktrees/swift-oak-hsv7`). `feat/museglimmer-arch-fingerprint` = same history + one CI line, local only.
+Target branch for the eventual PR: `test-museglimmer` (per the maintainer comment on #501).
 
 ## Environments (ready)
 - `~/envs/vllm`: Python 3.12, vLLM 0.31.0, torch 2.13.0+cu130, triton 3.7.1, transformers 5.17.0, pytest.
