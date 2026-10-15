@@ -2,8 +2,8 @@
  "row": "full_model_chain follow-up: reference scoring of xrt_tokens.json + single-GPU profiling",
  "status": "complete",
  "commit": {
-  "sha": "4d400e97a27ddfc5ea33effbcedb5cc7c2ca994c",
-  "dirty": true
+  "sha": "76fc3bcb60c650668736493e767dddc67a72b26b",
+  "dirty": false
  },
  "env": {
   "gpu": "NVIDIA A100-SXM4-80GB",
@@ -50750,6 +50750,7 @@
    }
   },
   "decode_batch_invariance": {
+   "status": "PASS",
    "batch": 16,
    "batch1_vs_batchN_equal": 16,
    "permuted_batch4_vs_batch1_equal": 4,
