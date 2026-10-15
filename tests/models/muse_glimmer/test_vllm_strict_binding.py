@@ -46,8 +46,10 @@ def _bf(*shape, device=DEVICE):
 class TestSliceMapping:
     def test_qkv_slices_tp1(self):
         hidden, d, nh, nkv = 32, 8, 4, 2
-        wq, wk, wv = _bf(nh * d, hidden, device="cpu"), _bf(nkv * d, hidden, device="cpu"), _bf(
-            nkv * d, hidden, device="cpu"
+        wq, wk, wv = (
+            _bf(nh * d, hidden, device="cpu"),
+            _bf(nkv * d, hidden, device="cpu"),
+            _bf(nkv * d, hidden, device="cpu"),
         )
         fused = torch.cat([wq, wk, wv])
         sq, sk, sv = vs.canonical_qkv_slices(fused, nh * d, nkv * d)
@@ -57,8 +59,10 @@ class TestSliceMapping:
 
     def test_qkv_slices_tp2_match_head_shards(self):
         hidden, d, nh, nkv, tp = 32, 8, 4, 2, 2
-        wq, wk, wv = _bf(nh * d, hidden, device="cpu"), _bf(nkv * d, hidden, device="cpu"), _bf(
-            nkv * d, hidden, device="cpu"
+        wq, wk, wv = (
+            _bf(nh * d, hidden, device="cpu"),
+            _bf(nkv * d, hidden, device="cpu"),
+            _bf(nkv * d, hidden, device="cpu"),
         )
         for rank in range(tp):
             q_rows = slice(rank * (nh // tp) * d, (rank + 1) * (nh // tp) * d)
@@ -197,7 +201,9 @@ class TestFallbackRowLocal:
         assert torch.allclose(fb.centered_rmsnorm(x, w, eps=1e-5).float(), ref_c.float(), atol=2e-2)
         assert torch.allclose(fb.weighted_rmsnorm(x, w, eps=1e-5).float(), ref_w.float(), atol=2e-2)
         emb = fb.normalized_embedding(x, torch.tensor([3, 0], device=DEVICE), eps=1e-5)
-        assert torch.allclose(emb[0].float(), (xf[3] * inv[3]).to(torch.bfloat16).float(), atol=2e-2)
+        assert torch.allclose(
+            emb[0].float(), (xf[3] * inv[3]).to(torch.bfloat16).float(), atol=2e-2
+        )
         r, pre = fb.fused_post_norm_residual_pre_norm(x, x, w, 1e-8, w, 1e-5)
         post = fb.centered_rmsnorm(x, w, eps=1e-8)
         assert torch.equal(r, (x.float() + post.float()).to(torch.bfloat16))
@@ -239,7 +245,12 @@ class TestFallbackRowLocal:
         assert torch.equal(
             logp[1:2],
             fb.lm_head_softcap_logprob(
-                h[1:2], w, targets[1:2], multiplier=0.19611613513818404, softcap=20.0, vocab_size=vocab
+                h[1:2],
+                w,
+                targets[1:2],
+                multiplier=0.19611613513818404,
+                softcap=20.0,
+                vocab_size=vocab,
             ),
         )
 
@@ -255,9 +266,14 @@ class TestFallbackAttention:
         gate = _bf(length, nh * d)
         cu = torch.tensor([0, length], dtype=torch.int32, device=DEVICE)
         pos = torch.arange(length, device=DEVICE)
-        y_var, o_var, lse_var = fb.gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=window)
+        y_var, o_var, lse_var = fb.gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=window
+        )
         # fp32 reference (same mask) for correctness.
-        scores = torch.einsum("qhd,khd->hqk", q.float(), k.float().repeat_interleave(nh // nkv, 1)) * d**-0.5
+        scores = (
+            torch.einsum("qhd,khd->hqk", q.float(), k.float().repeat_interleave(nh // nkv, 1))
+            * d**-0.5
+        )
         qi, ki = pos[:, None], pos[None, :]
         visible = ki <= qi
         if window is not None:
@@ -284,14 +300,22 @@ class TestFallbackAttention:
         y_pg, o_pg, lse_pg = fb.gated_attention_fwd_paged(
             q, gate, k_cache, v_cache, block_table, seq_lens, cu, window=window
         )
-        assert torch.equal(y_pg, y_var) and torch.equal(o_pg, o_var) and torch.equal(lse_pg, lse_var)
+        assert (
+            torch.equal(y_pg, y_var) and torch.equal(o_pg, o_var) and torch.equal(lse_pg, lse_var)
+        )
         # Decode: one query at a time (chunked prefill of the tail) must reproduce the rows.
         for position in (0, 17, 63, 64, 69):
             q_dec = q[position : position + 1]
             seq_dec = torch.tensor([position + 1], dtype=torch.int32, device=DEVICE)
             cu_dec = torch.tensor([0, 1], dtype=torch.int32, device=DEVICE)
             y_dec, _, _ = fb.gated_attention_fwd_paged(
-                q_dec, gate[position : position + 1], k_cache, v_cache, block_table, seq_dec, cu_dec,
+                q_dec,
+                gate[position : position + 1],
+                k_cache,
+                v_cache,
+                block_table,
+                seq_dec,
+                cu_dec,
                 window=window,
             )
             assert torch.equal(y_dec[0], y_var[position]), f"decode row {position} differs"
@@ -301,7 +325,9 @@ class TestFallbackAttention:
         cu2 = torch.tensor([0, length, length + 3], dtype=torch.int32, device=DEVICE)
         q2 = torch.cat([q, q[37:40]])
         g2 = torch.cat([gate, gate[37:40]])
-        y2, _, _ = fb.gated_attention_fwd_paged(q2, g2, k_cache, v_cache, block_table2, seq2, cu2, window=window)
+        y2, _, _ = fb.gated_attention_fwd_paged(
+            q2, g2, k_cache, v_cache, block_table2, seq2, cu2, window=window
+        )
         assert torch.equal(y2[:length], y_var)
         assert torch.equal(y2[length:], y_var[37:40])
 
@@ -340,7 +366,9 @@ class TestStrictSiblings:
         fallback = resolve_ops(force_fallback=True)
         if ops.is_strict("det_gemm"):
             a, w = _bf(4, 512), _bf(256, 512)
-            ys, yf = ops.det_gemm(a, w, out_dtype=torch.float32), fallback.det_gemm(a, w, out_dtype=torch.float32)
+            ys, yf = ops.det_gemm(a, w, out_dtype=torch.float32), fallback.det_gemm(
+                a, w, out_dtype=torch.float32
+            )
             assert torch.allclose(ys, yf, atol=1e-3, rtol=1e-4)
         if ops.is_strict("centered_rmsnorm"):
             x, w = _bf(4, 6656), _bf(6656)
@@ -362,10 +390,20 @@ class TestStrictSiblings:
             targets = torch.tensor([1, 25344 + 7, 202047], device=DEVICE)
             for tile in (0, 1, 7):
                 s_strict = ops.softcap_tile_stats(
-                    z, tile, targets, multiplier=0.19611613513818404, softcap=20.0, vocab_size=202048
+                    z,
+                    tile,
+                    targets,
+                    multiplier=0.19611613513818404,
+                    softcap=20.0,
+                    vocab_size=202048,
                 )
                 s_fb = fallback.softcap_tile_stats(
-                    z, tile, targets, multiplier=0.19611613513818404, softcap=20.0, vocab_size=202048
+                    z,
+                    tile,
+                    targets,
+                    multiplier=0.19611613513818404,
+                    softcap=20.0,
+                    vocab_size=202048,
                 )
                 assert torch.allclose(s_strict[0], s_fb[0], atol=1e-5)
                 assert torch.allclose(s_strict[1], s_fb[1], rtol=1e-4)
@@ -384,7 +422,9 @@ class TestStrictSiblings:
 def test_strict_engine_decode_equals_prefill():
     from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import StrictRolloutEngine
 
-    model = os.path.expanduser(os.getenv("RL_KERNEL_MUSEGLIMMER_MODEL", "~/models/Muse-Glimmer-30B"))
+    model = os.path.expanduser(
+        os.getenv("RL_KERNEL_MUSEGLIMMER_MODEL", "~/models/Muse-Glimmer-30B")
+    )
     engine = StrictRolloutEngine(
         model, tensor_parallel_size=1, gpu_ids=[0], strict=True, max_model_len=512, seed=0
     )

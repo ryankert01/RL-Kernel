@@ -34,7 +34,7 @@ DEFAULT_PROMPTS = [
     "Write one sentence about the ocean.",
     "Explain why the sky is blue in two sentences.",
     "List three prime numbers greater than 10:",
-    "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
+    'def fibonacci(n):\n    """Return the n-th Fibonacci number."""\n',
     "Translate to German: The weather is nice today.",
     "Q: What is 17 * 23?\nA:",
     "Once upon a time, in a small village by the sea,",
@@ -76,27 +76,37 @@ def _load_prompts(path: str | None, tokenizer: Any, chat_template: bool) -> list
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--tp", type=int, default=1)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--strict", action="store_true", default=True)
     mode.add_argument("--native", action="store_true")
-    parser.add_argument("--prompt-file", default=None, help="JSON list of strings or token-id lists")
+    parser.add_argument(
+        "--prompt-file", default=None, help="JSON list of strings or token-id lists"
+    )
     parser.add_argument("--chat-template", action="store_true")
     parser.add_argument("--max-tokens", type=int, default=32)
     parser.add_argument("--max-model-len", type=int, default=2048)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--n", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--gpu-ids", default=None, help="comma list; ignored when a lease set CUDA_VISIBLE_DEVICES")
+    parser.add_argument(
+        "--gpu-ids", default=None, help="comma list; ignored when a lease set CUDA_VISIBLE_DEVICES"
+    )
     parser.add_argument(
         "--score",
         default=None,
         help="score the prompt_token_ids+token_ids of a previous output JSON instead of generating",
     )
-    parser.add_argument("--prefill-check", action="store_true", help="after generate, rescore via logprobs()")
-    parser.add_argument("--lora-zero-check", action="store_true", help="load an all-zero LoRA and re-score")
+    parser.add_argument(
+        "--prefill-check", action="store_true", help="after generate, rescore via logprobs()"
+    )
+    parser.add_argument(
+        "--lora-zero-check", action="store_true", help="load an all-zero LoRA and re-score"
+    )
     parser.add_argument("--lora-rank", type=int, default=16)
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
@@ -115,7 +125,11 @@ def main(argv: list[str] | None = None) -> int:
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    result: dict[str, Any] = {"mode": "score" if args.score else "generate", "strict": strict, "tp": args.tp}
+    result: dict[str, Any] = {
+        "mode": "score" if args.score else "generate",
+        "strict": strict,
+        "tp": args.tp,
+    }
 
     engine = StrictRolloutEngine(
         args.model,
@@ -145,7 +159,9 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             if "logprobs_hex" in previous:
-                result["bits_equal_to_scored_file"] = previous["logprobs_hex"] == result["logprobs_hex"]
+                result["bits_equal_to_scored_file"] = (
+                    previous["logprobs_hex"] == result["logprobs_hex"]
+                )
                 diffs = [
                     abs(a - b)
                     for ra, rb in zip(previous["logprobs"], logprobs, strict=True)
@@ -184,7 +200,9 @@ def main(argv: list[str] | None = None) -> int:
                 result["prefill_seconds"] = time.time() - t1
                 result["prefill_logprobs"] = prefill
                 result["prefill_logprobs_hex"] = hex_rows(prefill)
-                result["decode_vs_prefill_equal"] = result["prefill_logprobs_hex"] == result["logprobs_hex"]
+                result["decode_vs_prefill_equal"] = (
+                    result["prefill_logprobs_hex"] == result["logprobs_hex"]
+                )
                 diffs = [
                     abs(a - b)
                     for ra, rb in zip(flat_logprobs, prefill, strict=True)
@@ -211,20 +229,35 @@ def main(argv: list[str] | None = None) -> int:
                     engine.load_lora(state_dict, digest)
                     with_lora = engine.logprobs(sequences, starts)
                     result["lora_zero_logprobs_hex"] = hex_rows(with_lora)
-                    result["lora_zero_equal_to_prefill"] = result["lora_zero_logprobs_hex"] == result[
-                        "prefill_logprobs_hex"
-                    ]
+                    result["lora_zero_equal_to_prefill"] = (
+                        result["lora_zero_logprobs_hex"] == result["prefill_logprobs_hex"]
+                    )
                     result["lora_sha256"] = digest
                     engine.load_lora({}, "")
         result["meta"] = engine.provenance()
     finally:
         engine.close()
     Path(args.out).write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
-    summary = {k: v for k, v in result.items() if k in (
-        "mode", "strict", "tp", "generated_tokens", "tokens_per_s", "generate_seconds", "score_seconds",
-        "prefill_seconds", "decode_vs_prefill_equal", "decode_vs_prefill_max_abs_diff",
-        "bits_equal_to_scored_file", "max_abs_diff_to_scored_file", "lora_zero_equal_to_prefill",
-    )}
+    summary = {
+        k: v
+        for k, v in result.items()
+        if k
+        in (
+            "mode",
+            "strict",
+            "tp",
+            "generated_tokens",
+            "tokens_per_s",
+            "generate_seconds",
+            "score_seconds",
+            "prefill_seconds",
+            "decode_vs_prefill_equal",
+            "decode_vs_prefill_max_abs_diff",
+            "bits_equal_to_scored_file",
+            "max_abs_diff_to_scored_file",
+            "lora_zero_equal_to_prefill",
+        )
+    }
     print(json.dumps(summary, indent=2), file=sys.stderr)
     return 0
 

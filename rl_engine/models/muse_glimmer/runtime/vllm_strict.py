@@ -179,7 +179,9 @@ class StrictBindingState:
             "kv_heads_cached": [0, NUM_KV_HEADS],
             "kv_heads_replicated": True,
             "attention": (
-                "TP1" if t == 1 else "full 32/2-head attention run redundantly on every rank after an "
+                "TP1"
+                if t == 1
+                else "full 32/2-head attention run redundantly on every rank after an "
                 "exact all-gather of q/k/v/gate (bit-identical to TP1)"
             ),
             "o_proj_chunks": chunks,
@@ -580,7 +582,9 @@ def _check_pins(text: Any) -> dict[str, Any]:
     if layer_types != expected_layer_types():
         raise MuseGlimmerWorkloadError("vLLM text_config layer_types deviate from the pin")
     rope = getattr(text, "rope_parameters", None) or {}
-    theta = rope.get("rope_theta") if isinstance(rope, Mapping) else getattr(rope, "rope_theta", None)
+    theta = (
+        rope.get("rope_theta") if isinstance(rope, Mapping) else getattr(rope, "rope_theta", None)
+    )
     if float(theta or 0.0) != float(OFFICIAL_FINGERPRINT["rope_parameters"]["rope_theta"]):
         raise MuseGlimmerWorkloadError(f"vLLM text_config rope_theta={theta!r} is not pinned")
     pins["rope_theta"] = float(theta)
@@ -615,7 +619,9 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
             )
         cache_dtype = str(getattr(vllm_config.cache_config, "cache_dtype", "auto"))
         if cache_dtype not in ("auto", "bfloat16"):
-            raise RuntimeError(f"strict Muse Glimmer binding requires a bf16 KV cache, got {cache_dtype}")
+            raise RuntimeError(
+                f"strict Muse Glimmer binding requires a bf16 KV cache, got {cache_dtype}"
+            )
         state.cfg["max_model_len"] = int(model_config.max_model_len)
         state.checks["eager"] = "passed"
         state.checks["kv_cache_dtype"] = cache_dtype
@@ -650,9 +656,7 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
                 f"vLLM derived qk scale {attention.scale_query_by} != pinned "
                 f"{pins['qk_scale_factor']}"
             )
-        expected_local = (
-            expected_layer_types()[int(attention.layer_idx)] != FULL_ATTENTION
-        )
+        expected_local = expected_layer_types()[int(attention.layer_idx)] != FULL_ATTENTION
         if bool(attention.use_rope) != expected_local:
             raise RuntimeError(f"layer {attention.layer_idx}: rope/window schedule mismatch")
         impl = attention.attn.impl
@@ -677,7 +681,10 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
     state.role = "worker"
     state.cfg.update(pins)
     state.cfg["rope_table_positions"] = int(
-        min(pins["max_position_embeddings"], state.cfg.get("max_model_len", pins["max_position_embeddings"]))
+        min(
+            pins["max_position_embeddings"],
+            state.cfg.get("max_model_len", pins["max_position_embeddings"]),
+        )
     )
     state.cfg["window_keys_incl_self"] = int(pins["sliding_window"])
     state.cfg["sampling"] = "native"
@@ -699,7 +706,10 @@ def _patch_lm_head_padding(state: StrictBindingState) -> None:
         kwargs["org_num_embeddings"] = PADDED_VOCAB
         kwargs["padding_size"] = PADDED_VOCAB
         original_init(self, PADDED_VOCAB, embedding_dim, *args, **kwargs)
-        if int(self.num_embeddings_padded) != PADDED_VOCAB or int(self.org_vocab_size) != PADDED_VOCAB:
+        if (
+            int(self.num_embeddings_padded) != PADDED_VOCAB
+            or int(self.org_vocab_size) != PADDED_VOCAB
+        ):
             raise RuntimeError("strict lm_head padding did not produce the canonical 202752 layout")
         self._rlk_museglimmer_real_vocab = REAL_VOCAB
         state.call_counts["lm_head.padded_init"] += 1
@@ -725,13 +735,17 @@ def _patch_lm_head_padding(state: StrictBindingState) -> None:
     setattr(ParallelLMHead, _MARK, original_init)
     ParallelLMHead.__init__ = init_wrapped
     ParallelLMHead.weight_loader = loader_wrapped
-    state.hooks.append("vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__")
+    state.hooks.append(
+        "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__"
+    )
     state.hooks.append(
         "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader"
     )
 
 
-def gather_heads(state: StrictBindingState, local: torch.Tensor, *, replicas: int = 1) -> torch.Tensor:
+def gather_heads(
+    state: StrictBindingState, local: torch.Tensor, *, replicas: int = 1
+) -> torch.Tensor:
     """TP > 1: all-gather a per-rank head shard ``(T, n_local)`` into the full ``(T, n)`` tensor.
 
     Rank order is head order (column-parallel shards).  ``replicas`` > 1 (KV heads replicated
@@ -758,7 +772,9 @@ def _patch_attention_factory(state: StrictBindingState) -> None:
     if getattr(original_attention, _MARK, False):
         return
 
-    def attention_factory(num_heads: int, head_size: int, scale: float, num_kv_heads=None, **kwargs):
+    def attention_factory(
+        num_heads: int, head_size: int, scale: float, num_kv_heads=None, **kwargs
+    ):
         from vllm.distributed import get_tensor_model_parallel_world_size
 
         tp = int(get_tensor_model_parallel_world_size())
@@ -786,9 +802,8 @@ def _patch_model(state: StrictBindingState) -> None:
     original_attention = mg.MuseGlimmerAttention.forward
     original_mlp = mg.MuseGlimmerMLP.forward
 
-    def init_wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
-        original_init(self, *args, **kwargs)
-        vllm_config = kwargs.get("vllm_config", args[0] if args else None)
+    def init_wrapped(self: Any, *, vllm_config: Any, prefix: str = "") -> None:
+        original_init(self, vllm_config=vllm_config, prefix=prefix)
         _bind_model(state, self, vllm_config)
 
     def compute_logits(self: Any, hidden_states: torch.Tensor) -> torch.Tensor | None:
@@ -987,7 +1002,9 @@ def _patch_prompt_logprobs(state: StrictBindingState) -> None:
         )
         state.take_logits_ctx()
         targets = prompt_token_ids.to(torch.int64)
-        scores[:, 0] = strict_selected_logp(state, prompt_hidden_states[: targets.shape[0]], targets)
+        scores[:, 0] = strict_selected_logp(
+            state, prompt_hidden_states[: targets.shape[0]], targets
+        )
         state.call_counts["prompt_logprobs.strict_logp_calls"] += 1
         state.call_counts["prompt_logprobs.strict_logp_rows"] += int(targets.shape[0])
         if state.call_counts["prompt_logprobs.strict_logp_calls"] == 1:
@@ -996,7 +1013,9 @@ def _patch_prompt_logprobs(state: StrictBindingState) -> None:
 
     setattr(module, _MARK, original)
     module.compute_prompt_logprobs_with_chunking = wrapped
-    state.hooks.append("vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking")
+    state.hooks.append(
+        "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+    )
 
 
 # ----------------------------------------------------------------------------------------------
