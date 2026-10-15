@@ -118,6 +118,15 @@ def headline(results: dict) -> list[str]:
         ),
         ("long_window_random_lora", "long window as above with the rank-16 random LoRA"),
         ("decode_batch_64_random_lora", "decode batch 64 as above with the rank-16 random LoRA"),
+        (
+            "long_window_tightkv_no_lora",
+            "long window, 1 greedy + 8 T=1 copies, in a 1600-block KV pool (freed pages reused, "
+            "preemption + recompute)",
+        ),
+        (
+            "decode_batch_64_tightkv_no_lora",
+            "decode batch 64 in the same 1600-block KV pool",
+        ),
     ):
 
         def one(m: str, tp: int, label=label):
@@ -126,7 +135,11 @@ def headline(results: dict) -> list[str]:
                 return None
             dvp = c["decode_vs_prefill"]
             width = c["engine_steps"].get("max_decode_batch")
-            return f"{_frac(dvp)}{_info(dvp)}, max decode batch {width}"
+            text = f"{_frac(dvp)}{_info(dvp)}, max decode batch {width}"
+            events = c.get("scheduler_events")
+            if events and (events.get("preempted") or "tightkv" in label):
+                text += f", preempted {events['preempted']} / resumed {events['resumed']}"
+            return text
 
         rows.append(f"| {what} | {_tp_cells(results, 'native', one)} | "
                     f"{_tp_cells(results, 'strict', one)} |")
@@ -191,6 +204,10 @@ def headline(results: dict) -> list[str]:
     for key, what in (
         ("across_tp", "generated tokens + logprob bits, TP2/TP4 vs TP1 (same prompts, seeds)"),
         ("across_batch", "token choice, request i in a 64-wide vs a 256-wide batch (same seed)"),
+        (
+            "across_kv_pressure",
+            "token choice, tiny KV pool (reuse, preemption) vs normal pool (same seed)",
+        ),
     ):
         entries = inv.get(key)
         if not isinstance(entries, list):

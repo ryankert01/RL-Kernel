@@ -335,7 +335,41 @@ def token_selection_invariance(
                         ),
                     }
                 )
-    return {"across_tp": across_tp or "NOT RUN", "across_batch": across_batch or "NOT RUN"}
+    across_kv = []
+    for tight in contract:
+        if "_tightkv" not in tight["label"]:
+            continue
+        plain_label = tight["label"].replace("_tightkv", "")
+        for plain in contract:
+            if (
+                plain["label"] != plain_label
+                or plain["mode"] != tight["mode"]
+                or plain["tp"] != tight["tp"]
+            ):
+                continue
+            n = min(plain["requests"], tight["requests"])
+            if plain["seeds"][:n] != tight["seeds"][:n] or plain["temperatures"][:n] != tight[
+                "temperatures"
+            ][:n]:
+                continue
+            across_kv.append(
+                {
+                    "what": f"{tight['mode']} tp{tight['tp']} {plain_label}: first {n} requests "
+                    "in a tiny KV pool (page reuse, preemption/recompute: "
+                    f"{tight.get('scheduler_events')}) vs the normal pool (same prompt and seed)",
+                    **seq_compare(
+                        tight["token_ids"][:n],
+                        tight["logprobs"][:n],
+                        plain["token_ids"][:n],
+                        plain["logprobs"][:n],
+                    ),
+                }
+            )
+    return {
+        "across_tp": across_tp or "NOT RUN",
+        "across_batch": across_batch or "NOT RUN",
+        "across_kv_pressure": across_kv or "NOT RUN",
+    }
 
 
 def _bench_entry(run: dict, bench: dict, *, lora: bool) -> dict[str, Any]:
