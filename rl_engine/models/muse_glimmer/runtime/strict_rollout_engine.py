@@ -346,9 +346,16 @@ class StrictRolloutEngine:
         if max(summary["ranks"]) > self.max_lora_rank and not self.strict:
             raise ValueError(f"LoRA rank {summary['ranks']} exceeds max_lora_rank")
         if self.strict:
-            from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_load_lora
+            from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_load_lora_file
 
-            replies = self.llm.collective_rpc(worker_load_lora, args=(cpu_state, actual))
+            # Tensors nested in collective_rpc arguments do not survive vLLM's msgpack channel;
+            # ship them through a node-local file (every rank re-hashes what it read).
+            path = Path(self._readback_dir) / f"lora-{actual[:16]}.pt"
+            torch.save(cpu_state, path)
+            try:
+                replies = self.llm.collective_rpc(worker_load_lora_file, args=(str(path), actual))
+            finally:
+                path.unlink(missing_ok=True)
             if len(replies) != self.tensor_parallel_size:
                 raise RuntimeError("load_lora: not every TP rank answered")
             for reply in replies:
@@ -368,9 +375,9 @@ class StrictRolloutEngine:
         """Drop the adapter (strict: empty slots; native: no LoRA request)."""
 
         if self.strict:
-            from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_load_lora
+            from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_load_lora_file
 
-            self.llm.collective_rpc(worker_load_lora, args=({}, ""))
+            self.llm.collective_rpc(worker_load_lora_file, args=("", ""))
         self._native_lora = None
         self._lora_sha256 = None
 

@@ -1144,6 +1144,22 @@ def worker_load_lora(
     }
 
 
+def worker_load_lora_file(_worker: Any, path: str, sha256: str) -> dict[str, Any]:
+    """``LLM.collective_rpc`` target: load a ``torch.save``-d LoRA state dict from ``path``.
+
+    vLLM 0.31's msgpack utility channel does not round-trip tensors nested in RPC arguments
+    (they arrive as lists), so the driver writes the bf16 state dict to a node-local file and
+    every rank reads it (``weights_only=True``) and re-hashes it before installing its shard.
+    """
+
+    t0 = time.perf_counter()
+    state_dict = torch.load(path, map_location="cpu", weights_only=True) if path else {}
+    read_ms = (time.perf_counter() - t0) * 1e3
+    reply = worker_load_lora(_worker, state_dict, sha256)
+    reply["file_read_ms"] = read_ms
+    return reply
+
+
 def worker_check_lora_rule(
     _worker: Any, layer: int, tokens: int = 7, seed: int = 0
 ) -> dict[str, Any]:
@@ -1267,5 +1283,6 @@ __all__ = [
     "lora_small_k",
     "worker_check_lora_rule",
     "worker_load_lora",
+    "worker_load_lora_file",
     "worker_provenance",
 ]

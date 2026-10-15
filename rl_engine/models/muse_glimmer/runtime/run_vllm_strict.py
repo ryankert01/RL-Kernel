@@ -540,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             engine.clear_lora()
             flush()
-        if args.lora_random_check and strict and base_scores is not None:
+        if args.lora_random_check and (strict or args.native_lora) and base_scores is not None:
             from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
             from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_check_lora_rule
 
@@ -568,7 +568,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             with_lora = engine.logprobs(seqs, starts)
             record["scores_vs_no_lora"] = compare_rows(base_scores, with_lora)
-            if args.tp == 1:
+            if args.tp == 1 and strict:
                 record["unmerged_rule"] = [
                     engine.llm.collective_rpc(worker_check_lora_rule, args=(int(layer),))[0]
                     for layer in args.lora_rule_layers.split(",")
