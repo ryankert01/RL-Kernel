@@ -382,10 +382,16 @@ class TestLoRA:
 @gpu
 class TestStrictSiblings:
     def test_probe_keeps_strict_ops_under_cuda_default_device(self):
-        """vLLM builds the model under a CUDA default device; the probe must not demote then."""
+        """vLLM builds the model under a CUDA default device and bf16 default dtype; the probe must
+        not demote any strict op there."""
 
-        with torch.device(DEVICE):
-            ops = probe_ops(resolve_ops(), DEVICE)
+        previous = torch.get_default_dtype()
+        torch.set_default_dtype(torch.bfloat16)
+        try:
+            with torch.device(DEVICE):
+                ops = probe_ops(resolve_ops(), DEVICE)
+        finally:
+            torch.set_default_dtype(previous)
         assert ops.demotions == [], ops.demotions
         assert ops.all_strict, ops.fallback_names
 
@@ -461,6 +467,95 @@ class TestTPSimulation:
 # ------------------------------------------------------------------------------------------
 # E2E (opt-in)
 # ------------------------------------------------------------------------------------------
+
+
+E2E = pytest.mark.skipif(
+    os.getenv("RL_KERNEL_MUSEGLIMMER_E2E", "") != "1" or not CUDA,
+    reason="set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease",
+)
+_XRT = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "reports", "muse_glimmer_poc", "data",
+    "xrt_tokens.json",
+)
+
+
+def _bits(values):
+    import struct
+
+    return [struct.pack(">f", float(v)).hex() for v in values]
+
+
+@E2E
+def test_strict_engine_protocol_with_real_lora(tmp_path):
+    """Drive StrictRolloutEngine through e2e.engines.RolloutEngineLike with a real rank-16 LoRA."""
+
+    import inspect
+
+    from rl_engine.models.muse_glimmer.e2e.engines import RolloutEngineLike, coerce_samples
+    from rl_engine.models.muse_glimmer.e2e.sync import (
+        LoRAPackage,
+        WeightSyncError,
+        lora_sha256,
+        transfer_lora,
+        validate_lora_state_dict,
+    )
+    from rl_engine.models.muse_glimmer.runtime.run_vllm_strict import random_lora_state_dict
+    from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import StrictRolloutEngine
+
+    # Structural conformance: same method names, parameter names and kinds as the protocol.
+    for name in ("generate", "logprobs", "load_lora", "provenance", "close"):
+        want = inspect.signature(getattr(RolloutEngineLike, name))
+        have = inspect.signature(getattr(StrictRolloutEngine, name))
+        assert [(p.name, p.kind) for p in want.parameters.values()] == [
+            (p.name, p.kind) for p in have.parameters.values()
+        ], name
+
+    with open(_XRT, encoding="utf-8") as fh:
+        xrt = json.load(fh)
+    prompts = [
+        s["token_ids"][: s["completion_start"]] for s in xrt["sequences"][:2]
+    ]
+    model = os.path.expanduser(
+        os.getenv("RL_KERNEL_MUSEGLIMMER_MODEL", "~/models/Muse-Glimmer-30B")
+    )
+    engine = StrictRolloutEngine(
+        model, tensor_parallel_size=1, gpu_ids=[0], strict=True, max_model_len=1024, seed=3
+    )
+    try:
+        assert engine.provenance()["lora_sha256"] is None
+        state = random_lora_state_dict(seed=11, rank=16, b_std=0.01)
+        summary = validate_lora_state_dict(state)
+        assert summary["num_modules"] == 52 * 8 and summary["ranks"] == [16]
+        package = LoRAPackage(state, lora_sha256(state), step=0)
+        info = transfer_lora(package, engine, via_file=tmp_path / "lora.pt")
+        assert info["identity"] and engine.provenance()["lora_sha256"] == package.sha256
+        with pytest.raises(WeightSyncError):
+            engine.load_lora(state, "0" * 64)
+        assert engine.provenance()["lora_sha256"] == package.sha256
+
+        groups = engine.generate(prompts, n=2, max_tokens=12, temperature=1.0)
+        samples = coerce_samples(groups)
+        assert len(samples) == len(prompts) and all(len(g) == 2 for g in samples)
+        sequences, starts, decoded = [], [], []
+        for prompt, group in zip(prompts, samples):
+            for sample in group:
+                assert len(sample.token_ids) == len(sample.logprobs) > 0
+                for v in sample.logprobs:
+                    assert v <= 0.0 and float(torch.tensor(v, dtype=torch.float32)) == v
+                sequences.append(prompt + sample.token_ids)
+                starts.append(len(prompt))
+                decoded.append(sample.logprobs)
+        rescored = engine.logprobs(sequences, starts)
+        assert [_bits(r) for r in rescored] == [_bits(d) for d in decoded]
+
+        # A second sync (new adapter) replaces the first one on every rank.
+        state2 = random_lora_state_dict(seed=12, rank=16, b_std=0.01)
+        transfer_lora(LoRAPackage(state2, lora_sha256(state2), step=1), engine)
+        assert engine.provenance()["lora_sha256"] == lora_sha256(state2)
+        again = engine.logprobs(sequences, starts)
+        assert [_bits(r) for r in again] != [_bits(r) for r in rescored]
+    finally:
+        engine.close()
 
 
 @pytest.mark.skipif(

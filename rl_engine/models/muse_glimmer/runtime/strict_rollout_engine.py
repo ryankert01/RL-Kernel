@@ -170,6 +170,13 @@ class StrictRolloutEngine:
                 raise RuntimeError("strict rollout: worker reports no installed hooks")
             if prov.get("checks", {}).get("check_runtime_binding") != "passed":
                 raise RuntimeError("strict rollout: check_runtime_binding did not pass")
+            if not prov.get("all_ops_strict") and os.getenv(
+                "RL_KERNEL_MUSEGLIMMER_ALLOW_FALLBACK", ""
+            ).strip() not in ("1", "true", "yes"):
+                raise RuntimeError(
+                    f"strict rollout: rank {prov.get('tp_rank')} runs fallbacks "
+                    f"{prov.get('fallbacks')} (fail closed)"
+                )
         self._worker_provenance = list(provenances)
 
     def _lora_request(self) -> Any:

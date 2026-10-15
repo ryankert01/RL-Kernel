@@ -179,16 +179,17 @@ def resolve_ops(force_fallback: bool | None = None) -> StrictOps:
 def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]:
     """Tiny-shape smoke tests; each must run without raising and return sane shapes/dtypes.
 
-    Every random tensor is drawn on CPU explicitly: vLLM builds the model under a CUDA default
-    device, so ``torch.randn(..., generator=cpu_gen)`` without ``device=`` would fail there and
-    (before this was fixed) demote every strict op to its fallback.
+    Every random tensor is drawn on CPU in fp32 explicitly: vLLM builds the model under a CUDA
+    default device and a bf16 default dtype, so ``torch.randn(..., generator=cpu_gen)`` without
+    ``device=``/``dtype=`` would fail there or feed bf16 where fp32 is required (before this was
+    fixed every strict op was demoted to its fallback inside the vLLM worker).
     """
 
     g = torch.Generator(device="cpu").manual_seed(0)
     bf = torch.bfloat16
 
     def rnd(*shape):
-        return torch.randn(*shape, generator=g, device="cpu").to(device=device, dtype=bf)
+        return torch.randn(*shape, generator=g, device="cpu", dtype=torch.float32).to(device=device, dtype=bf)
 
     def expect(cond: bool, message: str) -> None:
         if not cond:
@@ -209,7 +210,7 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         expect(p.shape == (4, 256) and p.dtype == torch.float32, "det_gemm_partial")
 
     def probe_tree(ops: StrictOps) -> None:
-        parts = [torch.randn(3, generator=g, device="cpu").to(device) for _ in range(8)]
+        parts = [torch.randn(3, generator=g, device="cpu", dtype=torch.float32).to(device) for _ in range(8)]
         expect(ops.combine_tree(parts).shape == (3,), "combine_tree")
 
     def probe_norms(ops: StrictOps) -> None:
@@ -255,7 +256,7 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         expect(ops.swiglu(rnd(4, 256), rnd(4, 256)).dtype == bf, "swiglu")
 
     def probe_logp(ops: StrictOps) -> None:
-        z = torch.randn(4, 25344, generator=g, device="cpu").to(device)
+        z = torch.randn(4, 25344, generator=g, device="cpu", dtype=torch.float32).to(device)
         targets = torch.tensor([5, 25345, 202047, 7], device=device)
         stats = [
             ops.softcap_tile_stats(
@@ -286,8 +287,21 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
 
 
 def probe_ops(ops: StrictOps, device: torch.device) -> StrictOps:
-    """Smoke-test every strict binding; demote the ones that fail (reason recorded)."""
+    """Smoke-test every strict binding; demote the ones that fail (reason recorded).
 
+    Runs with the fp32 default dtype restored (vLLM calls this inside model construction, where
+    the default dtype is the model dtype).
+    """
+
+    previous_dtype = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float32)
+    try:
+        return _probe(ops, device)
+    finally:
+        torch.set_default_dtype(previous_dtype)
+
+
+def _probe(ops: StrictOps, device: torch.device) -> StrictOps:
     cases = _probe_cases(device)
     for _round in range(2):  # a demotion can change the inputs of a sibling probe; re-run once
         changed = False
