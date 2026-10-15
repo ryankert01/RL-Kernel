@@ -402,11 +402,10 @@ def _select_target(stats: Sequence[TileStats], like: torch.Tensor) -> torch.Tens
     """
 
     target_logit = torch.zeros_like(like)
-    found = torch.zeros_like(like, dtype=torch.bool)
     for st in stats:
         target_logit = torch.where(st.target_in_tile, st.target_logit, target_logit)
-        found = found | st.target_in_tile
-    return torch.where(found, target_logit, torch.full_like(target_logit, float("nan")))
+    found = torch.stack([st.target_in_tile for st in stats]).any(dim=0)
+    return torch.where(found, target_logit, float("nan"))
 
 
 def _finish_logp(stats: Sequence[TileStats]) -> tuple[torch.Tensor, torch.Tensor]:
