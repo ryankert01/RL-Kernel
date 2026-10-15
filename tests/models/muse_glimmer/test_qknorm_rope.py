@@ -903,22 +903,28 @@ class TestModelShapesStayBitwise:
 # --------------------------------------------------------------------------------------
 
 
+_LAYER_KIND_ENV = "MUSEGLIMMER_O4_REQUIRE_LAYER_KIND"
+
+
 @pytest.fixture
 def _layer_kind_state(monkeypatch):
-    """Isolate the process-wide layer-kind switch, warning latch and counters."""
-    monkeypatch.setattr(op, "_REQUIRE_LAYER_KIND", None)
-    monkeypatch.setattr(op, "_WARNED_IMPLICIT", False)
-    monkeypatch.setattr(op, "_LAYER_KIND_CALLS", {k: 0 for k in op._LAYER_KIND_CALLS})
-    monkeypatch.delenv(op.LAYER_KIND_ENV, raising=False)
+    """Isolate the process-wide layer-kind switch, warning latch and counters.
+
+    ``raising=False`` / ``getattr`` defaults: on a build without these internals the tests
+    still run and fail on behaviour (e.g. "DID NOT RAISE"), not in the fixture."""
+    calls = getattr(op, "_LAYER_KIND_CALLS", {})
+    monkeypatch.setattr(op, "_REQUIRE_LAYER_KIND", None, raising=False)
+    monkeypatch.setattr(op, "_WARNED_IMPLICIT", False, raising=False)
+    monkeypatch.setattr(op, "_LAYER_KIND_CALLS", {k: 0 for k in calls}, raising=False)
+    monkeypatch.delenv(getattr(op, "LAYER_KIND_ENV", _LAYER_KIND_ENV), raising=False)
     yield
 
 
 @pytest.fixture
 def _private_tables(monkeypatch):
     """Tests that corrupt a canonical table work on copies of the module caches."""
-    monkeypatch.setattr(op, "_CANONICAL_TABLES", dict(op._CANONICAL_TABLES))
-    monkeypatch.setattr(op, "_CANONICAL_VERSIONS", dict(op._CANONICAL_VERSIONS))
-    monkeypatch.setattr(op, "_CANONICAL_SHA", dict(op._CANONICAL_SHA))
+    for name in ("_CANONICAL_TABLES", "_CANONICAL_VERSIONS", "_CANONICAL_SHA"):
+        monkeypatch.setattr(op, name, dict(getattr(op, name, {})), raising=False)
     yield
 
 
@@ -944,17 +950,18 @@ class TestWaveBLayerKind:
     def test_env_var_makes_the_layer_kind_mandatory(self, _layer_kind_state, monkeypatch):
         q, k = _make_qk(8, seed=201)
         cos, sin = _tables(torch.arange(8, device=DEV))
-        monkeypatch.setenv(op.LAYER_KIND_ENV, "1")
-        assert op.layer_kind_required()
+        monkeypatch.setenv(_LAYER_KIND_ENV, "1")
         for c, s_ in ((cos, sin), (None, None)):
             with pytest.raises(ValueError, match="explicit"):
                 qknorm_scaled_rope(q, k, c, s_)
             with pytest.raises(ValueError, match="explicit"):
                 QKNormScaledRopeOp()(q, k, c, s_)
+        assert op.LAYER_KIND_ENV == _LAYER_KIND_ENV
         # explicit calls and the positions API are unaffected
         qknorm_scaled_rope(q, k, cos, sin, local=True)
         qknorm_scaled_rope(q, k, None, None, local=False)
         op.qknorm_scaled_rope_at(q, k, torch.arange(8, device=DEV), layer_idx=0)
+        assert op.layer_kind_required()
         assert op.runtime_provenance(compute_digest=False)["layer_kind_required"] is True
         # the programmatic switch overrides the environment, None defers to it again
         op.require_explicit_layer_kind(False)
@@ -962,7 +969,7 @@ class TestWaveBLayerKind:
         op.require_explicit_layer_kind(None)
         with pytest.raises(ValueError):
             qknorm_scaled_rope(q, k, None, None)
-        monkeypatch.setenv(op.LAYER_KIND_ENV, "0")
+        monkeypatch.setenv(_LAYER_KIND_ENV, "0")
         assert not op.layer_kind_required()
 
     def test_switch_without_env(self, _layer_kind_state):
