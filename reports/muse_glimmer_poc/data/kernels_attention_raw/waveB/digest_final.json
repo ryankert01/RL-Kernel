@@ -588,8 +588,8 @@
   "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
   "digest",
   "--out",
-  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/digest_final.json"
+  "reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/digest_final.json"
  ],
  "head_count_params": true,
- "wall_s": 122.24627757072449
+ "wall_s": 43.22022533416748
 }

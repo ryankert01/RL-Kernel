@@ -19,8 +19,9 @@
   device (it used to check each tensor only against its own weight):
   `test_fused_rejects_mixed_devices` (meta vs cpu tensors, runs anywhere) and
   `test_fused_rejects_two_gpus` (cuda:0 vs cuda:1; SKIPPED here: one GPU per lease, NOT RUN).
-- Tests: `tests/models/muse_glimmer/test_norms.py` 47 passed, 1 skipped (the two-GPU case) on one
-  leased A100 of pool 3,7 (see the Test commands section for the command).
+- Tests: `tests/models/muse_glimmer/test_norms.py` 47 passed, 1 skipped (the two-GPU case) in the
+  final run of the three owned files on one leased A100 of pool 3,7 (223 passed, 1 skipped in
+  total; log `reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/tests_owned.log.txt`).
 
 Branch `worktree-agent-ae93c2f69853aebf8` (merged from `feat/museglimmer-arch-fingerprint`).
 
@@ -128,6 +129,10 @@ Triton's divisibility specialization cannot create per-batch-size variants.
 - No sequence-split gate (G3): all ops are row-local; batch invariance covers it.
 
 ## Test commands and results
+
+Wave B (48 tests): `PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 3,7 -- ~/envs/vllm/bin/python -m
+pytest -q tests/models/muse_glimmer/test_norms.py` -> 47 passed, 1 skipped (needs two GPUs).
+Wave A (historical):
 
 ```
 PYTHONPATH=$WT ~/bin/gpu-lease -n 1 -- ~/envs/vllm/bin/python -m pytest \

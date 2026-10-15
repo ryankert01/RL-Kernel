@@ -2,6 +2,11 @@
 
 ## Wave B update (review wave A2) — backward kernels unchanged, bits unchanged
 
+Tests (final code, one A100 of pool 3,7): the three owned files 223 passed, 1 skipped
+(test_gated_attention_bwd.py: 75 tests, all passed); log
+`reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/tests_owned.log.txt`. Distributed CP
+tests NOT re-run in this wave (one GPU at a time).
+
 - **Backward bits**: the 14 backward digests of `gated_attention_bench digest` (dq, dk, dv,
   dgate at T = 1..4096, global + local) are identical to f91e8b6
   (`reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/digest_cmp.json`).

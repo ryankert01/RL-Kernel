@@ -121,7 +121,8 @@ bindings must pass exactly 2048 (`trace()["window_values"]`); request to the int
 
 **Tests (R8, R9).** `test_tile_layouts_share_warp_split` now compiles all 32 launched variants
 (4 head geometries x TOKEN/HEAD x varlen/paged x global/local) before scanning the TTGIR: one MMA
-layout `warpsPerCTA = [1, 4]`. Counts and the run are in "Test commands" below.
+layout `warpsPerCTA = [1, 4]`. Final run: 223 passed, 1 skipped over the three owned test files
+(101 / 75 / 48 tests; the skip needs two GPUs); details in "Test commands" below.
 
 ## Wave A update — head-count parameters (supersedes "Open issues 5" below)
 
@@ -195,7 +196,7 @@ Branch: `worktree-agent-a753a1fe25f1d2402` (based on `main` bf265a7 + merge of
 | G5 `trace()` | PASS: stable, JSON-serializable, carries op/dtypes/reduction order/casts/tile config. |
 | Benchmark (A100-80GB) | (wave A numbers; wave B table at the top supersedes them) prefill 4096: 2.06 ms vs SDPA-flash 1.57 ms (1.31x). Decode B=64@4096: paged 0.32 ms / varlen 0.20 ms vs SDPA 0.20 ms (1.6x / 1.0x). Local layer: SDPA has no window kernel (dense bool mask, 30 ms / 18 ms), the ratios are not comparable. |
 
-63 tests, 33 s on one A100.
+63 tests, 33 s on one A100 (wave A count; wave B: 101 tests in this file, see Test commands).
 
 ## Design (reduction order, casts, tiles)
 
@@ -289,6 +290,25 @@ tolerance reference, not a bitwise one (the tensor-core dot order is not reprodu
    `gated_attention_forward_fp32` (contract R4 naming).
 
 ## Test commands and results
+
+Wave B (final code; log `reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/tests_owned.log.txt`):
+
+```
+PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 3,7 -- ~/envs/vllm/bin/python -m pytest -q -p no:cacheprovider \
+    tests/models/muse_glimmer/test_gated_attention_fwd.py tests/models/muse_glimmer/test_gated_attention_bwd.py \
+    tests/models/muse_glimmer/test_norms.py -rs
+SKIPPED [1] tests/models/muse_glimmer/test_norms.py:164: needs two visible GPUs
+223 passed, 1 skipped, 1 warning in 107.87s (0:01:47)
+```
+
+(101 tests in test_gated_attention_fwd.py, 75 in test_gated_attention_bwd.py, 48 in test_norms.py.)
+Whole single-GPU Muse-Glimmer suite in the vLLM env at the same code (`full_suite_vllm.log.txt`):
+`pytest tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed` -> 675 passed,
+8 skipped (2-GPU, checkpoint and E2E gates). Megatron env (`megatron_env_tests.log.txt`):
+`test_megatron_strict_binding.py test_strict_model_tiny.py` -> 35 passed, 2 skipped. The
+distributed tests were NOT re-run (one GPU at a time in this wave).
+
+Wave A (historical):
 
 ```
 PYTHONPATH=$WT ~/bin/gpu-lease -n 1 -- ~/envs/vllm/bin/python -m pytest \
