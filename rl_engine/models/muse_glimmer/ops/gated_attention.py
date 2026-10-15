@@ -160,7 +160,7 @@ def validate_varlen_packing(
     cu_q, cu_k, pos = _host_int64(cu_seqlens_q, cu_seqlens_k, q_pos)
     lens_q = _check_offsets_host(cu_q, q_pos.numel(), "cu_seqlens_q")
     lens_k = _check_offsets_host(cu_k, int(num_k_tokens), "cu_seqlens_k")
-    seq_of_tok = torch.repeat_interleave(torch.arange(lens_q.numel()), lens_q)
+    seq_of_tok = torch.repeat_interleave(torch.arange(lens_q.numel(), device="cpu"), lens_q)
     bad = (pos < 0) | (pos >= lens_k[seq_of_tok])
     if bool(bad.any()):
         t = int(torch.nonzero(bad)[0, 0])

@@ -425,12 +425,12 @@ def prepare_sequence_meta(
         )
     batch = int(lens_q.numel())
     pos_cpu = q_pos.to("cpu", torch.int64)
-    qpos0_cpu = torch.zeros(batch, dtype=torch.int32)
+    qpos0_cpu = torch.zeros(batch, dtype=torch.int32, device="cpu")
     for b in range(batch):
         if int(lens_q[b]) == 0:
             continue
         seg = pos_cpu[int(cu_q[b]) : int(cu_q[b + 1])]
-        expected = seg[0] + torch.arange(seg.numel(), dtype=torch.int64)
+        expected = seg[0] + torch.arange(seg.numel(), dtype=torch.int64, device="cpu")
         if not torch.equal(seg, expected):
             raise ValueError(
                 "gated_attention_bwd requires contiguous ascending q_pos inside every sequence"

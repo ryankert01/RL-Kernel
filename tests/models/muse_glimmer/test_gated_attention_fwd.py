@@ -731,6 +731,28 @@ def test_host_validation_paged_seq_lens():
         )
 
 
+def test_host_validation_under_cuda_default_device():
+    """vLLM builds the model under torch.device('cuda') and bf16 default dtype: the host-side
+    validators must keep their CPU tensors on the CPU (regression found by
+    test_vllm_strict_binding's probe in wave B)."""
+    from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
+
+    q, k, v, gate, cu, pos = _varlen_case(n=64, seed=6)
+    ref = ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=W)
+    previous = torch.get_default_dtype()
+    torch.set_default_dtype(torch.bfloat16)
+    try:
+        with torch.device(DEV):
+            got = ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=W)
+            meta = bwd.prepare_sequence_meta(cu, cu, pos, num_k_tokens=k.shape[0])
+            with pytest.raises(ValueError, match="q_pos"):
+                ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos + 1, window=W)
+    finally:
+        torch.set_default_dtype(previous)
+    _assert_equal(got, ref, "under a CUDA default device")
+    assert meta.max_seqlen_q == 64 and meta.qpos0.device == pos.device
+
+
 def test_seq_meta_path_validates_without_sync():
     """A SequenceMeta is a host-validated packing: no sync, and max_seqlen_q may not undercut it."""
     from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
