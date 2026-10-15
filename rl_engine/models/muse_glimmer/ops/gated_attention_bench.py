@@ -347,16 +347,35 @@ def run_bwd_diff(old_path: str) -> dict[str, Any]:
                 rec["old_error"] = f"{type(exc).__name__}: {str(exc)[-160:]}"
                 records.append(rec)
                 continue
-            for name, a, b in zip(("dq", "dk", "dv", "dgate"), new_g, old_g):
-                diff = (a.float() - b.float()).abs()
-                rec[f"{name}_mismatch"] = int((a != b).sum().item())
-                rec[f"{name}_numel"] = a.numel()
-                rec[f"{name}_max_abs_diff"] = float(diff.max().item())
-                rec[f"{name}_max_rel_diff"] = float(
-                    (diff.max() / b.float().abs().max().clamp_min(1e-30)).item()
-                )
+            _diff_into(rec, "full", ("dq", "dk", "dv", "dgate"), new_g, old_g)
+            # isolate the two causes: (a) preprocess sigmoid (finding 4) on dgate/do/delta,
+            # (b) the dK/dV query-chunk rule on identical do/delta (dq kernel is unchanged)
+            new_pre = bwd.gated_attention_bwd_preprocess(inp["dy"], o, inp["gate"])
+            old_pre = old.gated_attention_bwd_preprocess(inp["dy"], o, inp["gate"])
+            _diff_into(rec, "preprocess", ("dgate", "do", "delta"), new_pre, old_pre)
+            _dg, do, delta = new_pre
+            core = (inp["q"], inp["k"], inp["v"], do, lse, delta, cu, cu, pos)
+            new_c = bwd.strict_gated_attention_bwd_partials(*core, window=window)
+            old_c = old.strict_gated_attention_bwd_partials(*core, window=window)
+            _diff_into(
+                rec, "core_same_do", ("dq", "dk", "dv"),
+                (new_c[0], bwd.combine_kv_partials(new_c[1]), bwd.combine_kv_partials(new_c[2])),
+                (old_c[0], old.combine_kv_partials(old_c[1]), old.combine_kv_partials(old_c[2])),
+            )
             records.append(rec)
     return {"records": records, "old_module": old_path}
+
+
+def _diff_into(rec: dict[str, Any], prefix: str, names, new, old) -> None:
+    for name, a, b in zip(names, new, old):
+        diff = (a.float() - b.float()).abs()
+        key = f"{prefix}/{name}"
+        rec[f"{key}_mismatch"] = int((a != b).sum().item())
+        rec[f"{key}_numel"] = a.numel()
+        rec[f"{key}_max_abs_diff"] = float(diff.max().item())
+        rec[f"{key}_max_rel_diff"] = float(
+            (diff.max() / b.float().abs().max().clamp_min(1e-30)).item()
+        )
 
 
 def main(argv: Optional[list[str]] = None) -> int:

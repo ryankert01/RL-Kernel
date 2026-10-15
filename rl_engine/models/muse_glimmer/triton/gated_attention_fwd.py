@@ -34,9 +34,17 @@ Cast points: inputs bf16; scores/p/l/acc fp32; ``p`` rounded to bf16 once before
 
 Two tile shapes share this body and must be bitwise identical per row (verified by the test
 suite): ``TOKEN`` tiles (``BLOCK_M = 64`` consecutive queries of one head) for
-prefill/training, and ``HEAD`` tiles (``BLOCK_M = 16`` = the 16 query heads of one GQA group
-at a single query position) for decode / short chunks, which read each K/V block once per KV
-head instead of once per query head.
+prefill/training, and ``HEAD`` tiles (``BLOCK_M = 16`` rows holding the query heads of one GQA
+group at a single query position) for decode / short chunks, which read each K/V block once per
+KV head instead of once per query head.
+
+Head counts are constexpr parameters (``H_Q``, ``H_KV``) so a tensor-parallel rank runs the same
+body on its head shard: TP1 ``32/2`` (GQA group 16), TP2 ``16/1`` (group 16), TP4 ``8/1`` and
+TP8 ``4/1`` with a replicated KV head (group 8 / 4). A HEAD tile always has ``BLOCK_M = 16``
+rows; when the shard's group is smaller the unused rows are masked (they load zeros, produce
+``-inf`` scores and are never stored), so the valid rows run the identical instruction stream
+(same tile height, same warp split) and keep their bits. Heads never interact, so a rank's
+output equals the matching slice of the full-geometry call bit for bit (test suite).
 
 Why both tiles use ``num_warps = 4``: the only reduction whose result depends on the thread
 layout is ``rowsum(p)`` over the 64 keys of a block (``rowmax`` is exact in any order and the
@@ -70,8 +78,37 @@ NUM_WARPS_TOKEN = 4
 NUM_WARPS_HEAD = 4  # must equal NUM_WARPS_TOKEN: same warp split along keys, same sum tree
 NUM_STAGES = 2
 
+#: Per-rank ``(H_Q, H_KV)`` the strict attention kernels accept: TP1, TP2 (own KV head), TP4 /
+#: TP8 (one replicated KV head). Rank ``r`` of TP ``t`` holds Q heads ``[32r/t, 32(r+1)/t)`` and
+#: KV head ``floor(2r/t)``; its GQA group is ``H_Q // H_KV`` (16, 16, 8, 4).
+SUPPORTED_HEAD_GEOMETRIES = ((NUM_Q_HEADS, NUM_KV_HEADS), (16, 1), (8, 1), (4, 1))
+
+
+def check_head_geometry(num_q_heads: int, num_kv_heads: int) -> tuple[int, int]:
+    """Validate a per-rank ``(H_Q, H_KV)`` against :data:`SUPPORTED_HEAD_GEOMETRIES`."""
+    geom = (int(num_q_heads), int(num_kv_heads))
+    if geom not in SUPPORTED_HEAD_GEOMETRIES:
+        raise ValueError(
+            f"(num_q_heads, num_kv_heads)={geom} is not a Muse-Glimmer TP shard; supported: "
+            f"{SUPPORTED_HEAD_GEOMETRIES}"
+        )
+    return geom
+
+
 NEG_INF = tl.constexpr(float("-inf"))
 INT32_MAX = tl.constexpr(2147483647)
+
+
+@triton.jit
+def sigmoid_rn(x):
+    """Output-gate sigmoid shared by the forward and the backward: ``1 / (1 + exp(-x))`` fp32.
+
+    ``tl.exp`` fp32 and an IEEE round-to-nearest division (``libdevice.div_rn``): Triton's
+    default fp32 ``/`` may lower to the approximate ``div.full.f32``. Both kernels must call this
+    helper so the gradient differentiates the same function that produced ``y``.
+    """
+    one = tl.zeros_like(x) + 1.0
+    return libdevice.div_rn(one, one + tl.exp(-x))
 
 
 @triton.jit
@@ -120,14 +157,15 @@ def _gated_attention_fwd_kernel(
     offs_n = tl.arange(0, BLOCK_N)
 
     if HEAD_TILE:
-        tl.static_assert(BLOCK_M == GROUP, "HEAD tiles hold exactly one GQA group")
+        tl.static_assert(BLOCK_M >= GROUP, "a HEAD tile holds one whole GQA group")
         tok = pid_m.to(tl.int64)
         if tok >= len_q:
             return
         kv_head = pid_h
         row_tok = tok + tl.zeros([BLOCK_M], dtype=tl.int64)
         row_head = pid_h * GROUP + tl.arange(0, BLOCK_M)
-        row_valid = tl.arange(0, BLOCK_M) >= 0
+        # rows >= GROUP exist only for TP4/TP8 shards (group 8/4); they are masked everywhere
+        row_valid = tl.arange(0, BLOCK_M) < GROUP
         pos_scalar = tl.load(q_pos_ptr + q_start + tok)
         pos_rows = pos_scalar + tl.zeros([BLOCK_M], dtype=tl.int32)
         p_min = pos_scalar
@@ -211,8 +249,7 @@ def _gated_attention_fwd_kernel(
     g = tl.load(
         gate_ptr + row_off[:, None] + offs_d[None, :], mask=row_valid[:, None], other=0.0
     ).to(tl.float32)
-    one = tl.full([BLOCK_M, D], 1.0, dtype=tl.float32)
-    gate = libdevice.div_rn(one, one + tl.exp(-g))
+    gate = sigmoid_rn(g)
     y = (o_bf16.to(tl.float32) * gate).to(tl.bfloat16)
 
     tl.store(o_ptr + row_off[:, None] + offs_d[None, :], o_bf16, mask=row_valid[:, None])
@@ -233,5 +270,8 @@ __all__ = [
     "NUM_WARPS_HEAD",
     "NUM_WARPS_TOKEN",
     "PAGE_SIZE",
+    "SUPPORTED_HEAD_GEOMETRIES",
     "_gated_attention_fwd_kernel",
+    "check_head_geometry",
+    "sigmoid_rn",
 ]

@@ -4,22 +4,22 @@
 
 Two references live here:
 
-1. :func:`golden_forward_fixed_order` - a hand-written fixed-order fp32 forward with the
-   contract's casts (p -> bf16 before PV, out -> bf16, y -> bf16, lse = m + log l). It follows
-   the kernel's block structure (64-key blocks ascending from the first visible block, online
-   softmax with m/l/acc updated in the contract's order) and evaluates every dot product as a
-   sequential loop over the contraction index (no ``torch.matmul``). It is the forward the
-   autograd Function falls back to while the sibling Triton forward is not importable, and the
-   source of ``o``/``lse`` for the backward tests.
+1. :func:`golden_forward_fixed_order` - a varlen ADAPTER over THE forward golden of the op,
+   :func:`rl_engine.models.muse_glimmer.ops.gated_attention.gated_attention_forward_fp32`
+   (fixed-order fp32 blocked online softmax with the contract casts). It loops over the packed
+   sequences and returns ``(y bf16, o bf16, lse fp32)``, i.e. the golden rounded at the
+   kernel's output cast points. There is exactly one O5 forward golden; this module does not
+   re-implement it. The backward tests take ``o``/``lse`` from the strict forward kernel (the
+   tensors a real training step saves) and use the goldens only as accuracy references.
 
 2. :func:`reference_backward` - the mathematical gradient of the un-quantised gated attention,
    computed by ``torch.autograd`` in fp64 (default; the contract allows an FP64 reference) or
    fp32. It uses ``torch.matmul`` because it is a tolerance reference, not a strict path and not
    the golden: its reduction order is irrelevant at the attention gradient tolerance.
 
-Both work on the varlen layout: ``q (Tq,32,128)``, ``k/v (Tk,2,128)``, ``gate_logits
-(Tq,4096)``, ``cu_seqlens_q/k`` int32 offsets, ``q_pos`` absolute query positions, keys of a
-sequence at absolute positions ``0..Lk-1``.
+Both work on the varlen layout: ``q (Tq,H_Q,128)``, ``k/v (Tk,H_KV,128)``, ``gate_logits
+(Tq,H_Q*128)``, ``cu_seqlens_q/k`` int32 offsets, ``q_pos`` absolute query positions, keys of a
+sequence at absolute positions ``0..Lk-1``; GQA: q head ``h`` reads kv head ``h // (H_Q/H_KV)``.
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ from typing import Optional
 
 import torch
 
+from rl_engine.models.muse_glimmer.ops.gated_attention import gated_attention_forward_fp32
+
 HEAD_DIM = 128
 NUM_Q_HEADS = 32
 NUM_KV_HEADS = 2
@@ -35,9 +37,9 @@ BLOCK_N = 64
 SOFTMAX_SCALE = float(HEAD_DIM) ** -0.5
 
 
-def _kv_index() -> torch.Tensor:
-    """GQA map: q head h reads kv head h // 16."""
-    return torch.arange(NUM_Q_HEADS) // (NUM_Q_HEADS // NUM_KV_HEADS)
+def _kv_index(num_q_heads: int = NUM_Q_HEADS, num_kv_heads: int = NUM_KV_HEADS) -> torch.Tensor:
+    """GQA map: q head h reads kv head h // (H_Q / H_KV)."""
+    return torch.arange(num_q_heads) // (num_q_heads // num_kv_heads)
 
 
 def _visible(
@@ -66,66 +68,26 @@ def golden_forward_fixed_order(
     *,
     window: Optional[int],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Fixed-order fp32 forward with the contract casts -> ``(y bf16, o bf16, lse fp32)``.
+    """Varlen adapter over ``gated_attention_forward_fp32`` -> ``(y bf16, o bf16, lse fp32)``.
 
-    Reduction order (per sequence, all heads together, rows independent):
-      key blocks of 64 ascending from floor(max(0, p_min-W+1)/64) (0 on global layers) to
-      floor(p_max/64); inside a block ``s = sum_{d ascending} q_d * k_d`` (sequential),
-      ``m_new = max(m, rowmax)``, ``alpha = exp(m - m_new)``, ``p = exp(s - m_new)``,
-      ``l = l*alpha + rowsum(p)``, ``acc = acc*alpha + sum_{j ascending} bf16(p_j) * v_j``.
-    Casts: p -> bf16 before PV; out = acc/l -> bf16; y = out*sigmoid(g) fp32 -> bf16.
+    Per sequence ``b``: ``gated_attention_forward_fp32(q_b, k_b, v_b, g_b, q_pos_b, window)`` in
+    fp32 (reduction order and casts: see that function), then ``y`` and ``o`` rounded to bf16
+    once (the kernel's output casts). Bitwise identical to calling the forward golden
+    sequence by sequence (``test_golden_adapter_is_the_forward_golden``).
     """
-    device = q.device
-    tq = q.shape[0]
-    kv_idx = _kv_index().to(device)
-    y = torch.empty((tq, NUM_Q_HEADS * HEAD_DIM), dtype=torch.bfloat16, device=device)
-    o = torch.empty_like(y)
-    lse = torch.empty((tq, NUM_Q_HEADS), dtype=torch.float32, device=device)
-    scale = SOFTMAX_SCALE
-    neg_inf = float("-inf")
-
+    tq, hq = q.shape[0], q.shape[1]
+    y = torch.zeros((tq, hq * HEAD_DIM), dtype=torch.bfloat16, device=q.device)
+    o = torch.zeros_like(y)
+    lse = torch.full((tq, hq), float("-inf"), dtype=torch.float32, device=q.device)
     for (q0, q1), (k0, k1) in zip(_split(cu_seqlens_q), _split(cu_seqlens_k)):
         if q1 == q0:
             continue
-        qs = q[q0:q1].to(torch.float32)  # (Lq, Hq, D)
-        ks = k[k0:k1].to(torch.float32).index_select(1, kv_idx)  # (Lk, Hq, D)
-        vs = v[k0:k1].to(torch.float32).index_select(1, kv_idx)
-        qpos = q_pos[q0:q1].to(torch.int64)
-        lq, lk = q1 - q0, k1 - k0
-        m = torch.full((lq, NUM_Q_HEADS), neg_inf, dtype=torch.float32, device=device)
-        l = torch.zeros((lq, NUM_Q_HEADS), dtype=torch.float32, device=device)
-        acc = torch.zeros((lq, NUM_Q_HEADS, HEAD_DIM), dtype=torch.float32, device=device)
-        p_min = int(qpos.min())
-        p_max = int(qpos.max())
-        first = 0 if window is None else max(0, p_min - int(window) + 1) // BLOCK_N
-        last = min(p_max // BLOCK_N, (lk - 1) // BLOCK_N) if lk > 0 else -1
-        for kb in range(first, last + 1):
-            j0, j1 = kb * BLOCK_N, min((kb + 1) * BLOCK_N, lk)
-            kblk = ks[j0:j1].permute(1, 0, 2)  # (Hq, nk, D)
-            vblk = vs[j0:j1]  # (nk, Hq, D)
-            kpos = torch.arange(j0, j1, device=device)
-            s = torch.zeros((lq, NUM_Q_HEADS, j1 - j0), dtype=torch.float32, device=device)
-            for d in range(HEAD_DIM):
-                s = s + qs[:, :, d, None] * kblk[None, :, :, d]
-            s = s * scale
-            vis = _visible(qpos, kpos, window)[:, None, :]
-            s = torch.where(vis, s, neg_inf)
-            m_new = torch.maximum(m, s.amax(dim=-1))
-            alive = m_new > neg_inf
-            alpha = torch.exp(torch.where(alive, m - m_new, 0.0))
-            p = torch.where(vis, torch.exp(s - m_new[..., None]), 0.0)
-            p = torch.where(alive[..., None], p, 0.0)
-            l = l * alpha + p.sum(dim=-1)
-            p_bf = p.to(torch.bfloat16).to(torch.float32)
-            acc = acc * alpha[..., None]
-            for j in range(j1 - j0):
-                acc = acc + p_bf[:, :, j, None] * vblk[j][None, :, :]
-            m = m_new
-        out = (acc / l[..., None]).to(torch.bfloat16)
-        o[q0:q1] = out.reshape(lq, -1)
-        lse[q0:q1] = m + torch.log(l)
-        g = gate_logits[q0:q1].to(torch.float32)
-        y[q0:q1] = (out.to(torch.float32).reshape(lq, -1) * torch.sigmoid(g)).to(torch.bfloat16)
+        yb, ob, lb = gated_attention_forward_fp32(
+            q[q0:q1], k[k0:k1], v[k0:k1], gate_logits[q0:q1], q_pos[q0:q1], window
+        )
+        y[q0:q1] = yb.to(torch.bfloat16)
+        o[q0:q1] = ob.to(torch.bfloat16)
+        lse[q0:q1] = lb
     return y, o, lse
 
 
@@ -145,7 +107,7 @@ def reference_forward(
     Uses ``torch.matmul``; this is the tolerance reference, not a strict path (see module doc).
     """
     device = q.device
-    kv_idx = _kv_index().to(device)
+    kv_idx = _kv_index(q.shape[1], k.shape[1]).to(device)
     outs = []
     for (q0, q1), (k0, k1) in zip(_split(cu_seqlens_q), _split(cu_seqlens_k)):
         if q1 == q0:
