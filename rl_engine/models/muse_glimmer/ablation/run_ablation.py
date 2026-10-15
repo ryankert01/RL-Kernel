@@ -43,6 +43,7 @@ import torch  # noqa: E402
 
 from rl_engine.models.muse_glimmer.ablation import ablation_hf as A  # noqa: E402
 
+NULL_FACTORS = ("repeat_null", "second_gpu_null")
 DEFAULT_TOKENS = "reports/muse_glimmer_poc/data/xrt_tokens.json"
 DEFAULT_CKPT = "~/models/Muse-Glimmer-30B"
 SCHEMA = "muse_glimmer_ablation_v2"
@@ -560,17 +561,29 @@ def merge_parts(parts: list[dict[str, Any]], tokens: str, *, commands: list[str]
             recs, {}, {"n_factors": None}))
         for other in strict_parts[1:]:
             null_control(other, "strict", sb, "strict_train_alone", "strict baseline")
+    for s in settings:  # null controls flip nothing, whatever the part recorded
+        if s.get("factor") in NULL_FACTORS:
+            s["n_factors"] = 0
     commits = sorted({p["commit"] for p in parts})
-    status = "complete"
-    if any(p.get("status") != "complete" for p in parts) or not strict_parts \
-            or not by_kind.get("hf_baseline_only") or not layer_parts:
-        status = "partial"
+    have = {(s["engine"], s["factor"]) for s in settings}
+    missing = [name for name, ok in (
+        ("all parts complete", all(p.get("status") == "complete" for p in parts)),
+        ("strict part", bool(strict_parts)),
+        ("hf second-GPU null control", ("hf", "second_gpu_null") in have),
+        ("strict second-GPU null control", ("strict", "second_gpu_null") in have),
+        ("hf new-process null control", any(
+            s["engine"] == "hf" and s["setting"].startswith("new_process_same_gpu")
+            for s in settings)),
+        ("hf_layers part", bool(layer_parts)),
+    ) if not ok]
+    status = "partial" if missing else "complete"
     head = _git_sha()
     hf_lookup = {s.name: s for s in A.HF_SETTINGS}
     payload = {
         "row": "museglimmer_ablation",
         "schema": SCHEMA,
         "status": status,
+        "status_missing": missing,
         "commit": hf["commit"],
         "commits_all_parts": commits,
         "head_at_merge": head,

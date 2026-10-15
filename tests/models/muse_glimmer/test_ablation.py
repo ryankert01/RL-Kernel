@@ -465,7 +465,9 @@ def test_merge_synthetic_parts(tmp_path):
     want = sum(int((A.fp32_bits(a.logp) != A.fp32_bits(b.logp)).sum()) for a, b in zip(c64, l1))
     assert d["derived_from_stored_values"] and d["n_bits_differ"] == want and d["n_factors"] == 1
     assert by[("hf", "chunked_prefill_64")]["n_factors"] == 2
-    assert pay["status"] == "partial"  # no hf_layers part
+    assert pay["status"] == "partial" and pay["status_missing"] == ["hf_layers part"]
+    assert all(s["n_factors"] == 0 for s in pay["settings"]
+               if s["factor"] in ("repeat_null", "second_gpu_null"))
     assert pay["analysis"]["low_p_gold_tokens"]["status"].startswith("NOT RUN")
     assert pay["analysis"]["hf_baseline_top1_ties"]["n"] == sum(
         int((b.top2_gap == 0).sum()) for b in base)
