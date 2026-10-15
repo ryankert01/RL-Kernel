@@ -105,6 +105,7 @@ class PathResult:
             "peak_alloc_gib": self.peak_alloc_gib,
             "logp_head": [float(x) for x in self.logp[:4].tolist()],
             "logp_sum": float(self.logp.double().sum().item()),
+            "logp": [float(x) for x in self.logp.tolist()],
         }
 
 

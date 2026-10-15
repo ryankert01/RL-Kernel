@@ -147,13 +147,13 @@ class MuseGlimmerStrictModel:
             layer_window = window if layer.is_local else None
             if session is None:
                 y, o, _lse = ops.attention_varlen(
-                    q_hat, k_hat, v, g, cu, cu, positions, window=layer_window
+                    q_hat, k_hat, v, g, cu, cu, positions.to(torch.int32), window=layer_window
                 )
             else:
                 cache = session.cache
                 cache.append(i, session.seq, k_hat, v, start)
                 k_cache, v_cache, block_table = cache.layer_views(i)
-                seq_lens = torch.tensor([seq_len_after], dtype=torch.long, device=self.device)
+                seq_lens = torch.tensor([seq_len_after], dtype=torch.int32, device=self.device)
                 y, o, _lse = ops.attention_paged(
                     q_hat, g, k_cache, v_cache, block_table, seq_lens, cu, window=layer_window
                 )
@@ -203,15 +203,24 @@ class MuseGlimmerStrictModel:
         out: dict[str, torch.Tensor] = {"hidden": hidden}
         head_arg = ops.lm_head_arg(w.lm_head)
         if targets is not None:
-            logp = ops.lm_head_softcap_logprob(
-                hidden,
+            valid = targets >= 0
+            rows = hidden if bool(valid.all()) else hidden[valid]
+            logp_valid = ops.lm_head_softcap_logprob(
+                rows,
                 head_arg,
-                targets,
+                targets[valid] if rows is not hidden else targets,
                 multiplier=cfg.output_multiplier,
                 softcap=cfg.final_logit_softcapping,
                 vocab_size=cfg.vocab_size,
                 gemm=ops.gemm,
             )
+            if rows is hidden:
+                logp = logp_valid
+            else:
+                # Row-local op: scoring only the rows that have a target leaves their bits
+                # unchanged (batch invariance); rows without a target report NaN.
+                logp = torch.full((n,), float("nan"), dtype=torch.float32, device=self.device)
+                logp = logp.masked_scatter(valid, logp_valid)
             self._rec("logprob", logp)
             out["logp"] = logp
         if return_logits:

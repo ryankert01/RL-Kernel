@@ -253,21 +253,16 @@ class GoldenGemm:
 
 
 def row_parallel_gemm(gemm: Any, a: torch.Tensor, w: Any) -> torch.Tensor:
-    """Row-parallel GEMM through any gemm callable (uses ``.row_parallel`` when offered)."""
+    """Row-parallel GEMM (o_proj, down_proj) through any gemm callable.
+
+    :class:`GoldenGemm` exposes ``.row_parallel`` (8 fp32 K-chunk partials + fixed tree). A
+    contract-conformant strict GEMM such as the sibling ``fast_det_gemm`` applies the same
+    8-chunk K tree inside every call, so the row-parallel form is the plain call (slicing K
+    here would nest a second tree and change the bits).
+    """
     if hasattr(gemm, "row_parallel"):
         return gemm.row_parallel(a, w)
-    w_nk = _nk(w)
-    k = a.shape[-1]
-    step = k // ROW_PARALLEL_CHUNKS
-    parts = [
-        gemm(
-            a[:, c * step : (c + 1) * step].contiguous(),
-            w_nk[:, c * step : (c + 1) * step].contiguous(),
-            out_dtype=torch.float32,
-        )
-        for c in range(ROW_PARALLEL_CHUNKS)
-    ]
-    return fixed_tree_partials(parts).to(torch.bfloat16)
+    return gemm(a, _nk(w))
 
 
 # --------------------------------------------------------------------------------------------
