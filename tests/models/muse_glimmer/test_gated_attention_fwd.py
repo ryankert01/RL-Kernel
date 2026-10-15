@@ -1,0 +1,499 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 RL-Kernel Contributors
+"""Contract gates for the strict Muse-Glimmer gated-attention FORWARD (O5, RFC #501).
+
+G1 correctness vs the fp32 golden (WS1 attention bf16 tolerance) and fp32 vs fp64 golden;
+G2 batch invariance (alone vs packed, any batch slot) -> torch.equal;
+G3 sequence-split invariance (one-shot vs chunked vs token-by-token paged decode, eager vs no
+   window eviction, both layer kinds, lengths around the window edge) -> torch.equal;
+G5 trace(); plus the BLOCK_M=64 (TOKEN) vs BLOCK_M=16 (HEAD) tile parity the contract asks
+every agent to verify, the GQA head mapping, and the real Muse-Glimmer shapes.
+
+GPU only: every strict call runs the Triton kernel. TF32 is disabled for the whole module.
+"""
+
+from __future__ import annotations
+
+import json
+import random
+
+import pytest
+import torch
+
+from rl_engine.contracts.numerical import load_contract, resolve_tolerance
+from rl_engine.models.muse_glimmer.ops import gated_attention as ga
+from rl_engine.models.muse_glimmer.ops.paged_kv import PagedKVCache
+from rl_engine.models.muse_glimmer.triton import gated_attention_fwd as kern
+
+pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA GPU required")
+
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
+
+DEV = torch.device("cuda")
+W = ga.SLIDING_WINDOW
+HQ, HKV, D = kern.NUM_Q_HEADS, kern.NUM_KV_HEADS, kern.HEAD_DIM
+LAYER_KINDS = pytest.mark.parametrize("window", [None, W], ids=["global", "local"])
+
+_CONTRACT = load_contract()
+_TOL = resolve_tolerance(
+    _CONTRACT, judgment="forward_accuracy", op_class="attention", dtype=torch.bfloat16
+)
+
+
+# ------------------------------------------------------------------------------- helpers
+def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+    g = torch.Generator(device=DEV).manual_seed(seed)
+    q = (torch.randn(n, HQ, D, device=DEV, generator=g) * 3.87).to(torch.bfloat16)
+    k = torch.randn(n, HKV, D, device=DEV, generator=g).to(torch.bfloat16)
+    v = torch.randn(n, HKV, D, device=DEV, generator=g).to(torch.bfloat16)
+    gate = (torch.randn(n, HQ * D, device=DEV, generator=g) * 2.0).to(torch.bfloat16)
+    return q, k, v, gate
+
+
+def _i32(values) -> torch.Tensor:
+    return torch.tensor(list(values), dtype=torch.int32, device=DEV)
+
+
+def _one_shot(q, k, v, gate, window, tile_mode=None):
+    n = q.shape[0]
+    cu = _i32([0, n])
+    pos = torch.arange(n, dtype=torch.int32, device=DEV)
+    return ga.strict_gated_attention_fwd_varlen(
+        q, k, v, gate, cu, cu, pos, window=window, tile_mode=tile_mode
+    )
+
+
+def _chunked_varlen(q, k, v, gate, window, cuts, tile_mode=None):
+    """Chunked prefill through the varlen path: keys 0..end-1 are visible, queries = chunk."""
+    n = q.shape[0]
+    bounds = [0, *sorted(cuts), n]
+    ys, os_, ls = [], [], []
+    for a, b in zip(bounds[:-1], bounds[1:], strict=True):
+        if a == b:
+            continue
+        cu_q = _i32([0, b - a])
+        cu_k = _i32([0, b])
+        pos = torch.arange(a, b, dtype=torch.int32, device=DEV)
+        y, o, lse = ga.strict_gated_attention_fwd_varlen(
+            q[a:b].contiguous(), k[:b].contiguous(), v[:b].contiguous(), gate[a:b].contiguous(),
+            cu_q, cu_k, pos, window=window, tile_mode=tile_mode,
+        )
+        ys.append(y)
+        os_.append(o)
+        ls.append(lse)
+    return torch.cat(ys), torch.cat(os_), torch.cat(ls)
+
+
+def _new_cache(n_tokens: int, num_seqs: int = 1, poison: bool = True) -> PagedKVCache:
+    pages_per_seq = -(-n_tokens // kern.PAGE_SIZE)
+    return PagedKVCache(
+        num_pages=pages_per_seq * num_seqs + 8,
+        num_seqs=num_seqs,
+        max_pages_per_seq=pages_per_seq,
+        device=DEV,
+        poison_freed=poison,
+    )
+
+
+def _paged_step(cache, q_chunk, gate_chunk, window, tile_mode=None):
+    cu_q = _i32([0, q_chunk.shape[0]])
+    return ga.strict_gated_attention_fwd_paged(
+        q_chunk.contiguous(), gate_chunk.contiguous(), cache.k_cache, cache.v_cache,
+        cache.block_table, cache.seq_lens, cu_q, window=window, tile_mode=tile_mode,
+    )
+
+
+def _chunked_paged(q, k, v, gate, window, cuts, evict: bool, tile_mode=None):
+    n = q.shape[0]
+    cache = _new_cache(n)
+    bounds = [0, *sorted(cuts), n]
+    ys, os_, ls = [], [], []
+    for a, b in zip(bounds[:-1], bounds[1:], strict=True):
+        if a == b:
+            continue
+        cache.append(0, k[a:b], v[a:b])
+        if evict and window is not None:
+            # Eager: free everything invisible to the smallest query of this chunk.
+            cache.evict_window(0, window, query_pos=a)
+        y, o, lse = _paged_step(cache, q[a:b], gate[a:b], window, tile_mode)
+        ys.append(y)
+        os_.append(o)
+        ls.append(lse)
+    return torch.cat(ys), torch.cat(os_), torch.cat(ls)
+
+
+def _decode_paged(q, k, v, gate, window, evict: bool, prefill: int = 0):
+    """Optional one-shot paged prefill of ``prefill`` tokens, then token-by-token decode."""
+    n = q.shape[0]
+    cache = _new_cache(n)
+    ys, os_, ls = [], [], []
+    if prefill:
+        cache.append(0, k[:prefill], v[:prefill])
+        y, o, lse = _paged_step(cache, q[:prefill], gate[:prefill], window)
+        ys.append(y)
+        os_.append(o)
+        ls.append(lse)
+    for t in range(prefill, n):
+        cache.append(0, k[t : t + 1], v[t : t + 1])
+        if evict and window is not None:
+            cache.evict_window(0, window)
+        y, o, lse = _paged_step(cache, q[t : t + 1], gate[t : t + 1], window)
+        ys.append(y)
+        os_.append(o)
+        ls.append(lse)
+    return torch.cat(ys), torch.cat(os_), torch.cat(ls)
+
+
+def _assert_equal(got, want, what: str) -> None:
+    for name, a, b in zip(("y", "o", "lse"), got, want, strict=True):
+        if not torch.equal(a, b):
+            diff = (a.float() - b.float()).abs()
+            bad = int((diff > 0).sum().item())
+            raise AssertionError(
+                f"{what}: {name} differs in {bad} elements, max |diff| = {diff.max().item():.3e}"
+            )
+
+
+def _assert_close_golden(got_bf16: torch.Tensor, golden: torch.Tensor, what: str) -> float:
+    err = (got_bf16.float() - golden.float()).abs().max().item()
+    assert torch.allclose(
+        got_bf16.float(), golden.float(), atol=_TOL.atol, rtol=_TOL.rtol
+    ), f"{what}: max |err| = {err:.3e} exceeds WS1 attention bf16 atol={_TOL.atol} rtol={_TOL.rtol}"
+    return err
+
+
+# ------------------------------------------------------------------------------- G1
+@LAYER_KINDS
+@pytest.mark.parametrize("n", [37, 300, 2300], ids=lambda n: f"n{n}")
+def test_g1_kernel_vs_fp32_golden(window, n):
+    q, k, v, gate = _inputs(n, seed=11 + n)
+    pos = torch.arange(n, dtype=torch.int32, device=DEV)
+    y, o, lse = _one_shot(q, k, v, gate, window)
+    yg, og, lseg = ga.gated_attention_forward_fp32(q, k, v, gate, pos, window)
+    assert not torch.isnan(y).any() and not torch.isnan(lse).any()
+    ey = _assert_close_golden(y, yg, "y")
+    eo = _assert_close_golden(o, og, "o")
+    el = (lse - lseg).abs().max().item()
+    assert el < 1e-4, f"lse max |err| = {el:.3e}"
+    print(f"\nG1 window={window} n={n}: max|dy|={ey:.3e} max|do|={eo:.3e} max|dlse|={el:.3e}")
+
+
+@LAYER_KINDS
+def test_g1_fp32_golden_vs_fp64_golden(window):
+    n = 200
+    q, k, v, gate = _inputs(n, seed=5)
+    pos = torch.arange(n, dtype=torch.int32, device=DEV)
+    y32, o32, l32 = ga.gated_attention_forward_fp32(q, k, v, gate, pos, window)
+    y64, o64, l64 = ga.gated_attention_forward_fp32(q, k, v, gate, pos, window, dtype=torch.float64)
+    ey = (y32.double() - y64).abs().max().item()
+    eo = (o32.double() - o64).abs().max().item()
+    el = (l32.double() - l64).abs().max().item()
+    # fp32 accumulation error plus the rare bf16 round flips of p at rounding boundaries.
+    assert ey < 2e-2 and eo < 2e-2 and el < 1e-4
+    print(
+        f"\nfp32 vs fp64 golden window={window}: max|dy|={ey:.3e} max|do|={eo:.3e} "
+        f"max|dlse|={el:.3e}"
+    )
+    # and the kernel is as close to fp64 as to fp32
+    y, o, lse = _one_shot(q, k, v, gate, window)
+    e64 = (y.double() - y64).abs().max().item()
+    assert e64 <= _TOL.atol + _TOL.rtol * y64.abs().max().item()
+    print(f"kernel vs fp64 golden: max|dy|={e64:.3e}")
+
+
+# ------------------------------------------------------------------------------- tiles
+@LAYER_KINDS
+@pytest.mark.parametrize("n", [1, 16, 17, 64, 65, 2100], ids=lambda n: f"n{n}")
+def test_token_vs_head_tiles_bitwise(window, n):
+    """Contract O5: BLOCK_M=64 (prefill) and BLOCK_M=16 (decode) tiles give identical bits."""
+    q, k, v, gate = _inputs(n, seed=101 + n)
+    tok = _one_shot(q, k, v, gate, window, tile_mode="token")
+    head = _one_shot(q, k, v, gate, window, tile_mode="head")
+    auto = _one_shot(q, k, v, gate, window)
+    _assert_equal(head, tok, "HEAD tile vs TOKEN tile")
+    _assert_equal(auto, tok, "auto tile vs TOKEN tile")
+
+
+def test_tile_layouts_share_warp_split():
+    """The compiled MMA layouts must split warps along the key axis identically (see kernel doc)."""
+    assert kern.NUM_WARPS_HEAD == kern.NUM_WARPS_TOKEN
+    q, k, v, gate = _inputs(70, seed=3)
+    _one_shot(q, k, v, gate, None, tile_mode="token")
+    _one_shot(q, k, v, gate, None, tile_mode="head")
+    caches = kern._gated_attention_fwd_kernel.device_caches[torch.cuda.current_device()][0]
+    splits = set()
+    for compiled in caches.values():
+        for line in compiled.asm["ttgir"].splitlines():
+            if line.strip().startswith("#mma"):
+                splits.add(line.split("warpsPerCTA = ")[1].split("]")[0] + "]")
+    assert len(splits) == 1, f"different warp splits across tile variants: {splits}"
+    print(f"\nMMA warpsPerCTA for all compiled variants: {splits}")
+
+
+# ------------------------------------------------------------------------------- G2
+@LAYER_KINDS
+@pytest.mark.parametrize("tile_mode", ["token", "head"])
+def test_g2_batch_invariance_varlen(window, tile_mode):
+    lens = [5, 130, 64, 2100, 1, 333]
+    seqs = [_inputs(n, seed=200 + i) for i, n in enumerate(lens)]
+    alone = []
+    for q, k, v, gate in seqs:
+        alone.append(_one_shot(q, k, v, gate, window, tile_mode=tile_mode))
+
+    for order in ([0, 1, 2, 3, 4, 5], [5, 3, 1, 4, 2, 0], [3, 3, 0, 3]):
+        q = torch.cat([seqs[i][0] for i in order])
+        k = torch.cat([seqs[i][1] for i in order])
+        v = torch.cat([seqs[i][2] for i in order])
+        gate = torch.cat([seqs[i][3] for i in order])
+        cu = _i32([0, *torch.tensor([lens[i] for i in order]).cumsum(0).tolist()])
+        pos = torch.cat([torch.arange(lens[i], dtype=torch.int32, device=DEV) for i in order])
+        y, o, lse = ga.strict_gated_attention_fwd_varlen(
+            q, k, v, gate, cu, cu, pos, window=window, tile_mode=tile_mode
+        )
+        off = 0
+        for slot, i in enumerate(order):
+            n = lens[i]
+            got = (y[off : off + n], o[off : off + n], lse[off : off + n])
+            _assert_equal(got, alone[i], f"seq {i} (len {n}) at batch slot {slot} of {order}")
+            off += n
+
+
+@LAYER_KINDS
+def test_g2_batch_invariance_paged_decode(window):
+    """Decode batch with mixed context lengths vs each sequence decoded alone."""
+    lens = [1, 17, 64, 2049, 700, 2048]
+    seqs = [_inputs(n, seed=300 + i) for i, n in enumerate(lens)]
+    alone = []
+    for (q, k, v, gate), n in zip(seqs, lens, strict=True):
+        cache = _new_cache(n)
+        cache.append(0, k, v)
+        alone.append(_paged_step(cache, q[-1:], gate[-1:], window))
+
+    for order in ([0, 1, 2, 3, 4, 5], [3, 5, 2, 4, 1, 0]):
+        cache = _new_cache(max(lens), num_seqs=len(order))
+        for slot, i in enumerate(order):
+            cache.append(slot, seqs[i][1], seqs[i][2])
+        q = torch.cat([seqs[i][0][-1:] for i in order])
+        gate = torch.cat([seqs[i][3][-1:] for i in order])
+        cu_q = _i32(range(len(order) + 1))
+        y, o, lse = ga.strict_gated_attention_fwd_paged(
+            q, gate, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens, cu_q,
+            window=window,
+        )
+        for slot, i in enumerate(order):
+            got = (y[slot : slot + 1], o[slot : slot + 1], lse[slot : slot + 1])
+            _assert_equal(got, alone[i], f"decode seq {i} at slot {slot}")
+
+
+# ------------------------------------------------------------------------------- G3
+G3_LENGTHS = [64, 2047, 2048, 2049, 4096, 8192]
+
+
+def _split_points(n: int, seed: int) -> list[list[int]]:
+    rng = random.Random(seed)
+    cuts = [c for c in (2047, 2048, 2049) if c < n]
+    out: list[list[int]] = [[c] for c in cuts]
+    if n > 2:
+        out.append(sorted(rng.sample(range(1, n), min(3, n - 1))))
+        out.append(sorted(rng.sample(range(1, n), min(7, n - 1))))
+    if n >= 2:
+        out.append([1, n - 1])
+    return out
+
+
+@LAYER_KINDS
+@pytest.mark.parametrize("n", G3_LENGTHS, ids=lambda n: f"len{n}")
+def test_g3_chunked_prefill_varlen_and_paged(window, n):
+    q, k, v, gate = _inputs(n, seed=400 + n)
+    ref = _one_shot(q, k, v, gate, window)
+    for cuts in _split_points(n, seed=n):
+        got = _chunked_varlen(q, k, v, gate, window, cuts)
+        _assert_equal(got, ref, f"varlen chunked prefill cuts={cuts}")
+        got_p = _chunked_paged(q, k, v, gate, window, cuts, evict=False)
+        _assert_equal(got_p, ref, f"paged chunked prefill (no eviction) cuts={cuts}")
+        got_pe = _chunked_paged(q, k, v, gate, window, cuts, evict=True)
+        _assert_equal(got_pe, ref, f"paged chunked prefill (eager eviction) cuts={cuts}")
+
+
+@LAYER_KINDS
+@pytest.mark.parametrize("n", G3_LENGTHS, ids=lambda n: f"len{n}")
+def test_g3_token_by_token_decode(window, n):
+    """One-shot prefill == paged decode of every token (eager window eviction, NaN-poisoned)."""
+    q, k, v, gate = _inputs(n, seed=500 + n)
+    ref = _one_shot(q, k, v, gate, window)
+    got = _decode_paged(q, k, v, gate, window, evict=True)
+    _assert_equal(got, ref, "token-by-token paged decode")
+
+
+@pytest.mark.parametrize("n", [2049, 2200, 4096], ids=lambda n: f"len{n}")
+def test_g3_window_eviction_timing(n):
+    """Local layer: never evicting vs evicting eagerly at the window edge -> equal bits."""
+    q, k, v, gate = _inputs(n, seed=600 + n)
+    ref = _one_shot(q, k, v, gate, W)
+    prefill = n - 300
+    never = _decode_paged(q, k, v, gate, W, evict=False, prefill=prefill)
+    eager = _decode_paged(q, k, v, gate, W, evict=True, prefill=prefill)
+    _assert_equal(never, ref, "no eviction")
+    _assert_equal(eager, ref, "eager eviction")
+    # Eviction actually happened and freed pages were poisoned/reused without changing bits.
+    cache = _new_cache(n)
+    cache.append(0, k, v)
+    freed = cache.evict_window(0, W)
+    expected_free = max(0, (n - 1 - W + 1)) // kern.PAGE_SIZE
+    assert len(freed) == expected_free, (len(freed), expected_free)
+    y, o, lse = _paged_step(cache, q[-1:], gate[-1:], W)
+    _assert_equal((y, o, lse), tuple(t[-1:] for t in ref), "after eviction")
+
+
+def test_g3_evicted_pages_reused_by_other_sequence():
+    """Pages freed by one sequence are reused by another; neither sequence's bits change."""
+    n_a, n_b = 2600, 400  # A frees floor((2600 - 2048) / 16) = 34 pages; B needs 25
+    qa, ka, va, ga_ = _inputs(n_a, seed=700)
+    qb, kb, vb, gb = _inputs(n_b, seed=701)
+    ref_a = _one_shot(qa, ka, va, ga_, W)
+    ref_b = _one_shot(qb, kb, vb, gb, W)
+    pages_a = -(-n_a // kern.PAGE_SIZE)
+    cache = PagedKVCache(
+        num_pages=pages_a + 2, num_seqs=2, max_pages_per_seq=pages_a, device=DEV, poison_freed=True
+    )
+    cache.append(0, ka, va)
+    freed = cache.evict_window(0, W)
+    assert len(freed) * kern.PAGE_SIZE >= n_b, "test needs enough freed pages to host seq B"
+    cache.append(1, kb, vb)  # reuses pages freed by A
+    assert set(cache.allocated_pages(1)) <= set(freed) | {pages_a, pages_a + 1}
+    q = torch.cat([qa[-1:], qb[-1:]])
+    gate = torch.cat([ga_[-1:], gb[-1:]])
+    y, o, lse = ga.strict_gated_attention_fwd_paged(
+        q, gate, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens,
+        _i32([0, 1, 2]), window=W,
+    )
+    _assert_equal((y[:1], o[:1], lse[:1]), tuple(t[-1:] for t in ref_a), "seq A after reuse")
+    _assert_equal((y[1:], o[1:], lse[1:]), tuple(t[-1:] for t in ref_b), "seq B on reused pages")
+
+
+# ------------------------------------------------------------------------------- GQA
+@LAYER_KINDS
+def test_gqa_head_mapping(window):
+    n = 150
+    q, k, v, gate = _inputs(n, seed=800)
+    pos = torch.arange(n, dtype=torch.int32, device=DEV)
+    base = _one_shot(q, k, v, gate, window)
+    k2 = k.clone()
+    v2 = v.clone()
+    k2[:, 1] = torch.randn_like(k2[:, 1].float()).to(torch.bfloat16)
+    v2[:, 1] = torch.randn_like(v2[:, 1].float()).to(torch.bfloat16)
+    y2, o2, lse2 = _one_shot(q, k2, v2, gate, window)
+    half = (HQ // HKV) * D
+    assert torch.equal(y2[:, :half], base[0][:, :half]), "kv head 1 leaked into q heads 0..15"
+    assert torch.equal(lse2[:, : HQ // HKV], base[2][:, : HQ // HKV])
+    assert not torch.equal(o2[:, half:], base[1][:, half:]), "q heads 16..31 ignore kv head 1"
+    yg, og, lseg = ga.gated_attention_forward_fp32(q, k2, v2, gate, pos, window)
+    _assert_close_golden(y2, yg, "gqa y")
+    _assert_close_golden(o2, og, "gqa o")
+
+
+# ------------------------------------------------------------------------------- real shapes
+@LAYER_KINDS
+def test_real_shape_prefill_4096(window):
+    n = 4096
+    q, k, v, gate = _inputs(n, seed=900)
+    y, o, lse = _one_shot(q, k, v, gate, window)
+    assert y.shape == (n, HQ * D) and lse.shape == (n, HQ)
+    assert not torch.isnan(y).any()
+    # Golden on a spread of rows (incl. the window edge and the last rows): same positions.
+    edge_rows = {0, 1, 63, 64, 2046, 2047, 2048, 2049, 2111, 3000, 4094, 4095}
+    rows = torch.tensor(sorted(edge_rows | set(range(100, 4096, 397))), device=DEV)
+    pos = rows.to(torch.int32)
+    yg, og, lseg = ga.gated_attention_forward_fp32(
+        q[rows].contiguous(), k, v, gate[rows].contiguous(), pos, window
+    )
+    ey = _assert_close_golden(y[rows], yg, "prefill-4096 y")
+    eo = _assert_close_golden(o[rows], og, "prefill-4096 o")
+    el = (lse[rows] - lseg).abs().max().item()
+    assert el < 1e-4
+    # Chunked prefill at the window edge and decode of the last 8 tokens reproduce the bits.
+    got = _chunked_varlen(q, k, v, gate, window, [2048, 4088])
+    _assert_equal(got, (y, o, lse), "4096 chunked [2048, 4088]")
+    got_d = _decode_paged(q, k, v, gate, window, evict=True, prefill=4088)
+    _assert_equal(got_d, (y, o, lse), "4096 paged prefill + 8 decode steps")
+    print(
+        f"\nreal prefill-4096 window={window}: max|dy|={ey:.3e} max|do|={eo:.3e} "
+        f"max|dlse|={el:.3e}"
+    )
+
+
+@LAYER_KINDS
+def test_real_shape_decode_b64_ctx4096(window):
+    bsz, ctx = 64, 4096
+    seqs = [_inputs(ctx, seed=1000 + i) for i in range(bsz)]
+    pages = ctx // kern.PAGE_SIZE
+    cache = PagedKVCache(
+        num_pages=bsz * pages, num_seqs=bsz, max_pages_per_seq=pages, device=DEV, poison_freed=True
+    )
+    for i, (_, k, v, _) in enumerate(seqs):
+        cache.append(i, k, v)
+        if window is not None:
+            cache.evict_window(i, window)
+    q = torch.cat([s[0][-1:] for s in seqs])
+    gate = torch.cat([s[3][-1:] for s in seqs])
+    cu_q = _i32(range(bsz + 1))
+    y, o, lse = ga.strict_gated_attention_fwd_paged(
+        q, gate, cache.k_cache, cache.v_cache, cache.block_table, cache.seq_lens, cu_q,
+        window=window,
+    )
+    assert y.shape == (bsz, HQ * D) and not torch.isnan(y).any()
+    # Same decode through the varlen path with packed K/V (two different code paths, same bits).
+    k_all = torch.cat([s[1] for s in seqs])
+    v_all = torch.cat([s[2] for s in seqs])
+    cu_k = _i32(range(0, bsz * ctx + 1, ctx))
+    pos = torch.full((bsz,), ctx - 1, dtype=torch.int32, device=DEV)
+    got_v = ga.strict_gated_attention_fwd_varlen(
+        q, k_all, v_all, gate, cu_q, cu_k, pos, window=window
+    )
+    _assert_equal(got_v, (y, o, lse), "decode B=64: varlen vs paged")
+    # TOKEN-tile decode (BLOCK_M=64 with one valid row) gives the same bits as the HEAD tile.
+    got_t = ga.strict_gated_attention_fwd_varlen(
+        q, k_all, v_all, gate, cu_q, cu_k, pos, window=window, tile_mode="token"
+    )
+    _assert_equal(got_t, (y, o, lse), "decode B=64: TOKEN tile vs HEAD tile")
+    # Golden for three sequences.
+    for i in (0, 31, 63):
+        qi, ki, vi, gi = seqs[i]
+        yg, og, lseg = ga.gated_attention_forward_fp32(qi[-1:], ki, vi, gi[-1:], pos[:1], window)
+        _assert_close_golden(y[i : i + 1], yg, f"decode seq {i} y")
+        _assert_close_golden(o[i : i + 1], og, f"decode seq {i} o")
+        assert (lse[i : i + 1] - lseg).abs().max().item() < 1e-4
+
+
+# ------------------------------------------------------------------------------- G5
+def test_g5_trace():
+    t1 = ga.trace()
+    t2 = ga.trace()
+    assert t1 == t2
+    for key in ("op", "dtype_in", "dtype_acc", "dtype_out", "reduction_order", "tile_config"):
+        assert key in t1, key
+    assert t1["op"] == "gated_attention"
+    assert t1["dtype_in"] == "bf16" and t1["dtype_acc"] == "fp32" and t1["dtype_out"] == "bf16"
+    assert t1["tile_config"]["BLOCK_N"] == 64
+    assert t1["tile_config"]["token_tile"]["BLOCK_M"] == 64
+    assert t1["tile_config"]["head_tile"]["BLOCK_M"] == 16
+    assert t1["autotune"] is False and t1["tf32"] is False
+    json.dumps(t1)  # serializable
+
+
+def test_rejects_bad_inputs():
+    q, k, v, gate = _inputs(8, seed=1)
+    cu = _i32([0, 8])
+    pos = torch.arange(8, dtype=torch.int32, device=DEV)
+    with pytest.raises(ValueError):
+        ga.strict_gated_attention_fwd_varlen(q.float(), k, v, gate, cu, cu, pos, window=None)
+    with pytest.raises(ValueError):
+        bad_gate = gate[:, :10].contiguous()
+        ga.strict_gated_attention_fwd_varlen(q, k, v, bad_gate, cu, cu, pos, window=None)
+    with pytest.raises(ValueError):
+        bad_pos = pos.to(torch.int64)
+        ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, bad_pos, window=None)
+    with pytest.raises(ValueError):
+        ga.strict_gated_attention_fwd_varlen(q, k, v, gate, cu, cu, pos, window=None, tile_mode="x")
