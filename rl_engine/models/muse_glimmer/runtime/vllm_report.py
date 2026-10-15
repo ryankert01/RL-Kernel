@@ -246,6 +246,20 @@ def throughput(results: dict) -> list[str]:
             f"{b['peak_allocated_gib_max_rank']:.1f} | {mem[0].get('kv_cache_gib', 0):.1f}, "
             f"{mem[0].get('num_gpu_blocks')} | {min(loads or [0]):.0f}-{max(loads or [0]):.0f} |"
         )
+    by_label = {b["label"]: b["tokens_per_s"] for b in bench}
+    ratios = []
+    for tp in (1, 2, 4):
+        strict = by_label.get(f"strict tp{tp} eager")
+        for base in ("eager", "cuda-graphs"):
+            native = by_label.get(f"native tp{tp} {base}")
+            if strict and native:
+                ratios.append(f"TP{tp} strict / native {base} = {strict / native:.2f}x")
+        lora = by_label.get(f"strict tp{tp} eager +LoRA r16")
+        if strict and lora:
+            ratios.append(f"TP{tp} strict +LoRA / strict = {lora / strict:.2f}x")
+    if ratios:
+        rows.append("")
+        rows.append("Ratios of the medians: " + "; ".join(ratios) + ".")
     return rows
 
 
