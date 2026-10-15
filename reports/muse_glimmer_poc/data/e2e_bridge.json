@@ -1,6 +1,6 @@
 {
  "row": "final_e2e_lora (cross-environment trainer bridge + timeline instrumentation)",
- "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7",
+ "commit": "d2269480b3a3f4b6d49bf800bcb23fb716d86a1b",
  "env": {
   "trainer_server": {
    "python": "/home/ubuntu/envs/megatron/bin/python",
@@ -29,16 +29,16 @@
    "executable": "/home/ubuntu/envs/vllm/bin/python",
    "torch": "2.13.0+cu130",
    "torch_cuda": "13.0",
-   "cuda_visible_devices": "7",
-   "gpu_lease": "7",
+   "cuda_visible_devices": "3",
+   "gpu_lease": "3",
    "cpu_count": 240,
    "triton": "3.7.1",
    "vllm": "0.31.0",
    "transformers": "5.17.0",
    "load_average_1_5_15_at_start": [
-    260.98388671875,
-    355.5009765625,
-    235.49951171875
+    395.11328125,
+    418.1630859375,
+    298.93310546875
    ]
   }
  },
@@ -50,7 +50,8 @@
   "[33a86ad, CPU, no lease] W=<worktree>; cd $W; PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --cpu --hash-check --startup-overlap --overlap-label after_fix --import-e2e-run <scratch>/e2e/smoke_strict <scratch>/e2e/smoke_native --e2e-run-commit c3650ed... --work-dir <scratch>",
   "[dccc68a, CPU, no lease] W=<worktree>; cd $W; PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --transport-only --work-dir <scratch>",
   "[pre-fix tree = git archive 87a4cd2 (old bridge/trainer_server, mocks with build_delay_s) + bench_bridge.py of 33a86ad; CPU, no lease] ~/envs/vllm/bin/python <scratch>/run_overlap_before.py",
-  "[a1966a5, GPU from pool 3,7] W=<worktree>; cd $W; ~/bin/gpu-lease -n 1 --pool 3,7 --timeout 900 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --gpu --work-dir <scratch>"
+  "[a1966a5, GPU from pool 3,7] W=<worktree>; cd $W; ~/bin/gpu-lease -n 1 --pool 3,7 --timeout 900 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --gpu --work-dir <scratch>",
+  "[d226948, GPU from pool 3,7] W=<worktree>; cd $W; ~/bin/gpu-lease -n 1 --pool 3,7 --timeout 900 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --gpu --work-dir <scratch>"
  ],
  "surrogate_exactness": {
   "cpu": {
@@ -3753,11 +3754,11 @@
  },
  "gpu_smoke": {
   "status": "ran",
-  "lease": "7",
+  "lease": "3",
   "gpu_ids_physical": [
-   7
+   3
   ],
-  "parent_device_uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+  "parent_device_uuid": "149752e7-2b99-0d3c-4ebb-11fc01aed807",
   "parent_device_name": "NVIDIA A100-SXM4-80GB",
   "surrogate_exactness_cuda": {
    "device": "cuda",
@@ -3790,9 +3791,9 @@
    {
     "name": "megatron_env",
     "server_torch": "2.13.0+cu129",
-    "server_cuda_visible_devices": "7",
+    "server_cuda_visible_devices": "3",
     "server_device_count": 1,
-    "server_device_uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+    "server_device_uuid": "149752e7-2b99-0d3c-4ebb-11fc01aed807",
     "placement_ok": true,
     "trainer_device": "cuda",
     "server_peak_allocated_gib_per_call": [
@@ -3849,9 +3850,9 @@
    {
     "name": "same_env",
     "server_torch": "2.13.0+cu130",
-    "server_cuda_visible_devices": "7",
+    "server_cuda_visible_devices": "3",
     "server_device_count": 1,
-    "server_device_uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+    "server_device_uuid": "149752e7-2b99-0d3c-4ebb-11fc01aed807",
     "placement_ok": true,
     "trainer_device": "cuda",
     "server_peak_allocated_gib_per_call": [
@@ -3906,7 +3907,8 @@
     "all_bit_exact_vs_inprocess_cuda": true
    }
   ],
-  "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7"
+  "gated_by": "tests/models/muse_glimmer/test_e2e_bridge_gpu.py::test_cuda_trainer_through_bridge_sees_exactly_the_leased_gpu asserts placement and bit equality with the in-process CUDA mock for BOTH variants (megatron_env and same_env)",
+  "commit": "d2269480b3a3f4b6d49bf800bcb23fb716d86a1b"
  },
  "hash_schema_check": {
   "rows": [

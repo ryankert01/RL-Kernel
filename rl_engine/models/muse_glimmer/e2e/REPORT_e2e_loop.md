@@ -5,7 +5,7 @@ Row `final_e2e_lora` of RFC #501 (Muse-Glimmer-30B strict train/rollout POC). Ow
 `tests/models/muse_glimmer/test_e2e_bridge*.py`, `reports/muse_glimmer_poc/data/e2e_bridge.json`.
 
 STATUS: the orchestrator, trainer bridge, timeline and tests are complete. The review wave B
-fixes are in (13 issues; verdicts below). The integrator ran two one-step smokes with the REAL
+fixes are in (12 issues; verdicts below). The integrator ran two one-step smokes with the REAL
 30B engines through the bridge, on the merged code (commit c3650ed):
 
 * strict/strict: 0/128 bitwise drift, weight sync 2/2.
@@ -69,7 +69,7 @@ integrator".
 | R3 | should_fix | fixed | `trainer_server.main` builds the trainer before accepting the client (the accept runs in a background thread). `hello["startup"]` records launch / build / connect / ready. Test `test_trainer_builds_while_the_caller_starts_the_rollout` (before: `wait_ready blocked 5.39s`). Bench `startup_overlap.{before_fix,after_fix}`. |
 | R5 | should_fix | fixed | The server gathers every rank's LoRA hash and logprob digest and fails the reply on any difference. The client re-checks with `check_rank_hashes` and raises `RemoteWeightSyncError`. Tests `test_torchrun_rank_divergence_fails_closed[diverge_lora-…, diverge_logprobs-…]` (before: DID NOT RAISE) and `test_rank_hash_check_fails_closed`. |
 | R6 | nit | fixed | `token_logprobs` applies the server's `requires_grad` flags, and `step` refuses logprobs without autograd history. Test `test_forward_only_trainer_is_rejected_at_scoring` (before: `assert not True`). |
-| R7 | nit | fixed | The GPU test now asserts bit equality for the megatron-env variant as well. Rerun on GPU 7: 3 passed. |
+| R7 | nit | fixed | The GPU test now asserts bit equality for the megatron-env variant as well (3 passed on GPU 7 and on GPU 3). `gpu_smoke.gated_by` names that test. |
 | R8 | nit | fixed | The row is renamed `megatron_env_torchrun_2rank_replicated_control_plane` and its `note` states that there is no TP sharding. |
 | R9 | nit | fixed | A remote failure of `token_logprobs`, `step` or `export_lora` kills the server group and refuses further calls. Stateless ops (`ping`, `provenance`, unknown op) stay retryable. Test `test_remote_exception_in_a_stateful_op_retires_the_bridge` (before: DID NOT RAISE). |
 | R10 | nit | documented; engine hook requested | Profile entries record `rollout_engine_profiler` and the scope "orchestrator process only". The `StrictRolloutEngine.start_profile/stop_profile` hook belongs to the vLLM owner's file (see requests). |
@@ -306,7 +306,8 @@ What they do not show:
 
 ### Bridge measurements (`e2e_bridge.json`)
 
-The CPU sections were measured at 33a86ad, the transport at dccc68a and the GPU smoke at a1966a5.
+The CPU sections were measured at 33a86ad, the transport at dccc68a and the GPU smoke at d226948
+(GPU 3; it also passed at a1966a5 on GPU 7).
 The node was shared with other agents and heavily loaded:
 
 * During the 33a86ad run, `uptime` showed a load average of 95 / 137 / 99 (1 / 5 / 15 min).
@@ -324,7 +325,8 @@ So absolute CPU timings are noisy. The bit-exactness results do not depend on lo
   * the trainer server in the same env (cu130), process launcher;
   * `megatron_env_torchrun_2rank_replicated_control_plane`. This variant has no TP sharding;
     both ranks report the same LoRA hash each step.
-* **GPU smoke** (a1966a5, GPU 7): the server sees exactly the leased GPU (UUID match). The CUDA
+* **GPU smoke** (d226948 on GPU 3, a1966a5 on GPU 7): the server sees exactly the leased GPU
+  (UUID match). The CUDA
   mock behind the bridge matches the in-process CUDA mock bit for bit, both from the megatron
   env (cu129) and from the same env (cu130).
 * **Transport** (5 repeats; both servers up and pinged alternately; median RTT in ms, min-max in
@@ -415,11 +417,11 @@ Earlier mock checks (original row, not rerun):
 W=<worktree>; cd $W
 PYTHONPATH=$W ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_e2e_bridge.py \
     tests/models/muse_glimmer/test_e2e_loop_mock.py -q -p no:cacheprovider
-TBD-TESTS-TAIL
+66 passed in 282.67s (0:04:42)          # at d226948, loaded node (143.99s at 19776ea)
 ~/bin/gpu-lease -n 1 --pool 3,7 -- env PYTHONPATH=$W ~/envs/vllm/bin/python -m pytest \
     tests/models/muse_glimmer/test_e2e_bridge_gpu.py -q -p no:cacheprovider
-[gpu-lease] using GPUs [7]
-3 passed in 15.41s
+[gpu-lease] using GPUs [3]
+3 passed in 15.44s                       # at d226948 (also 3 passed on GPU 7 at 19776ea)
 ```
 
 The CPU tests start real trainer-server subprocesses in `~/envs/megatron`; the server runs on CPU
