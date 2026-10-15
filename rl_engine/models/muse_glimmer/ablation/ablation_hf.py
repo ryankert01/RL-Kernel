@@ -642,8 +642,6 @@ def tf32_probe(device: torch.device | str, seq_len: int = 2439) -> dict[str, Any
     """Does TF32 reach the only fp32 GEMM of the bf16 model (the RoPE ``inv_freq @ positions``
     batched GEMM with K = 1)?  Compares bits with TF32 off/on for that GEMM and for a square
     fp32 GEMM (control that TF32 is really switched on)."""
-    from transformers.models.muse_glimmer import modeling_muse_glimmer as hf  # noqa: F401
-
     dev = torch.device(device)
     gen = torch.Generator(device="cpu").manual_seed(0)
     a = torch.randn(1024, 1024, generator=gen).to(dev)
