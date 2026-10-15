@@ -1961,6 +1961,12 @@ def install_vllm_integration(plan: IntegrationPlan) -> VllmIntegration:
 def register_vllm_plugin() -> None:
     """vLLM general-plugin entry point; inactive unless Vime exported a plan."""
 
+    if os.getenv("RL_KERNEL_MUSEGLIMMER_STRICT", "").strip() in {"1", "true", "True"}:
+        # RFC #501 Muse Glimmer strict rollout binding (rl_engine.models.muse_glimmer.runtime).
+        from rl_engine.models.muse_glimmer.runtime.vllm_plugin import register as _museglimmer
+
+        _museglimmer()
+        return
     if os.getenv("RL_KERNEL_VLLM_INTEGRATION", "").strip() not in {"1", "true", "True"}:
         return
     install_vllm_integration(plan_from_environment())
