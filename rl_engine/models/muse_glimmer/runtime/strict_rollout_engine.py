@@ -142,6 +142,7 @@ class StrictRolloutEngine:
         enable_native_lora: bool = True,
         enforce_eager: bool = True,
         max_num_batched_tokens: int | None = None,
+        num_gpu_blocks_override: int | None = None,
     ) -> None:
         self.model_path = str(model_path)
         self.tensor_parallel_size = int(tensor_parallel_size)
@@ -197,6 +198,8 @@ class StrictRolloutEngine:
         )
         if max_num_batched_tokens is not None:
             kwargs["max_num_batched_tokens"] = int(max_num_batched_tokens)
+        if num_gpu_blocks_override is not None:
+            kwargs["num_gpu_blocks_override"] = int(num_gpu_blocks_override)
         if self.strict:
             kwargs["attention_config"] = {"backend": "FLASH_ATTN"}
         if self.enable_native_lora:

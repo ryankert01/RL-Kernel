@@ -317,7 +317,9 @@ def _raw_generate(
     seeds: list[int],
     max_tokens: int,
     ignore_eos: bool,
-) -> tuple[list[list[int]], list[list[float]], list[str], float, list[dict[str, Any]]]:
+) -> tuple[
+    list[list[int]], list[list[float]], list[str], float, list[dict[str, Any]], dict[str, int]
+]:
     """One ``llm.generate`` call (one engine batch) with per-request temperature and seed.
 
     The selected-token logprobs are the engine's (strict O7 in strict mode, vLLM raw logprobs in
@@ -342,6 +344,7 @@ def _raw_generate(
         )
         for t, seed in zip(temperatures, seeds, strict=True)
     ]
+    counters_before = llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "counters"})
     llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "start"})
     t0 = time.perf_counter()
     try:
@@ -354,6 +357,11 @@ def _raw_generate(
     finally:
         steps = llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "stop"})
     seconds = time.perf_counter() - t0
+    counters_after = llm.collective_rpc(tools.worker_step_timer, kwargs={"action": "counters"})
+    events = {
+        key: int(counters_after[0][key]) - int(counters_before[0][key])
+        for key in ("preempted", "resumed")
+    }
     tokens, logprobs, finish = [], [], []
     for out in outs:
         completion = out.outputs[0]
@@ -369,7 +377,8 @@ def _raw_generate(
             ]
         )
         finish.append(str(completion.finish_reason))
-    return tokens, logprobs, finish, seconds, (steps[0] if steps else [])
+    rank0 = list(steps[0]) if steps else []
+    return tokens, logprobs, finish, seconds, rank0, events
 
 
 def torch_fp32(value: float) -> float:
@@ -428,7 +437,7 @@ def run_batch_check(
 ) -> dict[str, Any]:
     """One engine batch + decode == prefill re-score check (contract shapes)."""
 
-    tokens, logprobs, finish, seconds, steps = _raw_generate(
+    tokens, logprobs, finish, seconds, steps, events = _raw_generate(
         engine,
         prompts,
         temperatures=temperatures,
@@ -467,6 +476,7 @@ def run_batch_check(
         "prefill_logprobs": prefill,
         "decode_vs_prefill": check,
         "engine_steps": _step_summary(steps),
+        "scheduler_events": events,
     }
 
 
@@ -673,6 +683,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-num-seqs", type=int, default=64)
     parser.add_argument("--max-num-batched-tokens", type=int, default=None)
     parser.add_argument(
+        "--num-gpu-blocks-override",
+        type=int,
+        default=None,
+        help="tiny KV pool: forces page reuse and preemption/recompute",
+    )
+    parser.add_argument("--contract-tag", default="", help="suffix for contract-shape labels")
+    parser.add_argument(
         "--cuda-graphs",
         action="store_true",
         help="native only: enforce_eager=False (CUDA-graph baseline)",
@@ -766,6 +783,7 @@ def main(argv: list[str] | None = None) -> int:
         enable_native_lora=args.native_lora,
         enforce_eager=not args.cuda_graphs,
         max_num_batched_tokens=args.max_num_batched_tokens,
+        num_gpu_blocks_override=args.num_gpu_blocks_override,
     )
     result["engine_load_s"] = time.perf_counter() - t_load
     result["engine_kwargs"] = {k: str(v) for k, v in engine.engine_kwargs.items()}
@@ -929,7 +947,7 @@ def main(argv: list[str] | None = None) -> int:
                     null_before = _null_pages(engine)
                     rec = run_batch_check(
                         engine,
-                        f"long_window_{lora_label}",
+                        f"long_window{args.contract_tag}_{lora_label}",
                         [long_prompts[0]] * copies,
                         temperatures=[0.0] + [1.0] * (copies - 1),
                         seeds=[4242 + i for i in range(copies)],
@@ -945,7 +963,7 @@ def main(argv: list[str] | None = None) -> int:
                     batch_prompts = [prompts[i % len(prompts)] for i in range(width)]
                     rec = run_batch_check(
                         engine,
-                        f"decode_batch_{width}_{lora_label}",
+                        f"decode_batch_{width}{args.contract_tag}_{lora_label}",
                         batch_prompts,
                         temperatures=[1.0] * width,
                         seeds=[9000 + i for i in range(width)],

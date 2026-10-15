@@ -88,9 +88,30 @@ def _scheduled(scheduler_output: Any) -> tuple[int, int]:
     return tokens, len(per_req)
 
 
-def worker_step_timer(worker: Any, action: str = "start") -> list[dict[str, Any]] | None:
-    """``action='start'`` installs the per-step timer; ``'stop'`` removes it and returns steps."""
+_SCHED_ATTR = "_rlk_museglimmer_sched_counters"
 
+
+def _count_scheduler_events(worker: Any, scheduler_output: Any) -> tuple[int, int]:
+    """Preempted / resumed request counts of one scheduler output (accumulated on the worker)."""
+
+    preempted = len(getattr(scheduler_output, "preempted_req_ids", None) or ())
+    cached = getattr(scheduler_output, "scheduled_cached_reqs", None)
+    resumed = len(getattr(cached, "resumed_req_ids", None) or ())
+    counters = getattr(worker, _SCHED_ATTR, None)
+    if counters is None:
+        counters = {"preempted": 0, "resumed": 0}
+        setattr(worker, _SCHED_ATTR, counters)
+    counters["preempted"] += preempted
+    counters["resumed"] += resumed
+    return preempted, resumed
+
+
+def worker_step_timer(worker: Any, action: str = "start") -> Any:
+    """``action='start'`` installs the per-step timer; ``'stop'`` removes it and returns steps;
+    ``'counters'`` returns the preempted / resumed request totals seen while timing."""
+
+    if action == "counters":
+        return dict(getattr(worker, _SCHED_ATTR, None) or {"preempted": 0, "resumed": 0})
     if action == "start":
         if getattr(worker, _TIMER_ATTR, None) is not None:
             worker_step_timer(worker, "stop")
@@ -100,6 +121,7 @@ def worker_step_timer(worker: Any, action: str = "start") -> list[dict[str, Any]
 
         def execute_model(scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
             tokens, reqs = _scheduled(scheduler_output)
+            preempted, resumed = _count_scheduler_events(worker, scheduler_output)
             if tokens == 0:
                 return original_execute(scheduler_output, *args, **kwargs)
             torch.cuda.synchronize()
@@ -112,11 +134,13 @@ def worker_step_timer(worker: Any, action: str = "start") -> list[dict[str, Any]
                         "tokens": tokens,
                         "reqs": reqs,
                         "ms": (time.perf_counter() - start) * 1e3,
+                        "preempted": preempted,
+                        "resumed": resumed,
                         "sampled_in_execute": True,
                     }
                 )
             else:
-                record["open"] = (start, tokens, reqs)
+                record["open"] = (start, tokens, reqs, preempted, resumed)
             return out
 
         def sample_tokens(*args: Any, **kwargs: Any) -> Any:
@@ -124,9 +148,15 @@ def worker_step_timer(worker: Any, action: str = "start") -> list[dict[str, Any]
             pending = record["open"]
             if pending is not None:
                 torch.cuda.synchronize()
-                start, tokens, reqs = pending
+                start, tokens, reqs, preempted, resumed = pending
                 record["steps"].append(
-                    {"tokens": tokens, "reqs": reqs, "ms": (time.perf_counter() - start) * 1e3}
+                    {
+                        "tokens": tokens,
+                        "reqs": reqs,
+                        "ms": (time.perf_counter() - start) * 1e3,
+                        "preempted": preempted,
+                        "resumed": resumed,
+                    }
                 )
                 record["open"] = None
             return out
