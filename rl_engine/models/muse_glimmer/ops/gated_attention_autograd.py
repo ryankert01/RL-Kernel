@@ -51,11 +51,13 @@ def strict_forward(
     *,
     window: Optional[int],
     max_seqlen_q: Optional[int] = None,
+    seq_meta: Optional[_bwd.SequenceMeta] = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """``(y bf16 (Tq,H_Q*128), o bf16 (Tq,H_Q*128), lse fp32 (Tq,H_Q))`` - the strict kernel."""
     return _fwd.strict_gated_attention_fwd_varlen(
         q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window=window,
         max_seqlen_q=max_seqlen_q, num_q_heads=q.shape[1], num_kv_heads=k.shape[1],
+        seq_meta=seq_meta,
     )
 
 
@@ -79,14 +81,17 @@ class GatedAttentionFn(torch.autograd.Function):
         k_c = k.contiguous()
         v_c = v.contiguous()
         g_c = gate_logits.contiguous()
-        max_seqlen_q = None
-        if seq_meta is not None:
-            # fail closed on a meta built for other tensors; no host sync (identity + versions)
-            _bwd._resolve_meta(seq_meta, cu_seqlens_q, cu_seqlens_k, q_pos, k_c.shape[0])
-            max_seqlen_q = seq_meta.max_seqlen_q
+        if seq_meta is None and any(ctx.needs_input_grad[:4]):
+            # Validate the packing once, here, with the backward's rules (contiguous ascending
+            # q_pos inside [0, len_k)): the forward fails early instead of after every layer's
+            # forward, and the backward reuses the meta (no second host sync).
+            seq_meta = _bwd.prepare_sequence_meta(
+                cu_seqlens_q, cu_seqlens_k, q_pos, num_k_tokens=k_c.shape[0]
+            )
+        # with a meta: identity/version check only (fail closed on other tensors), no host sync
         y, o, lse = strict_forward(
             q_c, k_c, v_c, g_c, cu_seqlens_q, cu_seqlens_k, q_pos, window=window,
-            max_seqlen_q=max_seqlen_q,
+            seq_meta=seq_meta,
         )
         ctx.save_for_backward(q_c, k_c, v_c, g_c, o, lse, cu_seqlens_q, cu_seqlens_k, q_pos)
         ctx.window = None if window is None else int(window)
@@ -131,7 +136,11 @@ def gated_attention(
     ``seq_meta`` (optional, from ``triton.gated_attention_bwd.prepare_sequence_meta`` on the same
     ``cu_seqlens``/``q_pos`` tensors) removes every host synchronisation of the op: the forward
     takes its grid size (``max_seqlen_q``) from it and the backward skips re-validation. A meta
-    built for other (or since modified) tensors raises.
+    built for other (or since modified) tensors raises. Without it, the forward builds one
+    (two device->host copies) when any input requires grad, so the packing is validated before
+    the kernel runs and the backward reuses it; in no-grad calls the forward wrapper validates
+    on the host instead (one copy). Pass one meta per micro-batch to every layer to pay the
+    copies once per step instead of once per layer.
     """
     return GatedAttentionFn.apply(
         q, k, v, gate_logits, cu_seqlens_q, cu_seqlens_k, q_pos, window, seq_meta

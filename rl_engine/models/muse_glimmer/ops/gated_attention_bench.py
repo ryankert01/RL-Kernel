@@ -183,6 +183,7 @@ def run_digest() -> dict[str, Any]:
             inp["q"], inp["gate"], kc, vc, table, seq_lens, _i32([0, 300]), window=window
         )
         fwd[f"{kind}/paged_prefill/T=300"] = [_sha(y), _sha(o), _sha(lse)]
+        _digest_extra(fwd, kind, window)
 
     back = out["backward"]
     for window in (None, W):
@@ -202,6 +203,90 @@ def run_digest() -> dict[str, Any]:
                 continue
             back[f"{kind}/T={n}"] = [_sha(t) for t in grads]
     return out
+
+
+def _paged_layout(ctxs: list[int], seed: int, hkv: int = HKV, evict_window: Optional[int] = None):
+    """Several sequences in one cache with interleaved (non-contiguous) page ids.
+
+    Sequence ``i`` has ``ctxs[i]`` keys; its logical page ``j`` lives at physical page
+    ``j * B + i``. With ``evict_window`` the pages whose keys all sit at ``<= ctx - 1 - W`` are
+    marked ``-1`` (evicted for a decode query at ``ctx - 1``) and NaN-filled.
+    """
+    bsz = len(ctxs)
+    max_pages = max(-(-c // PAGE) for c in ctxs)
+    kc = torch.zeros((max_pages * bsz, PAGE, hkv, D), dtype=torch.bfloat16, device=DEV)
+    vc = torch.zeros_like(kc)
+    table = torch.full((bsz, max_pages), -1, dtype=torch.int32, device=DEV)
+    seqs = []
+    for i, ctx in enumerate(ctxs):
+        s = _inputs(ctx, seed=seed + 13 * i, hq=HQ if hkv == HKV else 4, hkv=hkv)
+        seqs.append(s)
+        for j in range(-(-ctx // PAGE)):
+            phys = j * bsz + i
+            rows = slice(j * PAGE, min((j + 1) * PAGE, ctx))
+            n = rows.stop - rows.start
+            kc[phys, :n] = s["k"][rows]
+            vc[phys, :n] = s["v"][rows]
+            table[i, j] = phys
+            if evict_window is not None and (j + 1) * PAGE - 1 <= ctx - 1 - evict_window:
+                table[i, j] = -1
+                kc[phys].fill_(float("nan"))
+                vc[phys].fill_(float("nan"))
+    lens = torch.tensor(ctxs, dtype=torch.int32, device=DEV)
+    return kc, vc, table, lens
+
+
+def _digest_extra(fwd: dict[str, Any], kind: str, window: Optional[int]) -> None:
+    """Paths added in wave B (validation / in-kernel paged positions must not move bits):
+    TP head shards (TOKEN + HEAD tiles, varlen and paged), paged chunked prefill with queries
+    that are NOT the whole sequence (TOKEN tiles), multi-token HEAD tiles on the paged path,
+    interleaved page ids and evicted (-1, NaN-filled) pages on local layers."""
+    lens = [5, 130, 2100, 1, 333]
+    for hq in (16, 8, 4):
+        seqs = [_inputs(n, seed=21_000 + 7 * hq + i, hq=hq, hkv=1) for i, n in enumerate(lens)]
+        packed = {k: torch.cat([s[k] for s in seqs]) for k in ("q", "k", "v", "gate")}
+        cu = _i32([0, *torch.tensor(lens).cumsum(0).tolist()])
+        pos = torch.cat([torch.arange(n, dtype=torch.int32, device=DEV) for n in lens])
+        for mode in ("token", "head"):
+            y, o, lse = _fwd_varlen(packed, cu, cu, pos, window, tile_mode=mode,
+                                    num_q_heads=hq, num_kv_heads=1)
+            fwd[f"{kind}/tp_varlen/H_Q={hq}/{lens}/{mode}"] = [_sha(y), _sha(o), _sha(lse)]
+        ctxs = [2049, 1, 700, 4096]
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=22_000 + hq, hkv=1)
+        g = torch.Generator(device="cpu").manual_seed(23_000 + hq)
+        q = (torch.randn(len(ctxs), hq, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(len(ctxs), hq * D, generator=g).to(DEV, torch.bfloat16)
+        y, o, lse = ga.strict_gated_attention_fwd_paged(
+            q, gate, kc, vc, table, seq_lens, _i32(range(len(ctxs) + 1)), window=window,
+            num_q_heads=hq, num_kv_heads=1,
+        )
+        fwd[f"{kind}/tp_paged_decode/H_Q={hq}/{ctxs}"] = [_sha(y), _sha(o), _sha(lse)]
+    # paged chunked prefill: the queries are the last len_q of each sequence (TOKEN tiles)
+    for ctxs, lq in (([2100, 300, 4096], [100, 17, 64]), ([2049, 70, 4096], [3, 16, 1])):
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=24_000 + sum(lq))
+        g = torch.Generator(device="cpu").manual_seed(25_000 + sum(lq))
+        tq = sum(lq)
+        q = (torch.randn(tq, HQ, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(tq, HQ * D, generator=g).to(DEV, torch.bfloat16)
+        cu_q = _i32([0, *torch.tensor(lq).cumsum(0).tolist()])
+        for mode in (None, "token", "head"):
+            kw = {} if mode is None else {"tile_mode": mode}
+            y, o, lse = ga.strict_gated_attention_fwd_paged(
+                q, gate, kc, vc, table, seq_lens, cu_q, window=window, **kw
+            )
+            fwd[f"{kind}/paged_chunk/{ctxs}/{lq}/{mode or 'auto'}"] = [
+                _sha(y), _sha(o), _sha(lse)
+            ]
+    if window is not None:  # evicted pages (-1 in the table, NaN-filled) at decode
+        ctxs = [4096, 2100, 2049, 9000]
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=26_000, evict_window=window)
+        g = torch.Generator(device="cpu").manual_seed(26_500)
+        q = (torch.randn(len(ctxs), HQ, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(len(ctxs), HQ * D, generator=g).to(DEV, torch.bfloat16)
+        y, o, lse = ga.strict_gated_attention_fwd_paged(
+            q, gate, kc, vc, table, seq_lens, _i32(range(len(ctxs) + 1)), window=window
+        )
+        fwd[f"{kind}/paged_decode_evicted/{ctxs}"] = [_sha(y), _sha(o), _sha(lse)]
 
 
 # --------------------------------------------------------------------------------- bench
