@@ -362,8 +362,151 @@ def run_bwd_diff(old_path: str) -> dict[str, Any]:
                 (new_c[0], bwd.combine_kv_partials(new_c[1]), bwd.combine_kv_partials(new_c[2])),
                 (old_c[0], old.combine_kv_partials(old_c[1]), old.combine_kv_partials(old_c[2])),
             )
+            if n % 8 == 0:
+                # the contract defect: OLD one-shot kernel vs the OLD CP1 path (8 canonical query
+                # chunks, each through the old kernel, group tree then chunk tree), and the NEW
+                # one-shot kernel vs the same CP1 leaves folded in the new order
+                old_cp = _old_cp1_path(old, inp, do, lse, delta, pos, window)
+                _diff_into(
+                    rec, "defect_old_oneshot_vs_old_cp1", ("dk", "dv"),
+                    (old.combine_kv_partials(old_c[1]), old.combine_kv_partials(old_c[2])),
+                    old_cp,
+                )
             records.append(rec)
     return {"records": records, "old_module": old_path}
+
+
+def _old_cp1_path(old, inp, do, lse, delta, pos, window):
+    """v1 CP1 path (runtime/cp_attention.py at 6a61f6e): per canonical chunk the old kernel's 8
+    group partials folded by the group tree, then the 8 chunk roots folded by the same tree."""
+    from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree
+
+    n = inp["q"].shape[0]
+    chunk = n // 8
+    cu_k = _i32([0, n])
+    roots_k, roots_v = [], []
+    for c in range(8):
+        rows = slice(c * chunk, (c + 1) * chunk)
+        _dq, dkp, dvp = old.strict_gated_attention_bwd_partials(
+            inp["q"][rows].contiguous(), inp["k"], inp["v"], do[rows].contiguous(),
+            lse[rows].contiguous(), delta[rows].contiguous(), _i32([0, chunk]), cu_k,
+            pos[rows].contiguous(), window=window,
+        )
+        roots_k.append(combine_tree(list(dkp.unbind(0))))
+        roots_v.append(combine_tree(list(dvp.unbind(0))))
+    return (combine_tree(roots_k).to(torch.bfloat16), combine_tree(roots_v).to(torch.bfloat16))
+
+
+# --------------------------------------------------------------------------------- parity
+def _mm(a: torch.Tensor, b: torch.Tensor) -> int:
+    return int((a != b).sum().item())
+
+
+def run_parity() -> dict[str, Any]:
+    """Mismatch counts (expected all 0) for TP head shards and simulated CP ranks, one GPU.
+
+    TP t: rank r runs the strict forward/backward on its head shard (32/t Q heads, its KV head
+    replicated when t > 2); compared with the TP1 call's slices; rank sub-tree roots of the dK/dV
+    group partials combined in runtime/tp_canonical_tree.combine_tree vs TP1 dk/dv. CP c: rank i
+    runs the backward on its contiguous rows against the full K/V; rank roots combined in the
+    canonical tree vs the one-shot dk/dv (all_gather is a copy, so one GPU suffices).
+    """
+    from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree
+    from rl_engine.models.muse_glimmer.runtime.tp_canonical_tree import combine_tree as tp_tree
+
+    tp_records, cp_records = [], []
+    for window in (None, W):
+        n = 2100
+        inp = _inputs(n, seed=80_000)
+        cu = _i32([0, n])
+        pos = torch.arange(n, dtype=torch.int32, device=DEV)
+        y, o, lse = _fwd_varlen(inp, cu, cu, pos, window)
+        dgate, do, delta = bwd.gated_attention_bwd_preprocess(inp["dy"], o, inp["gate"])
+        dq, dkp, dvp = bwd.strict_gated_attention_bwd_partials(
+            inp["q"], inp["k"], inp["v"], do, lse, delta, cu, cu, pos, window=window
+        )
+        dk, dv = bwd.combine_kv_partials(dkp), bwd.combine_kv_partials(dvp)
+        for tp in (1, 2, 4, 8):
+            hq, gr = HQ // tp, 8 // tp
+            roots_k, roots_v = [], []
+            rec: dict[str, Any] = {"tp": tp, "window": window, "T": n, "ranks": []}
+            for r in range(tp):
+                heads, cols = slice(r * hq, (r + 1) * hq), slice(r * hq * D, (r + 1) * hq * D)
+                kvh = (r * hq) // (HQ // HKV)
+                sh = {"q": inp["q"][:, heads].contiguous(),
+                      "k": inp["k"][:, kvh : kvh + 1].contiguous() if tp > 1 else inp["k"],
+                      "v": inp["v"][:, kvh : kvh + 1].contiguous() if tp > 1 else inp["v"],
+                      "gate": inp["gate"][:, cols].contiguous()}
+                hkv = 1 if tp > 1 else HKV
+                y_r, o_r, l_r = _fwd_varlen(sh, cu, cu, pos, window, num_q_heads=hq,
+                                            num_kv_heads=hkv)
+                dg_r, do_r, de_r = bwd.gated_attention_bwd_preprocess(
+                    inp["dy"][:, cols].contiguous(), o_r, sh["gate"], num_q_heads=hq
+                )
+                dq_r, dkp_r, dvp_r = bwd.strict_gated_attention_bwd_partials(
+                    sh["q"], sh["k"], sh["v"], do_r, l_r, de_r, cu, cu, pos, window=window,
+                    num_q_heads=hq, num_kv_heads=hkv,
+                )
+                kv_sel = kvh if tp > 1 else slice(None)
+                groups = slice(r * gr, (r + 1) * gr)
+                rk = dkp_r[:, :, 0] if tp > 1 else dkp_r
+                rv = dvp_r[:, :, 0] if tp > 1 else dvp_r
+                rec["ranks"].append({
+                    "rank": r, "q_heads": [r * hq, (r + 1) * hq], "kv_head": kvh,
+                    "y": _mm(y_r, y[:, cols]), "o": _mm(o_r, o[:, cols]),
+                    "lse": _mm(l_r, lse[:, heads]), "dq": _mm(dq_r, dq[:, heads]),
+                    "dgate": _mm(dg_r, dgate[:, cols]),
+                    "dk_group_partials": _mm(rk, dkp[groups, :, kv_sel]),
+                    "dv_group_partials": _mm(rv, dvp[groups, :, kv_sel]),
+                })
+                for roots, part in ((roots_k, dkp_r), (roots_v, dvp_r)):
+                    root = bwd.kv_partials_subtree(part)
+                    if tp > 1:
+                        full = torch.zeros((n, HKV, D), dtype=torch.float32, device=DEV)
+                        full[:, kvh] = root[:, 0]
+                        root = full
+                    roots.append(root)
+            rec["dk_tree_vs_tp1"] = _mm(tp_tree(roots_k).to(torch.bfloat16), dk)
+            rec["dv_tree_vs_tp1"] = _mm(tp_tree(roots_v).to(torch.bfloat16), dv)
+            tp_records.append(rec)
+        for n in (8, 300, 2048, 2100, 4096, 8192):
+            inp = _inputs(n, seed=90_000 + n)
+            cu = _i32([0, n])
+            pos = torch.arange(n, dtype=torch.int32, device=DEV)
+            _y, o, lse = _fwd_varlen(inp, cu, cu, pos, window)
+            one = bwd.strict_gated_attention_bwd(
+                inp["q"], inp["k"], inp["v"], inp["gate"], o, lse, inp["dy"], cu, cu, pos,
+                window=window,
+            )
+            for cp in (1, 2, 4, 8):
+                if n % cp:
+                    continue
+                span = n // cp
+                rk, rv, dqs, dgs = [], [], [], []
+                for i in range(cp):
+                    rows = slice(i * span, (i + 1) * span)
+                    dg_i, do_i, de_i = bwd.gated_attention_bwd_preprocess(
+                        inp["dy"][rows].contiguous(), o[rows].contiguous(),
+                        inp["gate"][rows].contiguous(),
+                    )
+                    dq_i, dkp_i, dvp_i = bwd.strict_gated_attention_bwd_partials(
+                        inp["q"][rows].contiguous(), inp["k"], inp["v"], do_i,
+                        lse[rows].contiguous(), de_i, _i32([0, span]), cu,
+                        pos[rows].contiguous(), window=window,
+                    )
+                    rk.append(dkp_i)
+                    rv.append(dvp_i)
+                    dqs.append(dq_i)
+                    dgs.append(dg_i)
+                got_k = bwd.combine_kv_partials(combine_tree(rk))
+                got_v = bwd.combine_kv_partials(combine_tree(rv))
+                cp_records.append({
+                    "cp": cp, "T": n, "window": window, "rows_per_rank": span,
+                    "dq": _mm(torch.cat(dqs), one[0]), "dk": _mm(got_k, one[1]),
+                    "dv": _mm(got_v, one[2]), "dgate": _mm(torch.cat(dgs), one[3]),
+                    "numel_dk": one[1].numel(),
+                })
+    return {"tp": tp_records, "cp_simulated": cp_records}
 
 
 def _diff_into(rec: dict[str, Any], prefix: str, names, new, old) -> None:
@@ -381,7 +524,7 @@ def _diff_into(rec: dict[str, Any], prefix: str, names, new, old) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["digest", "bench", "bwd-diff"])
+    ap.add_argument("mode", choices=["digest", "bench", "bwd-diff", "parity"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--iters", type=int, default=20)
     ap.add_argument("--quick", action="store_true")
@@ -394,6 +537,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         payload = run_digest()
     elif args.mode == "bench":
         payload = run_bench(args.iters, args.quick)
+    elif args.mode == "parity":
+        payload = run_parity()
     else:
         if not args.old_module:
             ap.error("bwd-diff needs --old-module")
