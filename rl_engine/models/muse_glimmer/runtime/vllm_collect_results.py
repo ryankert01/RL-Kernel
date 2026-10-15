@@ -283,7 +283,20 @@ def collect(
     for r in runs:
         if not r.get("profile"):
             continue
-        profiles.append({"mode": r["mode"], "tp": r["tp"], **r["profile"]})
+        entry: dict[str, Any] = {"mode": r["mode"], "tp": r["tp"]}
+        for kind, prof in r["profile"].items():
+            if not prof:
+                entry[kind] = "NOT CAPTURED"
+                continue
+            prof = dict(prof)
+            if "kernel_cuda_ms" not in prof:
+                # Older captures: kernel rows are the ones without CPU time; top-25 only.
+                prof["kernel_cuda_ms_top25"] = sum(
+                    o["self_cuda_ms"] for o in prof["top_ops"] if o["self_cpu_ms"] == 0.0
+                )
+                prof.pop("total_self_cuda_ms", None)
+            entry[kind] = prof
+        profiles.append(entry)
     result["profile"] = profiles or "NOT RUN"
     provenance = []
     for r in runs:

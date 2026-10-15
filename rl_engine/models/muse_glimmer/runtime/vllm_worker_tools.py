@@ -149,9 +149,11 @@ def _top_ops(prof: Any, top: int) -> list[dict[str, Any]]:
         total_us = float(
             getattr(evt, "device_time_total", None) or getattr(evt, "cuda_time_total", 0.0) or 0.0
         )
+        device_type = str(getattr(evt, "device_type", ""))
         rows.append(
             {
                 "name": str(evt.key)[:160],
+                "is_kernel": "CUDA" in device_type,
                 "calls": int(evt.count),
                 "self_cuda_ms": cuda_us / 1e3,
                 "cuda_total_ms": total_us / 1e3,
@@ -191,11 +193,14 @@ def worker_profile(
             torch.cuda.synchronize()
             prof.__exit__(None, None, None)
             ops = _top_ops(prof, int(top))
-            total = sum(r["self_cuda_ms"] for r in _top_ops(prof, 10**6))
+            every = _top_ops(prof, 10**6)
             state["result"] = {
                 "step": dict(state["step"], wall_ms=(time.perf_counter() - state["t0"]) * 1e3),
                 "top_ops": ops,
-                "total_self_cuda_ms": total,
+                # Kernel rows only: CPU-side op rows (aten::mm, autograd Functions) repeat the
+                # device time of the kernels they launch, so summing every row double counts.
+                "kernel_cuda_ms": sum(r["self_cuda_ms"] for r in every if r["is_kernel"]),
+                "kernels": len([r for r in every if r["is_kernel"]]),
             }
             state["prof"] = None
 
