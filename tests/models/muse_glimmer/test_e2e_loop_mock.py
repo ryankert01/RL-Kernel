@@ -350,7 +350,31 @@ def test_load_lora_rejects_wrong_hash_and_lying_rollout() -> None:
         sync.export_lora_verified(LyingTrainer(), step=0)
     record = sync.transfer_lora(package, rollout)
     assert record["identity"] and rollout.provenance()["lora_sha256"] == sha
+    assert record["rollout_sha256_source"] == "provenance.lora_sha256"
     assert sync.weight_sync_identity(sha, sha) and not sync.weight_sync_identity(sha, None)
+
+
+def test_rollout_hash_from_tp_workers_when_engine_level_key_is_absent() -> None:
+    """StrictRolloutEngine (vLLM) reports the held LoRA hash per TP worker only."""
+
+    _, trainer = _engines("strict/strict")
+    package = sync.export_lora_verified(trainer, step=0)
+
+    class WorkerReportingRollout:
+        def __init__(self, hashes):
+            self.hashes = hashes
+
+        def load_lora(self, state_dict, sha256):
+            return None
+
+        def provenance(self):
+            return {"engine": {}, "workers": [{"lora_sha256": h} for h in self.hashes]}
+
+    record = sync.transfer_lora(package, WorkerReportingRollout([package.sha256] * 2))
+    assert record["identity"] and record["rollout_sha256_source"].endswith("(2 ranks agree)")
+    for hashes in ([package.sha256, "0" * 64], [package.sha256, None], []):
+        with pytest.raises(sync.WeightSyncError):
+            sync.transfer_lora(package, WorkerReportingRollout(hashes))
 
 
 # ------------------------------------------------------------------------------------------

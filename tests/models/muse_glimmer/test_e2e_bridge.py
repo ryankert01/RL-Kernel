@@ -6,7 +6,8 @@ The client runs in this interpreter (the vLLM env); the trainer server is a real
 started with the Megatron env's Python (``~/envs/megatron/bin/python``) over the real transport,
 holding the CPU ``MockTrainer``. Every server gets ``CUDA_VISIBLE_DEVICES=""`` (no GPU use).
 
-    PYTHONPATH=<worktree> ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_e2e_bridge.py -q
+    PYTHONPATH=<worktree> ~/envs/vllm/bin/python -m pytest \
+        tests/models/muse_glimmer/test_e2e_bridge.py -q
 """
 
 from __future__ import annotations
@@ -232,7 +233,8 @@ def test_remote_trainer_equals_in_process_trainer_bitwise(tmp_path: Path, which:
     remote = _remote(tmp_path, python=python)
     try:
         hello = remote.wait_ready()
-        assert hello["devices"]["device_count"] == 0 and hello["devices"]["cuda_visible_devices"] == ""
+        assert hello["devices"]["device_count"] == 0
+        assert hello["devices"]["cuda_visible_devices"] == ""
         if which == "megatron_env":
             assert "cu129" in hello["versions"]["torch"]
         got = _run_steps(remote)
@@ -319,7 +321,9 @@ def test_hung_server_times_out_and_is_killed(tmp_path: Path) -> None:
 
 @requires_megatron_env
 def test_remote_exception_propagates_and_server_survives(tmp_path: Path) -> None:
-    remote = _remote(tmp_path, factory=FAULTY, factory_kwargs={"fault": "raise", "fault_op": "step"})
+    remote = _remote(
+        tmp_path, factory=FAULTY, factory_kwargs={"fault": "raise", "fault_op": "step"}
+    )
     try:
         lps = remote.token_logprobs(SEQS, STARTS)
         loss = grpo.grpo_token_loss(lps, [t.detach() for t in lps], ADVANTAGES).loss
@@ -458,7 +462,8 @@ def test_cli_mock_through_bridge_equals_in_process_and_writes_timeline(tmp_path:
     assert local["timeline"]["bridge"] is None
     records = [json.loads(line) for line in (tmp_path / "remote" / "steps.jsonl").read_text()
                .splitlines()]
-    assert records[0]["trainer_step"]["bridge"]["grad_elements"] == records[0]["drift"]["token_count"]
+    first = records[0]
+    assert first["trainer_step"]["bridge"]["grad_elements"] == first["drift"]["token_count"]
     assert records[0]["timeline"]["tokens_generated"] == records[0]["num_completion_tokens"]
     profile = remote["profiles"][0]
     paths = [Path(profile["orchestrator_rollout_generate"]["path"])]

@@ -49,7 +49,6 @@ import secrets
 import signal
 import socket
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -165,7 +164,7 @@ def tensor_bytes(tensor: torch.Tensor) -> bytes:
 
 
 def surrogate_loss(logprobs: Sequence[torch.Tensor], grads: Sequence[torch.Tensor]) -> torch.Tensor:
-    """``sum_i (logprobs[i] * grads[i]).sum()``; its gradient w.r.t. ``logprobs[i]`` is ``grads[i]``.
+    """``sum_i (logprobs[i] * grads[i]).sum()``; d/d ``logprobs[i]`` is exactly ``grads[i]``.
 
     ``grads[i]`` is moved to ``logprobs[i].device`` (a bit-exact copy). Shapes and dtypes must
     match exactly (no silent cast).
@@ -271,6 +270,20 @@ def child_env(gpu_ids: Sequence[int], extra: Mapping[str, str] | None = None) ->
     return env
 
 
+def set_nodelay(conn: Connection) -> None:
+    """Disable Nagle on a TCP ``Connection`` (both ends call it).
+
+    ``Connection.send_bytes`` writes header and payload separately above 16 KiB; with Nagle +
+    delayed ACK on loopback that stalled 16 KiB .. 1 MiB messages by ~40-90 ms per round trip.
+    """
+
+    dup = socket.socket(fileno=os.dup(conn.fileno()))
+    try:
+        dup.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    finally:
+        dup.close()
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -359,7 +372,8 @@ class RemoteTrainer:
         self.gpu_ids = [int(g) for g in gpu_ids]
         if self.gpu_ids and len(self.gpu_ids) != self.tensor_parallel_size:
             raise ValueError(
-                f"gpu_ids {self.gpu_ids} must list one GPU per TP rank (TP{self.tensor_parallel_size})"
+                f"gpu_ids {self.gpu_ids} must list one GPU per TP rank "
+                f"(TP{self.tensor_parallel_size})"
             )
         self.lora_rank = int(lora_rank)
         self.lr = float(lr)
@@ -410,7 +424,9 @@ class RemoteTrainer:
                 **dict(extra_env or {}),
             },
         )
-        self.command = server_command(self.python, launcher, self.tensor_parallel_size, self.spec_path)
+        self.command = server_command(
+            self.python, launcher, self.tensor_parallel_size, self.spec_path
+        )
         self._log_file = open(self.log_path, "ab")  # noqa: SIM115 - owned until close()
         self._proc = subprocess.Popen(
             self.command,
@@ -454,6 +470,7 @@ class RemoteTrainer:
         port = self._wait_handshake(deadline)
         try:
             self._conn = Client(("127.0.0.1", port), authkey=self._authkey)
+            set_nodelay(self._conn)
         except (OSError, EOFError) as exc:
             raise self._dead("connect", exc) from exc
         data = self._recv(deadline, "startup", self.startup_timeout_s)
@@ -562,7 +579,9 @@ class RemoteTrainer:
         if self._closed:
             raise RemoteTrainerError("RemoteTrainer is closed")
         if self._broken:
-            raise RemoteTrainerError(f"trainer bridge unusable after an earlier failure: {self._broken}")
+            raise RemoteTrainerError(
+                f"trainer bridge unusable after an earlier failure: {self._broken}"
+            )
         self.wait_ready()
         assert self._conn is not None
         timeout = float(timeout_s if timeout_s is not None else self.call_timeout_s)
@@ -752,11 +771,3 @@ class RemoteTrainer:
 
         result, stats = self._call("ping", {"payload": payload})
         return result.get("payload"), stats
-
-
-def resolve_python(python: str | None) -> str:
-    return os.path.expanduser(python or DEFAULT_TRAINER_PYTHON)
-
-
-def current_python() -> str:
-    return sys.executable

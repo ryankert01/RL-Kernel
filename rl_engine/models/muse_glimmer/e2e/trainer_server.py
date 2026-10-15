@@ -52,6 +52,7 @@ from rl_engine.models.muse_glimmer.e2e.bridge import (
     PROTOCOL,
     decode_message,
     encode_message,
+    set_nodelay,
     surrogate_loss,
     to_wire,
     wire_tensor,
@@ -348,7 +349,9 @@ class TrainerServer:
             statuses = self._gather(status) if self.world > 1 else [status]
             if self.rank == 0:
                 assert statuses is not None
-                errors = [f"rank {s['rank']}: {s.get('error')}" for s in statuses if not s.get("ok")]
+                errors = [
+                    f"rank {s['rank']}: {s.get('error')}" for s in statuses if not s.get("ok")
+                ]
                 all_ok = ok and not errors
                 server = {
                     "compute_s": status["compute_s"],
@@ -425,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         tmp.replace(handshake)
         conn = listener.accept()
+        set_nodelay(conn)
         listener.close()
         _log(rank, "client connected")
 

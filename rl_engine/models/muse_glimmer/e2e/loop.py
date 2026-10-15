@@ -597,7 +597,8 @@ def run_loop(
                 profile_now = cfg.profile_step is not None and step == cfg.profile_step
                 remote_profile = profile_now and callable(getattr(trainer, "arm_profile", None))
                 if remote_profile:
-                    trainer.arm_profile(profile_dir, f"step{step:04d}")  # type: ignore[attr-defined]
+                    arm_profile = trainer.arm_profile  # type: ignore[attr-defined]
+                    arm_profile(profile_dir, f"step{step:04d}")
 
                 with clock.phase("rollout_generate"), profiled(
                     profile_now,

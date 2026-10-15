@@ -158,7 +158,9 @@ def config_from_args(args: argparse.Namespace) -> LoopConfig:
         run_dir = Path(args.run_dir)
     task = args.task or ("arith" if args.mock else "gsm8k")
     bridge = args.trainer_bridge == "on" or (args.trainer_bridge == "auto" and not args.mock)
-    factory = args.trainer_factory or (MOCK_TRAINER_FACTORY if args.mock else DEFAULT_TRAINER_FACTORY)
+    factory = args.trainer_factory or (
+        MOCK_TRAINER_FACTORY if args.mock else DEFAULT_TRAINER_FACTORY
+    )
     return LoopConfig(
         run_dir=run_dir,
         steps=args.steps,
