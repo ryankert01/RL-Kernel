@@ -1,7 +1,9 @@
 # REPORT — megatron_runtime (Megatron Bridge strict binding + LoRA + weight_sync_identity, StrictTrainer)
 
-**STATUS (wave B, code commit `926da65`): TP1 and TP2 complete — every check passes, and TP2 equals TP1
-bitwise for logprobs, LoRA gradients and the post-step LoRA hash. TP4: PENDING (see "TP4" below).**
+**STATUS (wave B, code commit `926da65`): complete for TP1, TP2 and TP4 — every check passes, and TP2
+and TP4 each equal TP1 bitwise for logprobs, LoRA gradients and the post-step LoRA hash, on the real 30B
+model. Bench at TP1/TP2. NOT RUN: TP8 (gated), native/bench at TP4, the cross-runtime diff against
+post-O7 vLLM/reference dumps (not on disk yet).**
 Machine-readable results: `reports/muse_glimmer_poc/data/megatron_runtime.json` (raw series, exact
 commands, producing commit and sha256 of every xrt file). Hardware A100-SXM4-80GB; `~/envs/megatron`
 (torch 2.13.0+cu129, Triton 3.7.1, TE 2.20.2, megatron-core 0.20.0, Megatron Bridge 0.7.0); checkpoint
@@ -28,9 +30,18 @@ Every strict op resolves to its sibling strict kernel (`provenance.ops.all_stric
 mode cannot select a fallback. TP8 has no real-model run: it is gated
 (`MUSE_MEGATRON_ALLOW_UNTESTED_TP=8` required) and covered by simulated-TP unit tests only.
 
-### TP4
-PENDING: the 4-GPU run (`--tp 4 --checks identity,xrt,repeat,lora_noop,grad_repeat,packing,step`) and
-the 4-process NCCL test are queued on GPUs 0-3; results replace this paragraph when they land.
+### TP4 (real 30B run, 4 GPUs, `--checks identity,xrt,repeat,lora_noop,grad_repeat,packing,step`)
+Per rank 8 Q heads / 1 KV head (KV head replicated on ranks {0,1} and {2,3}), `linear_qkv` re-sharded to
+canonical rows at bind time, 24.1 GiB allocated per rank after load. Results: identity 626/627; strict
+xrt **0/933 vs TP1**; repeat 0/933; lora_noop 0/933; grad_repeat 0 differing elements; LoRA gradients
+**0 / 104,792,064 vs TP1** (aggregate sha256 `1df6d60b…`); packing 512 / 4096 / 8192 identical; grad norm
+7.0176005363464355; post-step LoRA hash **`69968212…` = TP1**, post-step logprobs 0/933 vs TP1; recompute
+0 mismatches. Timings: xrt scoring 3.8 s, recompute fwd+bwd of the xrt set 10.3 s (TP2 13.0 s, TP1
+17.7 s). The run recorded commit `58deb44` with `dirty=true`: 58deb44 is a data-only commit on top of
+926da65, and the only uncommitted file under `rl_engine/` at launch was this report
+(`git diff --stat 58deb44 5a809e3 -- rl_engine tests`), so every measured `.py` equals 926da65.
+Real 4-process NCCL test of the per-rank attention block (incl. the replica fold), LM head and LoRA
+linears: passed.
 
 ## Files (all under `rl_engine/models/muse_glimmer/runtime/` unless noted)
 | file | what |
@@ -166,8 +177,8 @@ The same file plus the vLLM binding's LoRA cross-check (`test_vllm_strict_bindin
 calls `StrictColumnLinear` / `StrictRowLinear` through their unchanged positional signature), vllm env:
 `47 passed, 3 skipped in 45.31s`.
 Real NCCL (`test_nccl_tp_equals_tp1_lm_head_column_row_attention[2]` / `[4]`: LM head, column/row LoRA
-linears and the per-rank attention block incl. the TP4 replica fold on real collectives): PENDING (run
-with the 4-GPU lease).
+linears and the per-rank attention block incl. the TP4 replica fold on real collectives, both layer
+kinds), 4-GPU lease: `2 passed, 46 deselected, 1 warning in 18.52s`.
 30B TrainerLike protocol test at TP2 (`RL_KERNEL_MUSEGLIMMER_E2E=1 MUSEGLIMMER_TRAIN_TP=2`, 2 steps,
 lr 1e-4, any-scalar loss): strict `1 passed in 248.96s` (step 1 loss 117.5417, grad norm 423.0179,
 recompute 0/231 mismatches; step 2 loss -0.68622, grad norm 0.54787); native
@@ -197,7 +208,8 @@ state recomputed from the documented byte stream (replaces the tautological alia
   gradients 0 of 104,792,064 elements in 832 tensors (aggregate sha256 `1df6d60b…` at both); LoRA
   logprobs with random B 0/933; grad norm equal; post-step LoRA hash equal (`69968212…`); post-step
   logprobs 0/933.
-- **TP4 vs TP1**: PENDING.
+- **TP4 vs TP1** (real 4-GPU run): strict logprobs 0/933; LoRA gradients 0 of 104,792,064 elements;
+  grad norm equal; post-step LoRA hash equal; post-step logprobs 0/933.
 - **Repeat / packing**: repeat 0/933 and grad_repeat 0 elements at every TP run; packing budgets 512 /
   4096 / 8192 (6 / 2 / 1 micro-batches) give identical gradients (same aggregate sha256) and logprobs at
   TP1 and TP2.
@@ -242,7 +254,7 @@ allocations), not the strict path.
 | megatron_runtime:R5 | fixed | this report rewritten from the JSON |
 | megatron_runtime:R6 | fixed | JSON regenerated: per-check status, per-file sha256 + producing commit, every row of a TP from one run |
 | megatron_runtime:R7 | fixed | 3.580 GiB freed = vision params; unit test with the setattr cycle |
-| megatron_runtime:R8 | PENDING (TP4 run queued) | TP8 gated behind `MUSE_MEGATRON_ALLOW_UNTESTED_TP=8` |
+| megatron_runtime:R8 | fixed | real TP4 run: identity 626/627, xrt/grads/post-step hash == TP1; TP8 gated behind `MUSE_MEGATRON_ALLOW_UNTESTED_TP=8` |
 | megatron_runtime:R9 | fixed | warm-up per phase and size, 3 repeats, samples + median, one run per TP |
 | megatron_runtime:R10 | fixed | canonical `rope_rows`, no cache |
 | megatron_runtime:R11 | fixed | pinned-hash test, FP64 golden comparison, tests for R1/R2/R3 |
@@ -263,6 +275,8 @@ allocations), not the strict path.
 4. E2E: `StrictTrainer.step` can now raise `StrictRecomputeMismatch` in strict mode; the bridge should
    surface it as a hard failure of the step (it propagates through `trainer.step`).
 5. Final cross-runtime byte-diff once the vLLM and reference dumps are regenerated after `c88607f`.
+6. RESUME.md / E2E layout: Megatron TP>2 no longer fails closed; a real TP4 run equals TP1 (logprobs,
+   LoRA gradients, post-step hash), so `train TP4` is available to the E2E (TP8 still gated).
 
 ## Open issues
 - TP8: no real-model run (needs 8 GPUs); gated behind `MUSE_MEGATRON_ALLOW_UNTESTED_TP=8`.
