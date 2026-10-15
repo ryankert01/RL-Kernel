@@ -42,3 +42,9 @@ Merge each with `git merge --no-edit <branch>` from the POC worktree (the branch
 3. Strict logprob dumps from both runtimes on the same token ids (`run_vllm_strict.py`, `run_megatron_strict.py`) and byte-diff them (`logprobs_hex`).
 4. E2E: `rl_engine/models/muse_glimmer/e2e/run_poc_grpo.py --rollout-tp 2 --rollout-gpus 0,1 --train-tp 4 --train-gpus 4,5,6,7 --mode strict/strict ...` (needs the whole node idle; stop other leases first), then the other three modes.
 5. Fill REPORT.md sections 4.2–8 from the agent reports, MERGE_LOG.md, bench_ws1.log and the ablation table; compile section 6 from RFC_AUDIT_DIGEST.md + the "RFC feedback" sections of every REPORT_*.md.
+
+## Update 2026-10-15 ~15:30 UTC (wrap-up at the usage-limit reset)
+All seven agent branches except `ablation` (no commits yet) were merged into the POC branch in their then-current
+state (some agents were still committing; re-run `git merge --no-edit <branch>` for each to pick up late commits).
+Modules import; the per-row tests, the real-weights chain run, TP/CP multi-GPU tests and the E2E have NOT been
+re-run by the integrator after these merges — do that first when resuming (step 1 above).
