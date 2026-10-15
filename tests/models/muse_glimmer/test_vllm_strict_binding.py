@@ -381,6 +381,14 @@ class TestLoRA:
 
 @gpu
 class TestStrictSiblings:
+    def test_probe_keeps_strict_ops_under_cuda_default_device(self):
+        """vLLM builds the model under a CUDA default device; the probe must not demote then."""
+
+        with torch.device(DEVICE):
+            ops = probe_ops(resolve_ops(), DEVICE)
+        assert ops.demotions == [], ops.demotions
+        assert ops.all_strict, ops.fallback_names
+
     def test_probe_and_strict_vs_fallback_agree(self):
         ops = probe_ops(resolve_ops(), DEVICE)
         strict_names = [n for n in OP_NAMES if ops.is_strict(n)]

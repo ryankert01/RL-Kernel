@@ -83,6 +83,7 @@ from rl_engine.models.muse_glimmer.workload import (
 
 STRICT_ENV = "RL_KERNEL_MUSEGLIMMER_STRICT"
 READBACK_ENV = "RL_KERNEL_READBACK_DIR"
+ALLOW_FALLBACK_ENV = "RL_KERNEL_MUSEGLIMMER_ALLOW_FALLBACK"
 SCHEMA = "rlkernel.museglimmer.vllm_strict.v1"
 REAL_VOCAB = int(OFFICIAL_FINGERPRINT["vocab_size"])
 PADDED_VOCAB = int(OFFICIAL_PARALLEL_LAYOUT["padded_vocab_size"])
@@ -650,6 +651,18 @@ def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None
     _init_collective(state)
     device = next(model.parameters()).device
     probe_ops(state.ops, device)
+    if not state.ops.all_strict:
+        detail = state.ops.provenance()
+        if os.getenv(ALLOW_FALLBACK_ENV, "").strip() not in ("1", "true", "yes"):
+            state.persist()
+            raise RuntimeError(
+                "strict Muse Glimmer binding: not every op resolved to the strict sibling kernel "
+                f"(fallbacks {detail['fallbacks']}, demotions {detail['demotions']}); set "
+                f"{ALLOW_FALLBACK_ENV}=1 to run the labelled fallbacks anyway (fail closed)"
+            )
+        state.checks["all_ops_strict"] = "failed (fallbacks allowed by env)"
+    else:
+        state.checks["all_ops_strict"] = "passed"
     attn_backend.bind_ops(state.ops)
 
     layers = model.model.layers
