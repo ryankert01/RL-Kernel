@@ -240,12 +240,27 @@ def profile_record(strict: dict[str, Any] | None, hf: dict[str, Any] | None) -> 
     return out
 
 
+def _repeat_record(first: dict[str, Any] | None, final: dict[str, Any] | None) -> dict[str, Any]:
+    """Two separate processes scoring the same file with the same backend: byte-equal?"""
+    if first is None or final is None:
+        return {"status": "NOT RUN"}
+    d = compare_xrt(first, final)
+    return {
+        "status": "PASS" if d["equal_tokens"] == d["n_tokens"] else "FAIL",
+        "first_commit": first.get("commit"),
+        "final_commit": final.get("commit"),
+        "n_tokens": d["n_tokens"],
+        "equal_tokens": d["equal_tokens"],
+    }
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--runs", required=True, help="directory with the run JSON files")
     p.add_argument("--out", default=str(DATA / "reference_profile.json"))
     p.add_argument("--status", default="complete")
     p.add_argument("--commands", default=None, help="JSON list of the exact command lines")
+    p.add_argument("--notes", default=None, help="JSON object stored under \"notes\"")
     args = p.parse_args(argv)
     runs = pathlib.Path(args.runs)
     golden = _load(runs / "xrt_reference_golden.json")
@@ -273,6 +288,7 @@ def main(argv=None) -> int:
         "commit": source_commit(),
         "env": env,
         "commands": json.loads(pathlib.Path(args.commands).read_text()) if args.commands else [],
+        "notes": json.loads(pathlib.Path(args.notes).read_text()) if args.notes else {},
         "experiments": {
             "chain_triton_512_hf_pre_change": chain_record(
                 _load(runs / "chain_triton_512_hf_base.json")),
@@ -280,6 +296,8 @@ def main(argv=None) -> int:
             "chain_triton_2100_hf": chain_record(_load(runs / "chain_triton_2100_hf.json")),
             "chain_golden_2100": chain_record(_load(runs / "chain_golden_2100.json")),
             "xrt_scoring": xrt_record(golden, triton, hf_x),
+            "xrt_triton_repeat": _repeat_record(_load(runs / "xrt_reference_triton_first.json"),
+                                                triton),
             "profile": profile_record(strict, hf),
             "decode_batch_invariance": (strict or {}).get("decode_batch_invariance",
                                                           {"status": "NOT RUN"}),
