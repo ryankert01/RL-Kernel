@@ -60,6 +60,7 @@ every run file's own commit field, with `includes_o7_fix`).
 | triton 2100+32 + HF | 10 incl. W−1/W/W+1 | 32/32 each | 1.74 / 1.10 / 4.26 | 52.2–52.7 | 0.0852 / 0.0187 | 98.08 % / 100 % |
 | golden 2100+32 | 10 incl. W−1/W/W+1 | 32/32 each | 35.79 / 33.50 / 87.87 | 52.4–54.4 | – | – |
 | pytest gate 256+32 (triton) | 7 | 32/32 each | 1.13 / 0.29 / 4.67 | 52.1–52.2 | – | – |
+| pytest gate 256+32 (golden, `MUSEGLIMMER_BACKEND` unset; the batched-decode gate skips) | 7 | 32/32 each | 2.58 / 1.92 / 20.63 | 52.3–52.4 | – | – |
 
 **Profile (A100-SXM4-80GB, triton backend; strict vs HF bf16 sdpa; `clean` = median wall of 3 prefill / 5
 decode calls without regions; GPU-busy = kernel time, 3 torch.profiler passes).**
@@ -115,7 +116,9 @@ WT=$(git rev-parse --show-toplevel); CK=~/models/Muse-Glimmer-30B; R=<runs dir>;
 $L env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed -q
 #   -> 653 passed, 8 skipped (at 3404cf9)
 $L env PYTHONPATH=$WT MUSEGLIMMER_CHECKPOINT=$CK MUSEGLIMMER_BACKEND=triton ~/envs/vllm/bin/python -m pytest \
-    tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA          # -> 2 passed
+    tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA          # -> 2 passed (39.1 s)
+$L env PYTHONPATH=$WT MUSEGLIMMER_CHECKPOINT=$CK ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA          # golden -> 1 passed, 1 skipped (46.9 s)
 $L env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/reference/run_chain.py --checkpoint $CK \
     --backend triton --score-file reports/muse_glimmer_poc/data/xrt_tokens.json --score-out $R/xrt_reference_triton.json \
     --score-check-modes prefill,decode,chunked:prompt_boundary,chunked:block64,chunked:ragged,chunked:window_boundary_2047,chunked:window_boundary_2048,chunked:window_boundary_2049
