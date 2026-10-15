@@ -123,6 +123,34 @@ class NativeLoRAHooks:
         self.handles.clear()
 
 
+_LOGP_CHUNK = 1024
+
+
+def _chunk_logp(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    lp = torch.log_softmax(logits.float(), dim=-1)
+    return lp.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+
+
+def chunked_token_logprobs(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """``log_softmax(logits.float())[t, targets[t]]`` over row chunks of 1024 (native reference).
+
+    Same per-row arithmetic as one full ``torch.log_softmax`` (row-wise kernel); the fp32 working
+    set is one chunk. With autograd each chunk is checkpointed (only the bf16 logits view is
+    saved), so the backward never holds a (T, V) fp32 tensor either.
+    """
+    from torch.utils.checkpoint import checkpoint
+
+    outs = []
+    for s in range(0, logits.shape[0], _LOGP_CHUNK):
+        z = logits[s : s + _LOGP_CHUNK]
+        y = targets[s : s + _LOGP_CHUNK]
+        if torch.is_grad_enabled() and z.requires_grad:
+            outs.append(checkpoint(_chunk_logp, z, y, use_reentrant=False))
+        else:
+            outs.append(_chunk_logp(z, y))
+    return torch.cat(outs)
+
+
 def native_logprobs_with_grad(model: Any, seq: list[int], start: int, device: torch.device,
                               *, grad: bool, recompute: bool = True) -> torch.Tensor:
     """fp32 logp of ``seq[start:]`` from Bridge's native forward (one sequence, B=1).
@@ -150,12 +178,16 @@ def native_logprobs_with_grad(model: Any, seq: list[int], start: int, device: to
         with torch.set_grad_enabled(grad):
             logits = inner(input_ids=ids, position_ids=pos, attention_mask=mask,
                            runtime_gather_output=True)
-            lp = torch.log_softmax(logits.float(), dim=-1)[0, :-1]
-            out = lp.gather(-1, ids[0, 1:].unsqueeze(-1)).squeeze(-1)[start - 1 :]
+            out = chunked_token_logprobs(logits[0, start - 1 : -1], ids[0, start:])
     finally:
         inner.train(was_training)
         cfg.recompute_granularity, cfg.recompute_method, cfg.recompute_num_layers = saved
     return out
 
 
-__all__ = ["NATIVE_LORA_FORM", "NativeLoRAHooks", "native_logprobs_with_grad"]
+__all__ = [
+    "NATIVE_LORA_FORM",
+    "NativeLoRAHooks",
+    "chunked_token_logprobs",
+    "native_logprobs_with_grad",
+]

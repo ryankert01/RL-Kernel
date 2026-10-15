@@ -67,6 +67,7 @@ from rl_engine.models.muse_glimmer.runtime.megatron_lora import (
 from rl_engine.models.muse_glimmer.runtime.megatron_native_lora import (
     NATIVE_LORA_FORM,
     NativeLoRAHooks,
+    chunked_token_logprobs,
     native_logprobs_with_grad,
 )
 from rl_engine.models.muse_glimmer.runtime.megatron_strict import (
@@ -410,8 +411,8 @@ class _RankState:
             t0 = time.perf_counter()
             logits = inner(input_ids=ids, position_ids=pos, attention_mask=mask,
                            runtime_gather_output=True)
-            lp = torch.log_softmax(logits.float(), dim=-1)[:, :-1]
-            loss = -lp.gather(-1, ids[:, 1:].unsqueeze(-1)).mean()
+            lp = chunked_token_logprobs(logits[0, :-1], ids[0, 1:])
+            loss = -lp.mean()
             torch.cuda.synchronize()
             t1 = time.perf_counter()
             loss.backward()

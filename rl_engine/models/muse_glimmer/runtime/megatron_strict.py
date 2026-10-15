@@ -314,17 +314,24 @@ class MuseGlimmerStrictBinding:
 
         for p in model.parameters():
             p.requires_grad_(False)
+        gib = 2**30
+        self.memory_gib: dict[str, float] = {"bound_start": torch.cuda.memory_allocated() / gib}
         if drop_vision:
             for name in ("vision_tower", "vision_adapter", "vision_projection"):
                 if hasattr(model, name):
                     delattr(model, name)
                     self.notes.append(f"dropped {name} (text-only trainer)")
             torch.cuda.empty_cache()
+        self.memory_gib["after_vision_drop"] = torch.cuda.memory_allocated() / gib
 
         self.layers = [self._layer_weights(i) for i in range(self.dims.layers)]
         self.embed_full = self._gather_embedding()
         self.lm_tiles, self.lm_tile_ids = self._gather_lm_head_tiles()
         self.final_norm_weight = self._final_norm_weight(hf_path)
+        self.memory_gib["after_weight_views"] = torch.cuda.memory_allocated() / gib
+        self.memory_gib["model_params"] = sum(
+            p.numel() * p.element_size() for p in model.parameters()
+        ) / gib
         shapes = muse_glimmer_projection_shapes(
             hidden=self.dims.hidden,
             q_width=self.dims.q_width,
@@ -640,6 +647,7 @@ class MuseGlimmerStrictBinding:
             "canonical_chunks": sk.CANONICAL_CHUNKS,
             "vocab_tiles": {"rows": d.tile_rows, "local": self.lm_tile_ids, "padded_vocab": d.padded_vocab},
             "final_norm_roundtrip_mismatches": getattr(self, "final_norm_roundtrip_mismatches", None),
+            "memory_gib": dict(self.memory_gib),
             "notes": list(self.notes),
         }
 
@@ -846,8 +854,10 @@ def native_token_logprobs(model: Any, token_ids: torch.Tensor) -> torch.Tensor:
             logits = inner(input_ids=ids, position_ids=pos, attention_mask=mask, runtime_gather_output=True)
     finally:
         inner.train(was_training)
-    lp = torch.log_softmax(logits.float(), dim=-1)
-    return lp[:, :-1].gather(-1, ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+    from rl_engine.models.muse_glimmer.runtime.megatron_native_lora import chunked_token_logprobs
+
+    rows = [chunked_token_logprobs(logits[i, :-1], ids[i, 1:]) for i in range(b)]
+    return torch.stack(rows)
 
 
 def export_binding_lora(binding: MuseGlimmerStrictBinding) -> tuple[dict[str, torch.Tensor], str]:
