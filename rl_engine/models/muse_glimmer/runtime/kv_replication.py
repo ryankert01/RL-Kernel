@@ -52,21 +52,29 @@ SLIDING_WINDOW = int(OFFICIAL_FINGERPRINT["sliding_window"])
 
 _sibling_attention = None
 ATTENTION_BACKEND = "fallback:pure_torch_fp32_blockwise_online_softmax"
-for _module_name in (
-    # Strict Triton forward (the gated_attention agent's kernel; also what
-    # ops.gated_attention_autograd.strict_forward binds when importable).
-    "rl_engine.models.muse_glimmer.triton.gated_attention_fwd",
-    # Name used in the WS2 brief for the same fixed interface.
-    "rl_engine.models.muse_glimmer.ops.gated_attention",
-):
-    try:
-        import importlib
+# FINDING (2026-10-15): the landed strict forward
+# (``ops.gated_attention.strict_gated_attention_fwd_varlen``) pins the FULL geometry
+# (q (T,32,128), k/v (T,2,128), gate (T,4096), int32 offsets); it rejects a TP shard
+# (16/8/4 Q heads, 1 KV head), so it cannot yet run rank-local attention. Until the kernel
+# takes head counts as parameters (or a zero-padded full-geometry embedding of the shard is
+# wired in), the proof stays on the fallback; opt in with MUSEGLIMMER_STRICT_ATTN_FWD=1 for
+# full-geometry calls only.
+STRICT_ATTN_ENV = "MUSEGLIMMER_STRICT_ATTN_FWD"
+if __import__("os").environ.get(STRICT_ATTN_ENV) == "1":
+    for _module_name in (
+        "rl_engine.models.muse_glimmer.ops.gated_attention",
+        "rl_engine.models.muse_glimmer.triton.gated_attention_fwd",
+    ):
+        try:
+            import importlib
 
-        _sibling_attention = importlib.import_module(_module_name).strict_gated_attention_fwd_varlen
-        ATTENTION_BACKEND = f"{_module_name}.strict_gated_attention_fwd_varlen"
-        break
-    except (ImportError, AttributeError):  # pragma: no cover - depends on sibling branch
-        continue
+            _sibling_attention = importlib.import_module(
+                _module_name
+            ).strict_gated_attention_fwd_varlen
+            ATTENTION_BACKEND = f"{_module_name}.strict_gated_attention_fwd_varlen"
+            break
+        except (ImportError, AttributeError):  # pragma: no cover - depends on sibling branch
+            continue
 
 
 # --------------------------------------------------------------------------- #
@@ -192,8 +200,21 @@ def gated_attention_fwd(
             f"got {tuple(gate_logits.shape)}"
         )
     if _sibling_attention is not None:
+        if q.size(1) != 32 or k.size(1) != 2:
+            raise NotImplementedError(
+                "the strict gated-attention forward is pinned to 32 Q / 2 KV heads and cannot "
+                "run a TP shard; unset MUSEGLIMMER_STRICT_ATTN_FWD or run the full geometry"
+            )
+        cu32 = cu_seqlens.to(torch.int32).contiguous()
         y, _o, _lse = _sibling_attention(
-            q, k, v, gate_logits, cu_seqlens, cu_seqlens, positions, window=window
+            q.contiguous(),
+            k.contiguous(),
+            v.contiguous(),
+            gate_logits.contiguous(),
+            cu32,
+            cu32,
+            positions.to(torch.int32).contiguous(),
+            window=window,
         )
         return y
     return _fallback_gated_attention(q, k, v, gate_logits, cu_seqlens, positions, window=window)

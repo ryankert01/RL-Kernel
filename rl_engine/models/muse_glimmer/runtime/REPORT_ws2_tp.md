@@ -1,5 +1,23 @@
 # REPORT — WS2 tensor-parallel rows (RFC #501, Muse-Glimmer-30B strict POC)
 
+**STATUS: partial (wrap-up at the session limit).** Passed and committed: all three rows
+TP2 == TP1 and TP4 == TP1 bitwise on real shapes (NCCL, one rank per GPU), TP2 == TP4, repeat,
+negative controls, single-device TP8 simulations — first on fallbacks, then on the landed
+sibling kernels (`fast_det_gemm_partial`, `combine_tree`, `softcap_tile_stats`). Not run:
+(a) the TP8 multi-process tests (opt-in, idle node); (b) a GPU re-run of the tree after the
+LAST merge (`36b7fb3`, which brought the strict attention forward `ops/gated_attention.py`) —
+that merge changed no GEMM / vocab code path, and `kv_replication` deliberately keeps its
+fallback by default (see finding below), so the committed tests are expected to pass unchanged;
+(c) the KV proof on the strict attention kernel: the landed kernel pins 32 Q / 2 KV heads and
+int32 offsets and rejects a TP shard, so rank-local attention cannot use it yet (finding for the
+`kv_head_replication` row; opt-in full-geometry use via `MUSEGLIMMER_STRICT_ATTN_FWD=1`).
+Resume with:
+`gpu-lease -n 4 --contiguous --pool 0-5 -- env PYTHONPATH=<worktree> ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/distributed -q`
+then `MUSEGLIMMER_TP8=1` on the idle node, and (for the strict-kernel KV proof) either add
+head-count parameters to `ops/gated_attention.py` or embed each rank's shard at its global
+head / KV slots of a zero-padded full-geometry call in `kv_replication.rank_kv_replicated_attention`
+(per-head separability makes the owned heads' bits identical).
+
 Rows: `tp_canonical_tree` (row-parallel `o_proj` / `down_proj` on the canonical 8-leaf tree),
 `vocab_parallel_softcap_logp` (soft-capped selected-token logprob on 8 canonical vocab tiles),
 `kv_head_replication` forward half (declared replicated-KV ownership map + proof that
