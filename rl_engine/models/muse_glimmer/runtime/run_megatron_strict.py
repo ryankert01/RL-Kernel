@@ -230,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         if {"xrt", "repeat", "lora_noop", "native"} & set(checks):
             trainer.memory(reset=True)
             ta = _sync_time()
-            base = trainer.score(seqs, starts)
+            base = [t.cpu() for t in trainer.score(seqs, starts)]
             tb = _sync_time()
             C["xrt_strict"] = {
                 "seconds": tb - ta,
@@ -252,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[xrt] strict scored {sum(spans)} tokens in {tb - ta:.2f}s", flush=True)
 
         if "repeat" in checks:
-            again = trainer.score(seqs, starts)
+            again = [t.cpu() for t in trainer.score(seqs, starts)]
             mism = [bit_mismatches(a, b) for a, b in zip(again, base, strict=True)]
             C["repeat"] = {"mismatches_per_sequence": mism, "total_mismatches": sum(mism),
                            "tokens": sum(spans), "torch_equal": sum(mism) == 0}
@@ -261,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if "lora_noop" in checks:
             trainer.set_lora_enabled(False)
-            without = trainer.score(seqs, starts)
+            without = [t.cpu() for t in trainer.score(seqs, starts)]
             trainer.set_lora_enabled(True)
             mism = [bit_mismatches(a, b) for a, b in zip(without, base, strict=True)]
             C["lora_noop"] = {"mismatches_per_sequence": mism, "total_mismatches": sum(mism),
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         if "native" in checks:
             trainer.memory(reset=True)
             ta = _sync_time()
-            nat = trainer.native_logprobs(seqs, starts)
+            nat = [t.cpu() for t in trainer.native_logprobs(seqs, starts)]
             tb = _sync_time()
             out = Path(args.xrt_out_dir) / f"xrt_megatron_native_tp{tp}.json"
             write_xrt(out, xrt, nat, mode="native", tp=tp, backend="megatron_bridge_te_native",
@@ -364,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
             info = trainer.step(surrogate_loss(lps, weights))
             tc = _sync_time()
             state, sha1 = trainer.export_lora()
-            after = trainer.score(seqs, starts)
+            after = [t.cpu() for t in trainer.score(seqs, starts)]
             changes = [float((a.double() - b.detach().cpu().double()).abs().max()) for a, b in zip(after, lps, strict=True)]
             C["step"] = {
                 "info": info, "fwd_s": tb - ta, "step_s": tc - tb, "memory": trainer.memory(reset=True),
