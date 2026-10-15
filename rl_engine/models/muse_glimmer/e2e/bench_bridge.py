@@ -546,6 +546,32 @@ def gpu_smoke(work: Path, steps: int = 3) -> dict[str, Any]:
     return out
 
 
+def hash_schema_check() -> dict[str, Any]:
+    """Does the Megatron binding's LoRA hash equal the loop's muse_glimmer_lora_sha256_v1?"""
+
+    from rl_engine.models.muse_glimmer.runtime import megatron_lora
+
+    gen = torch.Generator().manual_seed(5)
+    cases = {
+        "known_answer": {"layers.0.q_proj.lora_A": torch.zeros(1, 2, dtype=torch.bfloat16)},
+        "random_rank16_layer0": {
+            f"layers.0.{proj}.lora_{m}": (
+                torch.randn(*((16, k) if m == "A" else (n, 16)), generator=gen) * 0.01
+            ).to(torch.bfloat16)
+            for proj, (k, n) in (("q_proj", (64, 32)), ("mlp.down_proj", (96, 64)))
+            for m in ("A", "B")
+        },
+    }
+    rows = []
+    for name, state in cases.items():
+        canonical = lora_sha256(state)
+        megatron = megatron_lora.lora_sha256(state)
+        rows.append({"case": name, "num_tensors": len(state),
+                     "e2e_sync_muse_glimmer_lora_sha256_v1": canonical,
+                     "runtime_megatron_lora_sha256": megatron, "equal": canonical == megatron})
+    return {"rows": rows, "all_equal": all(r["equal"] for r in rows)}
+
+
 XRT_TOKENS = bridge.REPO_ROOT / "reports" / "muse_glimmer_poc" / "data" / "xrt_tokens.json"
 
 
@@ -627,6 +653,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="REAL StrictTrainer (30B) behind the bridge on the leased GPUs (integrator only)",
     )
+    parser.add_argument(
+        "--hash-check", action="store_true", help="Megatron LoRA hash vs the loop's schema"
+    )
     parser.add_argument("--train-tp", type=int, default=1)
     parser.add_argument("--trainer-launcher", choices=bridge.LAUNCHERS, default="process")
     parser.add_argument("--model-path", default="~/models/Muse-Glimmer-30B")
@@ -642,7 +671,10 @@ def main(argv: list[str] | None = None) -> int:
     work = Path(args.work_dir or tempfile.mkdtemp(prefix="mg-bridge-bench-"))
     work.mkdir(parents=True, exist_ok=True)
     data.update({"row": ROW, "commit": _git_head()})
-    data.setdefault("env", {})["client"] = _client_env()
+    if args.cpu:
+        data["cpu_sections_commit"] = data["commit"]
+    mode = "gpu" if (args.gpu or args.real_trainer_smoke) else "cpu"
+    data.setdefault("env", {})[f"client_{mode}_run"] = _client_env()
     data.setdefault("commands", [])
     command = args.command or (
         f"PYTHONPATH=<worktree> {sys.executable} -m rl_engine.models.muse_glimmer.e2e.bench_bridge "
@@ -661,14 +693,18 @@ def main(argv: list[str] | None = None) -> int:
         data["env"]["trainer_server"] = {"python": MEGATRON_PY, "torch": megatron["server_torch"]}
     if args.gpu:
         data["gpu_smoke"] = gpu_smoke(work / "gpu")
+        data["gpu_smoke"]["commit"] = data["commit"]
         if data["gpu_smoke"].get("status") == "ran":
             data["env"]["gpu"] = data["gpu_smoke"]["parent_device_name"]
+    if args.hash_check:
+        data["hash_schema_check"] = hash_schema_check()
     if args.real_trainer_smoke:
         key = f"real_trainer_smoke_tp{args.train_tp}"
         data[key] = real_trainer_smoke(
             work / "real", tp=args.train_tp, launcher=args.trainer_launcher,
             model_path=args.model_path, num_sequences=args.num_sequences,
         )
+        data[key]["commit"] = data["commit"]
     for tp in (1, 2):
         data.setdefault(
             f"real_trainer_smoke_tp{tp}",

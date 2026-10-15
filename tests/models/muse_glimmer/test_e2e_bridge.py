@@ -146,6 +146,19 @@ def test_surrogate_matches_in_process_backward_on_a_real_grpo_loss() -> None:
         assert _bits(a) == _bits(b)
 
 
+def test_cpu_mock_trainer_never_initializes_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
+    """torch 2.13 Adam.step probes the CUDA stream; the CPU mock must not grab a GPU."""
+
+    def _blocked(*args, **kwargs):
+        raise AssertionError("CPU mock trainer tried to initialize CUDA")
+
+    monkeypatch.setattr(torch.cuda, "_lazy_init", _blocked)
+    trainer = _local()
+    for _ in range(2):
+        lps = trainer.token_logprobs(SEQS, STARTS)
+        trainer.step(grpo.grpo_token_loss(lps, [t.detach() for t in lps], ADVANTAGES).loss)
+
+
 def test_surrogate_rejects_mismatches_and_forward_only_logprobs() -> None:
     lp = torch.zeros(3, requires_grad=True) * 1.0
     with pytest.raises(ValueError, match="shape"):

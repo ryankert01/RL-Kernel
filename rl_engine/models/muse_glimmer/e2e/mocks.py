@@ -620,6 +620,21 @@ class MockRolloutEngine:
         return None
 
 
+class CPUSafeAdam(torch.optim.Adam):
+    """``torch.optim.Adam`` that does not touch CUDA when every parameter lives on the CPU.
+
+    torch 2.13's ``Optimizer._accelerator_graph_capture_health_check`` (run by every
+    ``Adam.step``) queries ``torch.accelerator.current_stream()``, which creates a CUDA context on
+    the current GPU whenever one is visible, even for CPU parameters. A CPU mock must not occupy
+    a GPU it never leased. The update arithmetic is unchanged (same ``Adam.step``).
+    """
+
+    def _accelerator_graph_capture_health_check(self) -> None:
+        if all(p.device.type == "cpu" for group in self.param_groups for p in group["params"]):
+            return
+        super()._accelerator_graph_capture_health_check()
+
+
 class MockTrainer:
     """CPU stand-in for ``StrictTrainer`` (same constructor and methods)."""
 
@@ -651,7 +666,7 @@ class MockTrainer:
         self.model.init_lora(self.seed)
         self.model.to(self.device)
         self.native_policy = TRAINER_NATIVE_POLICY
-        self.optimizer = torch.optim.Adam(self.model.lora_parameters(), lr=self.lr)
+        self.optimizer = CPUSafeAdam(self.model.lora_parameters(), lr=self.lr)
         self.pad_id = ByteTokenizer.PAD
         self._step = 0
 
