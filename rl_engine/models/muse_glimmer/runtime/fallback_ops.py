@@ -462,7 +462,9 @@ def gated_attention_fwd_varlen(
         if qe == qs:
             continue
         ks, ke = int(cu_k[b]), int(cu_k[b + 1])
-        o_b, lse_b = _attend_rows(q[qs:qe], q_pos[qs:qe].to(torch.int64), k[ks:ke], v[ks:ke], window)
+        o_b, lse_b = _attend_rows(
+            q[qs:qe], q_pos[qs:qe].to(torch.int64), k[ks:ke], v[ks:ke], window
+        )
         o[qs:qe] = o_b
         lse[qs:qe] = lse_b
     return _apply_gate(o, gate_logits), o.reshape(t, nh * d), lse
@@ -532,7 +534,9 @@ def _merge_stats(
     return m, s_a * torch.exp(m_a - m) + s_b * torch.exp(m_b - m)
 
 
-def combine_tile_stats(stats: Sequence[Sequence[torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
+def combine_tile_stats(
+    stats: Sequence[Sequence[torch.Tensor]],
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Combine 8 (or 1/2/4) tile ``(M_t, S_t, ...)`` records in the fixed tree -> ``(M, logZ)``."""
 
     pairs = [(s[0], s[1]) for s in stats]

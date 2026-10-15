@@ -214,9 +214,7 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         expect(ops.weighted_rmsnorm(x, w, eps=1e-5).dtype == bf, "weighted_rmsnorm")
         ids = torch.tensor([1, 3, 2, 0], device=device)
         expect(ops.normalized_embedding(x, ids, eps=1e-5).shape == (4, 512), "normalized_embedding")
-        r, pre = ops.fused_post_norm_residual_pre_norm(
-            x, x, w, 1e-8, w, 1e-5, pre_form="centered"
-        )
+        r, pre = ops.fused_post_norm_residual_pre_norm(x, x, w, 1e-8, w, 1e-5, pre_form="centered")
         expect(r.dtype == bf and pre.shape == x.shape, "fused_post_norm_residual_pre_norm")
 
     def probe_rope(ops: StrictOps) -> None:

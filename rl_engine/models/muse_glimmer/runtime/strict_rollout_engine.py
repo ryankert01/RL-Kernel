@@ -189,7 +189,9 @@ class StrictRolloutEngine:
         return results
 
     # ------------------------------------------------------------------------------------------
-    def logprobs(self, token_ids: list[list[int]], completion_start: list[int]) -> list[list[float]]:
+    def logprobs(
+        self, token_ids: list[list[int]], completion_start: list[int]
+    ) -> list[list[float]]:
         from vllm import SamplingParams
         from vllm.inputs import TokensPrompt
 
@@ -219,7 +221,9 @@ class StrictRolloutEngine:
                 if entry is None:
                     raise RuntimeError(f"no prompt logprob at position {position}")
                 values.append(
-                    float(torch.tensor(entry[int(ids[position])].logprob, dtype=torch.float32).item())
+                    float(
+                        torch.tensor(entry[int(ids[position])].logprob, dtype=torch.float32).item()
+                    )
                 )
             scored += len(values)
             results.append(values)
@@ -242,7 +246,9 @@ class StrictRolloutEngine:
             raise RuntimeError("load_lora is only available on a strict engine")
         from rl_engine.models.muse_glimmer.runtime.vllm_strict import worker_load_lora
 
-        cpu_state = {k: v.detach().to("cpu", torch.bfloat16).contiguous() for k, v in state_dict.items()}
+        cpu_state = {
+            k: v.detach().to("cpu", torch.bfloat16).contiguous() for k, v in state_dict.items()
+        }
         replies = self.llm.collective_rpc(worker_load_lora, args=(cpu_state, str(sha256)))
         if not replies:
             raise RuntimeError("load_lora: no workers answered")
@@ -282,7 +288,9 @@ class StrictRolloutEngine:
                 "vllm_version": vllm_version,
                 "model_runner": "v2" if os.getenv("VLLM_USE_V2_MODEL_RUNNER", "1") != "0" else "v1",
                 "enforce_eager": True,
-                "attention_backend_requested": "FLASH_ATTN(strict override)" if self.strict else "auto",
+                "attention_backend_requested": (
+                    "FLASH_ATTN(strict override)" if self.strict else "auto"
+                ),
                 "readback_dir": self._readback_dir,
                 "timing": {
                     "load_seconds": self.timing.load_seconds,
