@@ -1,0 +1,22 @@
+{
+ "vLLM 0.31 严格绑定": {
+  "status": "done",
+  "note": "933/933 == 参考链；TP2 == TP1；decode == prefill"
+ },
+ "Megatron Bridge 严格绑定": {
+  "status": "done",
+  "note": "logprob、LoRA 梯度、AdamW 一步 TP2 == TP1"
+ },
+ "weight_sync_identity": {
+  "status": "done",
+  "note": "626/627 + final norm 重载；LoRA 哈希每步校验"
+ },
+ "museglimmer_ablation": {
+  "status": "done",
+  "note": "22 个 HF 设置 + 13 个严格设置"
+ },
+ "final_e2e_lora（GRPO）": {
+  "status": "wave",
+  "note": "跨 env 桥完成；30B 四种模式运行中"
+ }
+}

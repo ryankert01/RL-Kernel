@@ -1,0 +1,57 @@
+[
+ [
+  "down",
+  "会话限额打断 Wave A",
+  "第二轮开工约一小时后到了用量上限：停掉 workflow，把每个 agent 的半成品存成提交，定时器 3 小时 10 分钟后自动恢复，只重启没做完的那一行。"
+ ],
+ [
+  "up",
+  "vLLM 严格 == 参考链：933/933",
+  "vLLM 0.31 的严格绑定在 30B 上对 9 条序列打分，和单卡参考链逐 bit 相同；TP2 == TP1，带随机 LoRA 也一样。"
+ ],
+ [
+  "down",
+  "vLLM 的 RPC 传不了嵌套张量",
+  "collective_rpc 用 msgpack，LoRA 的张量字典过不去；改成写节点本地文件、worker 读后重算哈希。"
+ ],
+ [
+  "up",
+  "rollout 自己和自己一致",
+  "严格 vLLM 在 TP1/TP2、贪心/采样、有无 LoRA 的 8 种组合里，decode 时记下的 logprob 与事后 prefill 重算 0/512 不同；原生是 146–169/512。"
+ ],
+ [
+  "up",
+  "训练侧 TP2 == TP1，连梯度都一样",
+  "Megatron 严格 trainer：logprob 0/933 不同，LoRA 梯度 832 个张量的聚合哈希一致，一步 AdamW 后 LoRA 哈希一致。"
+ ],
+ [
+  "down",
+  "TP1 训练 OOM",
+  "单次 8192 token 的打包在 80 GB 上放不下（权重就 56 GB）；默认 micro batch 改成 4096 token。"
+ ],
+ [
+  "down",
+  "两边的 LoRA 哈希不是同一个定义",
+  "Megatron 侧用 key+shape+bytes，E2E 用 name|dtype|shape；跨 env 桥的 agent 发现后统一到 muse_glimmer_lora_sha256_v1。"
+ ],
+ [
+  "down",
+  "Triton 把树折进了 MMA 链",
+  "K 很小时每个 K 块只迭代一次，编译器把树的 7 个加法折成 3 个，约一半输出偏离契约；对抗 review 发现，强制两次迭代后修复。"
+ ],
+ [
+  "down",
+  "near-certain token 的 logp > 0",
+  "两遍 softcap 内核的第二遍被编译成 FMA，最大值的 exp 不是 1；关掉 FP 融合后 0/2048。"
+ ],
+ [
+  "down",
+  "torch 2.13 的 Adam 在 CPU 上也会碰 GPU",
+  "CPU 参数的 optimizer.step 会建 CUDA context，占住 GPU 0；mock 改用 CPU 安全的 Adam。"
+ ],
+ [
+  "up",
+  "消融：原生漂移的来源",
+  "拼 batch、KV cache、分块 prefill、注意力实现、logits 精度，任何一个都让 98–99% 的 token 变 bit；TF32、RoPE 表、换卡、换进程都是 0。"
+ ]
+]

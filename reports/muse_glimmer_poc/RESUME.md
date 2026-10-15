@@ -96,3 +96,17 @@ row finished; (2) relaunch only the unfinished owners with a prompt that starts 
 every code row and a fresh `review_fwd_norms`; (3) merge into feat/museglimmer-poc, Wave B (per-rank heads in the
 bindings, full re-test incl. TP8, 3-way xrt byte-diff via tools/xrt_diff.py), Wave C (E2E four modes, whole node),
 Wave D (blog: python3 reports/muse_glimmer_poc/blog/build_blog.py, publish as Artifact, push).
+
+## Update 2026-10-15 ~20:50 UTC: resumed; wave A merged, wave A2 running
+- Seven wave A branches merged cleanly (1 vllm, 2 megatron, 3 e2e_bridge, 4 kernels_gemm, 6 kernels_rope, 7 ablation,
+  8 reference_profile). Merged regression: vLLM env 581 passed / 7 skipped / 0 failed; Megatron env 222 passed / 1 skipped.
+- xrt byte-diff on the merged dumps (tools/xrt_diff.py): strict base group (reference triton, vLLM TP1/TP2, Megatron TP1/TP2)
+  0/933; strict LoRA group (vLLM TP1/TP2) 0/933; native pairs 921-933/933. Dumps predate the O7 fix below -> regenerate.
+- O7 fix (c88607f): softcap kernels launch with enable_fp_fusion=False (logp of near-certain tokens was 1-2 ulp > 0).
+  This changes strict logprob bits everywhere: regenerate every xrt dump before the final byte-diff.
+- The bridge's integration findings F1-F5 are fixed in the merged code (canonical LoRA hash, native trainer LoRA hooks,
+  native rollout via vLLM LoRARequest, provenance hash recompute, 30 min NCCL timeout).
+- Wave A2 `wf_5e0d8071-7a1`: attention owner finishing (merge of worktree-wf_7b064961-36f-5) + 7 reviewers + fresh fwd/norms review.
+- E2E: tools/collect_e2e.py + blog section ready; real 30B smoke (1 step, rollout TP1 GPU4, train TP2 GPU5,6) started at ~20:48.
+- Remaining: merge attention, apply reviewer fixes, bindings -> per-rank heads, regenerate xrt dumps (incl. TP4 if it works),
+  TP8 re-test, E2E four modes (two concurrent 4-GPU runs), final blog + Artifact + RFC_CHANGES.md, push.
