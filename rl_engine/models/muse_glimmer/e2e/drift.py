@@ -72,7 +72,9 @@ def as_fp32_logprobs(values: Any, *, label: str) -> torch.Tensor:
     else:
         tensor = torch.tensor([float(v) for v in values], dtype=torch.float32)
     if tensor.dim() != 1:
-        raise ValueError(f"{label} logprobs must be 1-D per sample, got shape {tuple(tensor.shape)}")
+        raise ValueError(
+            f"{label} logprobs must be 1-D per sample, got shape {tuple(tensor.shape)}"
+        )
     return tensor.contiguous()
 
 

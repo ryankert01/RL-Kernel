@@ -43,7 +43,9 @@ def _int_list(text: str) -> list[int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--mode", default="strict/strict", choices=MODES, help="<train>/<rollout>")
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--prompts-per-step", type=int, default=8)
@@ -61,7 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rollout-gpus", type=_int_list, default=[0, 1])
     parser.add_argument("--train-tp", type=int, default=4)
     parser.add_argument("--train-gpus", type=_int_list, default=[4, 5, 6, 7])
-    parser.add_argument("--run-dir", default=None, help="default: runs/muse_glimmer_poc_grpo/<ts>_<mode>")
+    parser.add_argument(
+        "--run-dir", default=None, help="default: runs/muse_glimmer_poc_grpo/<ts>_<mode>"
+    )
     parser.add_argument("--sync-via-file", action="store_true", help="LoRA transfer through a file")
     parser.add_argument(
         "--no-recheck-rollout-logprobs",
@@ -72,9 +76,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
     parser.add_argument("--split", choices=("train", "test"), default="train")
     parser.add_argument("--limit-examples", type=int, default=None)
-    parser.add_argument("--no-download", action="store_true", help="fail if GSM8K files are missing")
+    parser.add_argument(
+        "--no-download", action="store_true", help="fail if GSM8K files are missing"
+    )
     parser.add_argument("--mock", action="store_true", help="CPU mock engines (no GPUs)")
-    parser.add_argument("--mock-perturb", type=float, default=0.0, help="perturb mock rollout weights")
+    parser.add_argument(
+        "--mock-perturb", type=float, default=0.0, help="perturb mock rollout weights"
+    )
     parser.add_argument(
         "--threads",
         type=int,
@@ -88,7 +96,8 @@ def config_from_args(args: argparse.Namespace) -> LoopConfig:
     if args.run_dir is None:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         suffix = "_mock" if args.mock else ""
-        run_dir = Path("runs/muse_glimmer_poc_grpo") / f"{stamp}_{args.mode.replace('/', '-')}{suffix}"
+        mode_tag = args.mode.replace("/", "-")
+        run_dir = Path("runs/muse_glimmer_poc_grpo") / f"{stamp}_{mode_tag}{suffix}"
     else:
         run_dir = Path(args.run_dir)
     task = args.task or ("arith" if args.mock else "gsm8k")
@@ -187,7 +196,9 @@ def build_task(cfg: LoopConfig, tokenizer: Any, *, download: bool = True) -> Tas
     path = data_dir / f"{cfg.split}.jsonl"
     if not path.exists():
         if not download:
-            raise FileNotFoundError(f"{path} missing; run data.download_gsm8k or drop --no-download")
+            raise FileNotFoundError(
+                f"{path} missing; run data.download_gsm8k or drop --no-download"
+            )
         download_gsm8k(data_dir, (cfg.split,))
     examples = load_gsm8k(path, limit=cfg.limit_examples)
     return GSM8KTask(examples, tokenizer, split=cfg.split)

@@ -271,7 +271,9 @@ class GSM8KTask:
         prompts = []
         for idx in chosen:
             example = self.examples[idx]
-            prompts.append(Prompt(example.index, self.encode(example), example.gold, example.question))
+            prompts.append(
+                Prompt(example.index, self.encode(example), example.gold, example.question)
+            )
         return prompts
 
     def reward(self, completion_ids: Sequence[int], prompt: Prompt) -> float:
@@ -324,7 +326,8 @@ class SyntheticArithmeticTask:
     def describe(self) -> dict[str, Any]:
         return {
             "task": self.name,
-            "reward": "1.0 iff the gold number string appears in the decoded completion (mock only)",
+            "reward": "1.0 iff the gold number string appears in the decoded completion "
+            "(mock only)",
             "max_operand": self.max_operand,
             "tokenizer": type(self.tokenizer).__name__,
         }
