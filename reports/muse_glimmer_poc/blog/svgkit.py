@@ -86,7 +86,9 @@ def hbars(
 ) -> str:
     """Horizontal grouped bars. rows: (label, [value per series]); series: (name, css class)."""
     label_w = max(text_w(r[0]) for r in rows) + 14
-    left, right, top = label_w, 64, 30 if title or len(series) > 1 else 10
+    legend = len(series) > 1
+    left, right = label_w, 64
+    top = (22 if title else 4) + (20 if legend else 0) + (8 if ref_label else 0) + 6
     group_h = bar_h * len(series) + 10
     h = top + group_h * len(rows) + 30
     vals = [v for _, vs in rows for v in vs if v is not None]
@@ -134,11 +136,11 @@ def hbars(
             out.append(f'<text class="val" x="{tx:.1f}" y="{y + bar_h - 4}">{esc(value_fmt(v))}</text>')
     if title:
         out.append(f'<text class="ctitle" x="0" y="14">{esc(title)}</text>')
-    if len(series) > 1:
-        lx = width - right
-        for name, c in reversed(series):
-            lx -= text_w(name, 11) + 26
-            out.append(f'<rect class="{c}" x="{lx:.1f}" y="5" width="10" height="10" rx="1.5"/><text class="tick" x="{lx + 14:.1f}" y="14">{esc(name)}</text>')
+    if legend:
+        lx, ly = 0.0, (22 if title else 4) + 12
+        for name, c in series:
+            out.append(f'<rect class="{c}" x="{lx:.1f}" y="{ly - 9}" width="10" height="10" rx="1.5"/><text class="tick" x="{lx + 14:.1f}" y="{ly}">{esc(name)}</text>')
+            lx += text_w(name, 11) + 30
     return svg(width, h, "".join(out), title or "bar chart")
 
 
@@ -156,7 +158,8 @@ def lines(
     y_fmt=fmt,
     dots: bool = True,
 ) -> str:
-    left, right, top, bottom = 56, 16, 28, 36
+    left, right, bottom = 56, 16, 36
+    top = (22 if title else 6) + 22
     vals = [v for _, _, ys in series for v in ys if v is not None]
     lo = ymin if ymin is not None else min(vals + [0])
     hi = ymax if ymax is not None else max(vals + [lo + 1e-9])
@@ -171,7 +174,8 @@ def lines(
     for t in ticks:
         out.append(f'<line class="grid" x1="{left}" y1="{Y(t):.1f}" x2="{width - right}" y2="{Y(t):.1f}"/>')
         out.append(f'<text class="tick" x="{left - 6}" y="{Y(t) + 4:.1f}" text-anchor="end">{esc(y_fmt(t))}</text>')
-    for x in xs:
+    step = max(1, -(-len(xs) // 12))
+    for x in list(xs)[::step]:
         out.append(f'<text class="tick" x="{X(x):.1f}" y="{height - bottom + 16}" text-anchor="middle">{esc(fmt(x))}</text>')
     for name, c, ys in series:
         pts = [(X(x), Y(y)) for x, y in zip(xs, ys) if y is not None]
@@ -187,10 +191,10 @@ def lines(
         out.append(f'<text class="tick" x="{left - 6}" y="{top - 10}" text-anchor="end">{esc(ylabel)}</text>')
     if title:
         out.append(f'<text class="ctitle" x="0" y="14">{esc(title)}</text>')
-    lx = width - right
-    for name, c, _ in reversed(series):
-        lx -= text_w(name, 11) + 26
-        out.append(f'<rect class="{c}" x="{lx:.1f}" y="5" width="10" height="10" rx="1.5"/><text class="tick" x="{lx + 14:.1f}" y="14">{esc(name)}</text>')
+    lx, ly = 0.0, (22 if title else 6) + 12
+    for name, c, _ in series:
+        out.append(f'<rect class="{c}" x="{lx:.1f}" y="{ly - 9}" width="10" height="10" rx="1.5"/><text class="tick" x="{lx + 14:.1f}" y="{ly}">{esc(name)}</text>')
+        lx += text_w(name, 11) + 30
     return svg(width, height, "".join(out), title or "line chart")
 
 
