@@ -26,6 +26,8 @@ nonzero while strict decode-vs-prefill is zero.
 
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import asdict, dataclass
 from typing import Any, Iterator, Sequence
 
@@ -618,6 +620,21 @@ class MockRolloutEngine:
         return None
 
 
+class CPUSafeAdam(torch.optim.Adam):
+    """``torch.optim.Adam`` that does not touch CUDA when every parameter lives on the CPU.
+
+    torch 2.13's ``Optimizer._accelerator_graph_capture_health_check`` (run by every
+    ``Adam.step``) queries ``torch.accelerator.current_stream()``, which creates a CUDA context on
+    the current GPU whenever one is visible, even for CPU parameters. A CPU mock must not occupy
+    a GPU it never leased. The update arithmetic is unchanged (same ``Adam.step``).
+    """
+
+    def _accelerator_graph_capture_health_check(self) -> None:
+        if all(p.device.type == "cpu" for group in self.param_groups for p in group["params"]):
+            return
+        super()._accelerator_graph_capture_health_check()
+
+
 class MockTrainer:
     """CPU stand-in for ``StrictTrainer`` (same constructor and methods)."""
 
@@ -632,6 +649,7 @@ class MockTrainer:
         strict: bool,
         seed: int,
         config: TinyLMConfig | None = None,
+        device: str = "cpu",
     ) -> None:
         self.model_path = str(model_path)
         self.tensor_parallel_size = int(tensor_parallel_size)
@@ -641,10 +659,14 @@ class MockTrainer:
         self.strict = bool(strict)
         self.seed = int(seed)
         self.cfg = config or TinyLMConfig()
+        # The tiny base weights and the LoRA init are drawn on the CPU (seeded) and then moved, so
+        # a CUDA mock holds the same initial bits as the CPU mock.
+        self.device = torch.device(device)
         self.model = TinyLM(self.cfg, lora_rank=self.lora_rank, trainable_lora=True)
         self.model.init_lora(self.seed)
+        self.model.to(self.device)
         self.native_policy = TRAINER_NATIVE_POLICY
-        self.optimizer = torch.optim.Adam(self.model.lora_parameters(), lr=self.lr)
+        self.optimizer = CPUSafeAdam(self.model.lora_parameters(), lr=self.lr)
         self.pad_id = ByteTokenizer.PAD
         self._step = 0
 
@@ -658,7 +680,11 @@ class MockTrainer:
         ids = torch.full((len(token_ids), width), self.pad_id, dtype=torch.long)
         for i, row in enumerate(token_ids):
             ids[i, : len(row)] = torch.tensor(row, dtype=torch.long)
-        states = self.model.initial_state(len(token_ids))
+        ids = ids.to(self.device)
+        states = [
+            (total.to(self.device), count.to(self.device))
+            for total, count in self.model.initial_state(len(token_ids))
+        ]
         if self.strict:
             logits, _ = self.model.forward_strict(ids, states)
             logp = strict_log_softmax(logits)
@@ -707,6 +733,7 @@ class MockTrainer:
             ),
             "tensor_parallel_size": self.tensor_parallel_size,
             "gpu_ids": list(self.gpu_ids),
+            "device": str(self.device),
             "lora_rank": self.lora_rank,
             "lr": self.lr,
             "optimizer": "Adam",
@@ -719,3 +746,76 @@ class MockTrainer:
 
     def close(self) -> None:
         return None
+
+
+class FaultyMockTrainer(MockTrainer):
+    """``MockTrainer`` with one injected fault, for the trainer-bridge failure tests.
+
+    ``fault`` is ``"exit"`` (the process dies with exit code 17, like a segfaulting rank),
+    ``"hang"`` (the call never returns), ``"raise"`` (a Python exception), ``"build"`` (the
+    constructor raises) or ``"bad_hash"`` (``export_lora`` reports a hash that does not match
+    its tensors). ``fault_op`` names the method that misbehaves on its
+    ``fault_after + 1``-th call; ``fault_rank`` restricts the fault to one torchrun rank (``RANK``
+    environment variable; ``None`` = every rank).
+    """
+
+    FAULTS = ("exit", "hang", "raise", "build", "bad_hash")
+
+    def __init__(
+        self,
+        model_path: str,
+        *,
+        fault: str,
+        fault_op: str = "step",
+        fault_after: int = 0,
+        fault_rank: int | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if fault not in self.FAULTS:
+            raise ValueError(f"fault must be one of {self.FAULTS}, got {fault!r}")
+        self.fault = fault
+        self.fault_op = fault_op
+        self.fault_after = int(fault_after)
+        self.fault_rank = fault_rank
+        self._fault_calls: dict[str, int] = {}
+        if fault == "build" and self._fault_active():
+            raise RuntimeError("injected fault: trainer construction failed")
+        super().__init__(model_path, **kwargs)
+
+    def _fault_active(self) -> bool:
+        return self.fault_rank is None or int(os.environ.get("RANK", "0")) == self.fault_rank
+
+    def _maybe_fault(self, op: str) -> None:
+        if op != self.fault_op or not self._fault_active():
+            return
+        count = self._fault_calls.get(op, 0)
+        self._fault_calls[op] = count + 1
+        if count < self.fault_after:
+            return
+        if self.fault == "exit":
+            os._exit(17)
+        if self.fault == "hang":
+            while True:
+                time.sleep(3600.0)
+        if self.fault == "raise":
+            raise RuntimeError(f"injected fault in {op}")
+        if self.fault == "bad_hash":
+            self._lie_about_hash = True
+
+    def token_logprobs(
+        self, token_ids: list[list[int]], completion_start: list[int]
+    ) -> list[torch.Tensor]:
+        self._maybe_fault("token_logprobs")
+        return super().token_logprobs(token_ids, completion_start)
+
+    def step(self, loss: torch.Tensor) -> dict[str, Any]:
+        self._maybe_fault("step")
+        return super().step(loss)
+
+    def export_lora(self) -> tuple[dict[str, torch.Tensor], str]:
+        self._lie_about_hash = False
+        self._maybe_fault("export_lora")
+        state_dict, sha = super().export_lora()
+        if self._lie_about_hash:
+            sha = "0" * 64
+        return state_dict, sha
