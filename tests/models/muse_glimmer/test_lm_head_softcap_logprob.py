@@ -248,6 +248,34 @@ def test_softcap_kernel_is_bitwise_torch_tanh():
 
 @requires_cuda
 @pytest.mark.ws1
+def test_near_certain_token_logprob_is_never_positive():
+    """The tile maximum must contribute exp(0) == 1 exactly, so s_t >= 1 and logp <= 0.
+
+    With FP contraction, pass 2 computed ``softcap * tanh(..) - m`` as one FMA, the max element's
+    exp was 0.999999 and 44/2048 such rows came out 1-2 ulp above 0 (48/1024 generated tokens on the 30B).
+    """
+
+    rows, vocab = 512, op.VOCAB_SIZE
+    tile = op.TILE_SIZE
+    g = torch.Generator(device="cuda").manual_seed(0)
+    targets = torch.randint(0, vocab, (rows,), device="cuda", generator=g)
+    big = torch.rand(rows, device="cuda", generator=g) * 150.0 + 60.0
+    stats = []
+    for t in range((vocab + tile - 1) // tile):
+        z = torch.randn(rows, tile, device="cuda", generator=g) * 3.0 - 60.0
+        hit = (targets // tile) == t
+        z[hit.nonzero().squeeze(1), (targets[hit] % tile)] = big[hit]
+        stats.append(op.softcap_tile_stats(z, t, targets, multiplier=MULT, softcap=CAP, vocab_size=vocab))
+    m_all = torch.stack([s[0] for s in stats]).max(0).values
+    for m_t, s_t, _, _ in stats:
+        assert (s_t[m_t == m_all] >= 1.0).all()
+    _, log_z = op.combine_tile_stats([(s[0], s[1]) for s in stats])
+    zhat_t = torch.stack([torch.where(s[3], s[2], torch.zeros_like(s[2])) for s in stats]).sum(0)
+    assert (zhat_t - log_z <= 0).all()
+
+
+@requires_cuda
+@pytest.mark.ws1
 def test_g1_forward_matches_fp64_golden_small():
     h, w_padded, targets = _small_inputs(37, seed=4, device="cuda")
     logp = _strict(h, w_padded, targets)

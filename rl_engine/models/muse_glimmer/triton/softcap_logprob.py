@@ -23,6 +23,10 @@ Arithmetic (all fp32, identical in every kernel below and in the torch golden):
   logical row's bits are batch invariant, and nothing depends on other tiles, so tiles may
   be computed in any order or on any rank.
 * exp/log             ``tl.exp`` / ``tl.log`` fp32 (contract R2).
+* no FP contraction   every launch passes ``enable_fp_fusion=False``: pass 2 must see the same rounded
+  ``zhat`` as pass 1, otherwise ``softcap * tanh(..) - m`` contracts to one FMA, the tile maximum's
+  ``exp(zhat - m)`` is not exactly 1, ``s_t < 1`` and ``logp`` of a near-certain token comes out
+  1-2 ulp above 0 (seen on 48/1024 generated tokens of the 30B before the fix).
 * backward            ``dz = (onehot - exp(zhat - logZ)) * dlogp * (m * (1 - tanh**2))`` in
   fp32, padded columns forced to ``0``, then ONE rounding to bf16 (the declared cast for the
   ``det_gemm`` operands of ``dh`` and ``dW``).
@@ -200,6 +204,7 @@ def launch_tile_stats(
         float(softcap),
         BLOCK_V=BLOCK_V,
         num_warps=NUM_WARPS,
+        enable_fp_fusion=False,
     )
     return m, s, tgt_logit, tgt_in.bool()
 
@@ -242,6 +247,7 @@ def launch_dz(
         float(softcap),
         BLOCK_V=BLOCK_V,
         num_warps=NUM_WARPS,
+        enable_fp_fusion=False,
     )
     return dz
 
@@ -257,7 +263,8 @@ def launch_softcap(z: torch.Tensor, *, multiplier: float, softcap: float) -> tor
     if n == 0:
         return out
     _softcap_apply_kernel[(triton.cdiv(n, BLOCK_V),)](
-        z_c, out, n, float(multiplier), float(softcap), BLOCK=BLOCK_V, num_warps=NUM_WARPS
+        z_c, out, n, float(multiplier), float(softcap), BLOCK=BLOCK_V, num_warps=NUM_WARPS,
+        enable_fp_fusion=False,
     )
     return out
 
