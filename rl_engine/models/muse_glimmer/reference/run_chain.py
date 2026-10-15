@@ -108,6 +108,9 @@ def _score_main(args: argparse.Namespace, model: MuseGlimmerStrictModel, weights
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    from rl_engine.models.muse_glimmer.reference.xrt_scoring import source_commit
+
+    commit = source_commit()
     device = torch.device(args.device)
     disable_tf32(device.type)
     _log(f"loading strict weights from {args.checkpoint} (layout for backend {args.backend})")
@@ -142,6 +145,7 @@ def main(argv=None) -> int:
         "model": model.describe(),
         "chain": report.to_dict(),
         "torch": torch.__version__,
+        "commit": commit,
         "device": torch.cuda.get_device_name(device) if device.type == "cuda" else str(device),
     }
     if args.hf_compare:

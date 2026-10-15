@@ -99,6 +99,7 @@ def score_token_file(
     ``check_modes`` entries: ``prefill``, ``decode``, ``per_token`` or
     ``chunked:<n1>/<n2>/...`` (chunk sizes over the scored ``len - 1`` tokens).
     """
+    commit = source_commit()  # captured when the run starts (the code that is measured)
     raw = pathlib.Path(score_file).read_bytes()
     data = json.loads(raw)
     if data.get("schema") != SCHEMA_IN:
@@ -166,7 +167,7 @@ def score_token_file(
                    "checkpoint_revision": data.get("checkpoint_revision")},
         "checks": {"modes": list(check_modes), "all_byte_equal_to_train": all_equal,
                    "sequences": checks},
-        "commit": source_commit(),
+        "commit": commit,
         "ops_provenance": dict(model.ops.provenance),
         "device": torch.cuda.get_device_name(dev),
         "torch": torch.__version__,
@@ -203,6 +204,7 @@ def score_token_file_hf(
     """Native anchor: the same tokens through transformers' bf16 model (one forward per
     sequence, its softcapped bf16 logits, fp32 log_softmax + gather). NOT a strict path; its
     logprobs are the "what a native runtime would say" reference for the drift plots."""
+    commit = source_commit()
     raw = pathlib.Path(score_file).read_bytes()
     data = json.loads(raw)
     dev = next(hf_model.parameters()).device
@@ -236,7 +238,7 @@ def score_token_file_hf(
         "sequences": seqs_out,
         "source": {"path": str(score_file), "sha256": hashlib.sha256(raw).hexdigest(),
                    "checkpoint_revision": data.get("checkpoint_revision")},
-        "commit": source_commit(),
+        "commit": commit,
         "device": torch.cuda.get_device_name(dev),
         "torch": torch.__version__,
         "note": "HF MuseGlimmerForConditionalGeneration bf16; logits are HF's bf16 softcapped "

@@ -63,6 +63,9 @@ def _ints(s: str) -> list[int]:
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    from rl_engine.models.muse_glimmer.reference.xrt_scoring import source_commit
+
+    commit = source_commit()
     device = torch.device(args.device)
     torch.cuda.set_device(device)
     disable_tf32(device.type)
@@ -106,9 +109,11 @@ def main(argv=None) -> int:
         result = profiling.profile_hf(hf, **common)
         result["weights_gib"] = sum(p.numel() * p.element_size() for p in hf.parameters()) / 2**30
     result["load_seconds"] = load_s
+    result["commit"] = commit
     result["method"] = ("cuda_events: nested named regions around every op call, exclusive "
                         "time per class, median over repeats; clean totals without regions; "
-                        "one torch.profiler pass per config for summed kernel time")
+                        "one torch.profiler pass per config with GPU kernel time charged to the "
+                        "innermost region open at launch (kernel_profile)")
     result["args"] = vars(args)
     result["env"] = {
         "gpu": torch.cuda.get_device_name(device),
