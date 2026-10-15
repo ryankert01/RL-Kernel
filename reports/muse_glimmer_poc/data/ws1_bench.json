@@ -1,0 +1,650 @@
+{
+ "source": "reports/muse_glimmer_poc/bench_ws1.log",
+ "gpu": "NVIDIA A100-SXM4-80GB",
+ "torch": "2.13.0+cu130",
+ "triton": "3.7.1",
+ "benchmarks": {
+  "benchmarks/models/muse_glimmer/bench_det_gemm.py": {
+   "tables": [
+    {
+     "heading": "G1 error vs fp64 reference (M=256, a~N(0,1), w~N(0,0.02^2))",
+     "columns": [
+      "shape",
+      "N",
+      "K",
+      "bf16 max_abs",
+      "bf16 max_abs / max abs ref",
+      "fp32 max_abs",
+      "fp32 max_rel"
+     ],
+     "rows": [
+      {
+       "shape": "q_proj",
+       "N": "4096",
+       "K": "6656",
+       "bf16 max_abs": "2.930e-02",
+       "bf16 max_abs / max abs ref": "3.384e-03",
+       "fp32 max_abs": "1.049e-05",
+       "fp32 max_rel": "3.717e-04"
+      },
+      {
+       "shape": "k_proj",
+       "N": "256",
+       "K": "6656",
+       "bf16 max_abs": "1.559e-02",
+       "bf16 max_abs / max abs ref": "2.087e-03",
+       "fp32 max_abs": "7.629e-06",
+       "fp32 max_rel": "2.970e-04"
+      },
+      {
+       "shape": "v_proj",
+       "N": "256",
+       "K": "6656",
+       "bf16 max_abs": "1.559e-02",
+       "bf16 max_abs / max abs ref": "2.087e-03",
+       "fp32 max_abs": "7.629e-06",
+       "fp32 max_rel": "2.970e-04"
+      },
+      {
+       "shape": "attn_gate",
+       "N": "4096",
+       "K": "6656",
+       "bf16 max_abs": "2.930e-02",
+       "bf16 max_abs / max abs ref": "3.384e-03",
+       "fp32 max_abs": "1.049e-05",
+       "fp32 max_rel": "3.717e-04"
+      },
+      {
+       "shape": "o_proj",
+       "N": "6656",
+       "K": "4096",
+       "bf16 max_abs": "1.562e-02",
+       "bf16 max_abs / max abs ref": "2.351e-03",
+       "fp32 max_abs": "4.292e-06",
+       "fp32 max_rel": "2.748e-04"
+      },
+      {
+       "shape": "mlp_gate",
+       "N": "19968",
+       "K": "6656",
+       "bf16 max_abs": "2.930e-02",
+       "bf16 max_abs / max abs ref": "3.384e-03",
+       "fp32 max_abs": "1.049e-05",
+       "fp32 max_rel": "3.717e-04"
+      },
+      {
+       "shape": "up_proj",
+       "N": "19968",
+       "K": "6656",
+       "bf16 max_abs": "2.930e-02",
+       "bf16 max_abs / max abs ref": "3.384e-03",
+       "fp32 max_abs": "1.049e-05",
+       "fp32 max_rel": "3.717e-04"
+      },
+      {
+       "shape": "down_proj",
+       "N": "6656",
+       "K": "19968",
+       "bf16 max_abs": "3.127e-02",
+       "bf16 max_abs / max abs ref": "2.251e-03",
+       "fp32 max_abs": "4.768e-05",
+       "fp32 max_rel": "1.313e-03"
+      },
+      {
+       "shape": "lm_head",
+       "N": "202752",
+       "K": "6656",
+       "bf16 max_abs": "3.052e-02",
+       "bf16 max_abs / max abs ref": "2.971e-03",
+       "fp32 max_abs": "1.001e-05",
+       "fp32 max_rel": "4.694e-04"
+      }
+     ]
+    },
+    {
+     "heading": "Throughput at M=4096 (bf16 out)",
+     "columns": [
+      "shape",
+      "N",
+      "K",
+      "strict ms",
+      "strict TFLOP/s",
+      "cuBLAS ms",
+      "cuBLAS TFLOP/s",
+      "strict/cuBLAS",
+      "legacy TritonDetGemmOp ms",
+      "legacy/strict",
+      "class",
+      "regs/spills"
+     ],
+     "rows": [
+      {
+       "shape": "q_proj",
+       "N": "4096",
+       "K": "6656",
+       "strict ms": "2.136",
+       "strict TFLOP/s": "104.6",
+       "cuBLAS ms": "0.819",
+       "cuBLAS TFLOP/s": "272.7",
+       "strict/cuBLAS": "2.61x",
+       "legacy TritonDetGemmOp ms": "40.120",
+       "legacy/strict": "18.8x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "k_proj",
+       "N": "256",
+       "K": "6656",
+       "strict ms": "0.195",
+       "strict TFLOP/s": "71.4",
+       "cuBLAS ms": "0.080",
+       "cuBLAS TFLOP/s": "175.2",
+       "strict/cuBLAS": "2.45x",
+       "legacy TritonDetGemmOp ms": "2.494",
+       "legacy/strict": "12.8x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "v_proj",
+       "N": "256",
+       "K": "6656",
+       "strict ms": "0.196",
+       "strict TFLOP/s": "71.2",
+       "cuBLAS ms": "0.080",
+       "cuBLAS TFLOP/s": "175.6",
+       "strict/cuBLAS": "2.46x",
+       "legacy TritonDetGemmOp ms": "2.491",
+       "legacy/strict": "12.7x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "attn_gate",
+       "N": "4096",
+       "K": "6656",
+       "strict ms": "1.815",
+       "strict TFLOP/s": "123.0",
+       "cuBLAS ms": "0.819",
+       "cuBLAS TFLOP/s": "272.8",
+       "strict/cuBLAS": "2.22x",
+       "legacy TritonDetGemmOp ms": "40.749",
+       "legacy/strict": "22.4x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "o_proj",
+       "N": "6656",
+       "K": "4096",
+       "strict ms": "1.899",
+       "strict TFLOP/s": "117.6",
+       "cuBLAS ms": "0.822",
+       "cuBLAS TFLOP/s": "271.8",
+       "strict/cuBLAS": "2.31x",
+       "legacy TritonDetGemmOp ms": "40.895",
+       "legacy/strict": "21.5x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "mlp_gate",
+       "N": "19968",
+       "K": "6656",
+       "strict ms": "8.763",
+       "strict TFLOP/s": "124.3",
+       "cuBLAS ms": "4.222",
+       "cuBLAS TFLOP/s": "257.9",
+       "strict/cuBLAS": "2.08x",
+       "legacy TritonDetGemmOp ms": "561.037",
+       "legacy/strict": "64.0x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "up_proj",
+       "N": "19968",
+       "K": "6656",
+       "strict ms": "8.785",
+       "strict TFLOP/s": "123.9",
+       "cuBLAS ms": "4.260",
+       "cuBLAS TFLOP/s": "255.6",
+       "strict/cuBLAS": "2.06x",
+       "legacy TritonDetGemmOp ms": "560.604",
+       "legacy/strict": "63.8x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "down_proj",
+       "N": "6656",
+       "K": "19968",
+       "strict ms": "8.087",
+       "strict TFLOP/s": "134.6",
+       "cuBLAS ms": "4.208",
+       "cuBLAS TFLOP/s": "258.7",
+       "strict/cuBLAS": "1.92x",
+       "legacy TritonDetGemmOp ms": "981.536",
+       "legacy/strict": "121.4x",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      },
+      {
+       "shape": "lm_head",
+       "N": "202752",
+       "K": "6656",
+       "strict ms": "89.928",
+       "strict TFLOP/s": "122.9",
+       "cuBLAS ms": "43.112",
+       "cuBLAS TFLOP/s": "256.4",
+       "strict/cuBLAS": "2.09x",
+       "legacy TritonDetGemmOp ms": "skipped",
+       "legacy/strict": "n/a",
+       "class": "prefill",
+       "regs/spills": "255/52"
+      }
+     ]
+    },
+    {
+     "heading": "Throughput at M=16 (bf16 out)",
+     "columns": [
+      "shape",
+      "N",
+      "K",
+      "strict ms",
+      "strict TFLOP/s",
+      "cuBLAS ms",
+      "cuBLAS TFLOP/s",
+      "strict/cuBLAS",
+      "legacy TritonDetGemmOp ms",
+      "legacy/strict",
+      "class",
+      "regs/spills"
+     ],
+     "rows": [
+      {
+       "shape": "q_proj",
+       "N": "4096",
+       "K": "6656",
+       "strict ms": "0.112",
+       "strict TFLOP/s": "7.8",
+       "cuBLAS ms": "0.044",
+       "cuBLAS TFLOP/s": "19.6",
+       "strict/cuBLAS": "2.52x",
+       "legacy TritonDetGemmOp ms": "0.446",
+       "legacy/strict": "4.0x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "k_proj",
+       "N": "256",
+       "K": "6656",
+       "strict ms": "0.109",
+       "strict TFLOP/s": "0.5",
+       "cuBLAS ms": "0.021",
+       "cuBLAS TFLOP/s": "2.6",
+       "strict/cuBLAS": "5.18x",
+       "legacy TritonDetGemmOp ms": "0.269",
+       "legacy/strict": "2.5x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "v_proj",
+       "N": "256",
+       "K": "6656",
+       "strict ms": "0.110",
+       "strict TFLOP/s": "0.5",
+       "cuBLAS ms": "0.020",
+       "cuBLAS TFLOP/s": "2.7",
+       "strict/cuBLAS": "5.35x",
+       "legacy TritonDetGemmOp ms": "0.269",
+       "legacy/strict": "2.5x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "attn_gate",
+       "N": "4096",
+       "K": "6656",
+       "strict ms": "0.115",
+       "strict TFLOP/s": "7.6",
+       "cuBLAS ms": "0.044",
+       "cuBLAS TFLOP/s": "19.7",
+       "strict/cuBLAS": "2.59x",
+       "legacy TritonDetGemmOp ms": "0.437",
+       "legacy/strict": "3.8x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "o_proj",
+       "N": "6656",
+       "K": "4096",
+       "strict ms": "0.110",
+       "strict TFLOP/s": "7.9",
+       "cuBLAS ms": "0.042",
+       "cuBLAS TFLOP/s": "20.5",
+       "strict/cuBLAS": "2.60x",
+       "legacy TritonDetGemmOp ms": "0.362",
+       "legacy/strict": "3.3x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "mlp_gate",
+       "N": "19968",
+       "K": "6656",
+       "strict ms": "0.184",
+       "strict TFLOP/s": "23.2",
+       "cuBLAS ms": "0.190",
+       "cuBLAS TFLOP/s": "22.4",
+       "strict/cuBLAS": "0.96x",
+       "legacy TritonDetGemmOp ms": "3.413",
+       "legacy/strict": "18.6x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "up_proj",
+       "N": "19968",
+       "K": "6656",
+       "strict ms": "0.184",
+       "strict TFLOP/s": "23.1",
+       "cuBLAS ms": "0.190",
+       "cuBLAS TFLOP/s": "22.4",
+       "strict/cuBLAS": "0.97x",
+       "legacy TritonDetGemmOp ms": "3.409",
+       "legacy/strict": "18.5x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "down_proj",
+       "N": "6656",
+       "K": "19968",
+       "strict ms": "0.192",
+       "strict TFLOP/s": "22.2",
+       "cuBLAS ms": "0.184",
+       "cuBLAS TFLOP/s": "23.2",
+       "strict/cuBLAS": "1.05x",
+       "legacy TritonDetGemmOp ms": "4.316",
+       "legacy/strict": "22.5x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      },
+      {
+       "shape": "lm_head",
+       "N": "202752",
+       "K": "6656",
+       "strict ms": "1.741",
+       "strict TFLOP/s": "24.8",
+       "cuBLAS ms": "1.788",
+       "cuBLAS TFLOP/s": "24.1",
+       "strict/cuBLAS": "0.97x",
+       "legacy TritonDetGemmOp ms": "244.157",
+       "legacy/strict": "140.2x",
+       "class": "decode16",
+       "regs/spills": "128/0"
+      }
+     ]
+    },
+    {
+     "heading": "Autograd forward+backward at M=4096 (dA + dW), strict vs torch bf16 autograd",
+     "columns": [
+      "shape",
+      "N",
+      "K",
+      "strict fwd+bwd ms",
+      "torch fwd+bwd ms",
+      "ratio",
+      "dA ms",
+      "dW ms"
+     ],
+     "rows": [
+      {
+       "shape": "o_proj",
+       "N": "6656",
+       "K": "4096",
+       "strict fwd+bwd ms": "5.556",
+       "torch fwd+bwd ms": "2.583",
+       "ratio": "2.15x",
+       "dA ms": "1.829",
+       "dW ms": "1.817"
+      },
+      {
+       "shape": "mlp_gate",
+       "N": "19968",
+       "K": "6656",
+       "strict fwd+bwd ms": "26.566",
+       "torch fwd+bwd ms": "12.912",
+       "ratio": "2.06x",
+       "dA ms": "9.087",
+       "dW ms": "8.732"
+      },
+      {
+       "shape": "down_proj",
+       "N": "6656",
+       "K": "19968",
+       "strict fwd+bwd ms": "26.018",
+       "torch fwd+bwd ms": "13.485",
+       "ratio": "1.93x",
+       "dA ms": "9.010",
+       "dW ms": "8.567"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\n# fast_det_gemm on NVIDIA A100-SXM4-80GB (sm80, torch 2.13.0+cu130, triton 3.7.1)\n\nPinned tile constants: {'decode16': {'block_m': 16, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 4, 'group_m': 8}, 'decode64': {'block_m': 32, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 4, 'group_m': 8}, 'prefill': {'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 8, 'num_stages': 3, 'group_m': 8}}\n\n## G1 error vs fp64 reference (M=256, a~N(0,1), w~N(0,0.02^2))\n\n| shape | N | K | bf16 max_abs | bf16 max_abs / max abs ref | fp32 max_abs | fp32 max_rel |\n|---|---|---|---|---|---|---|\n| q_proj | 4096 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |\n| k_proj | 256 | 6656 | 1.559e-02 | 2.087e-03 | 7.629e-06 | 2.970e-04 |\n| v_proj | 256 | 6656 | 1.559e-02 | 2.087e-03 | 7.629e-06 | 2.970e-04 |\n| attn_gate | 4096 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |\n| o_proj | 6656 | 4096 | 1.562e-02 | 2.351e-03 | 4.292e-06 | 2.748e-04 |\n| mlp_gate | 19968 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |\n| up_proj | 19968 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |\n| down_proj | 6656 | 19968 | 3.127e-02 | 2.251e-03 | 4.768e-05 | 1.313e-03 |\n| lm_head | 202752 | 6656 | 3.052e-02 | 2.971e-03 | 1.001e-05 | 4.694e-04 |\n\n## Throughput at M=4096 (bf16 out)\n\n| shape | N | K | strict ms | strict TFLOP/s | cuBLAS ms | cuBLAS TFLOP/s | strict/cuBLAS | legacy TritonDetGemmOp ms | legacy/strict | class | regs/spills |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| q_proj | 4096 | 6656 | 2.136 | 104.6 | 0.819 | 272.7 | 2.61x | 40.120 | 18.8x | prefill | 255/52 |\n| k_proj | 256 | 6656 | 0.195 | 71.4 | 0.080 | 175.2 | 2.45x | 2.494 | 12.8x | prefill | 255/52 |\n| v_proj | 256 | 6656 | 0.196 | 71.2 | 0.080 | 175.6 | 2.46x | 2.491 | 12.7x | prefill | 255/52 |\n| attn_gate | 4096 | 6656 | 1.815 | 123.0 | 0.819 | 272.8 | 2.22x | 40.749 | 22.4x | prefill | 255/52 |\n| o_proj | 6656 | 4096 | 1.899 | 117.6 | 0.822 | 271.8 | 2.31x | 40.895 | 21.5x | prefill | 255/52 |\n| mlp_gate | 19968 | 6656 | 8.763 | 124.3 | 4.222 | 257.9 | 2.08x | 561.037 | 64.0x | prefill | 255/52 |\n| up_proj | 19968 | 6656 | 8.785 | 123.9 | 4.260 | 255.6 | 2.06x | 560.604 | 63.8x | prefill | 255/52 |\n| down_proj | 6656 | 19968 | 8.087 | 134.6 | 4.208 | 258.7 | 1.92x | 981.536 | 121.4x | prefill | 255/52 |\n| lm_head | 202752 | 6656 | 89.928 | 122.9 | 43.112 | 256.4 | 2.09x | skipped | n/a | prefill | 255/52 |\n\n## Throughput at M=16 (bf16 out)\n\n| shape | N | K | strict ms | strict TFLOP/s | cuBLAS ms | cuBLAS TFLOP/s | strict/cuBLAS | legacy TritonDetGemmOp ms | legacy/strict | class | regs/spills |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n| q_proj | 4096 | 6656 | 0.112 | 7.8 | 0.044 | 19.6 | 2.52x | 0.446 | 4.0x | decode16 | 128/0 |\n| k_proj | 256 | 6656 | 0.109 | 0.5 | 0.021 | 2.6 | 5.18x | 0.269 | 2.5x | decode16 | 128/0 |\n| v_proj | 256 | 6656 | 0.110 | 0.5 | 0.020 | 2.7 | 5.35x | 0.269 | 2.5x | decode16 | 128/0 |\n| attn_gate | 4096 | 6656 | 0.115 | 7.6 | 0.044 | 19.7 | 2.59x | 0.437 | 3.8x | decode16 | 128/0 |\n| o_proj | 6656 | 4096 | 0.110 | 7.9 | 0.042 | 20.5 | 2.60x | 0.362 | 3.3x | decode16 | 128/0 |\n| mlp_gate | 19968 | 6656 | 0.184 | 23.2 | 0.190 | 22.4 | 0.96x | 3.413 | 18.6x | decode16 | 128/0 |\n| up_proj | 19968 | 6656 | 0.184 | 23.1 | 0.190 | 22.4 | 0.97x | 3.409 | 18.5x | decode16 | 128/0 |\n| down_proj | 6656 | 19968 | 0.192 | 22.2 | 0.184 | 23.2 | 1.05x | 4.316 | 22.5x | decode16 | 128/0 |\n| lm_head | 202752 | 6656 | 1.741 | 24.8 | 1.788 | 24.1 | 0.97x | 244.157 | 140.2x | decode16 | 128/0 |\n\n## Autograd forward+backward at M=4096 (dA + dW), strict vs torch bf16 autograd\n\n| shape | N | K | strict fwd+bwd ms | torch fwd+bwd ms | ratio | dA ms | dW ms |\n|---|---|---|---|---|---|---|---|\n| o_proj | 6656 | 4096 | 5.556 | 2.583 | 2.15x | 1.829 | 1.817 |\n| mlp_gate | 19968 | 6656 | 26.566 | 12.912 | 2.06x | 9.087 | 8.732 |\n| down_proj | 6656 | 19968 | 26.018 | 13.485 | 1.93x | 9.010 | 8.567 |"
+  },
+  "benchmarks/models/muse_glimmer/bench_gated_attention.py": {
+   "tables": [
+    {
+     "heading": "",
+     "columns": [
+      "case",
+      "strict ms",
+      "native SDPA ms",
+      "strict/native",
+      "max abs diff y (strict vs SDPA)"
+     ],
+     "rows": [
+      {
+       "case": "prefill Tq=4096 B=1 (global)",
+       "strict ms": "2.060",
+       "native SDPA ms": "1.529",
+       "strict/native": "1.35x",
+       "max abs diff y (strict vs SDPA)": "1.562e-02"
+      },
+      {
+       "case": "decode B=64 ctx=4096 (global)",
+       "strict ms": "0.322 (varlen K/V: 0.218)",
+       "native SDPA ms": "0.210",
+       "strict/native": "1.54x",
+       "max abs diff y (strict vs SDPA)": "1.562e-02"
+      },
+      {
+       "case": "prefill Tq=4096 B=1 (local)",
+       "strict ms": "1.552",
+       "native SDPA ms": "30.139",
+       "strict/native": "0.05x",
+       "max abs diff y (strict vs SDPA)": "1.562e-02"
+      },
+      {
+       "case": "decode B=64 ctx=4096 (local)",
+       "strict ms": "0.325 (varlen K/V: 0.108)",
+       "native SDPA ms": "18.063",
+       "strict/native": "0.02x",
+       "max abs diff y (strict vs SDPA)": "7.812e-03"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\ndevice: NVIDIA A100-SXM4-80GB  torch 2.13.0+cu130\n\n| case | strict ms | native SDPA ms | strict/native | max abs diff y (strict vs SDPA) |\n|---|---|---|---|---|\n| prefill Tq=4096 B=1 (global) | 2.060 | 1.529 | 1.35x | 1.562e-02 |\n| decode B=64 ctx=4096 (global) | 0.322 (varlen K/V: 0.218) | 0.210 | 1.54x | 1.562e-02 |\n| prefill Tq=4096 B=1 (local) | 1.552 | 30.139 | 0.05x | 1.562e-02 |\n| decode B=64 ctx=4096 (local) | 0.325 (varlen K/V: 0.108) | 18.063 | 0.02x | 7.812e-03 |\n\ntrace: {'BLOCK_N': 64, 'token_tile': {'BLOCK_M': 64, 'num_warps': 4}, 'head_tile': {'BLOCK_M': 16, 'num_warps': 4}, 'num_stages': 2, 'head_tile_max_q': 16, 'page_size': 16}\ntotal wall 4.1s"
+  },
+  "benchmarks/models/muse_glimmer/bench_gated_attention_bwd.py": {
+   "tables": [
+    {
+     "heading": "",
+     "columns": [
+      "row",
+      "strict bwd total (ms)",
+      "strict core w/o tree (ms)",
+      "SDPA causal bwd (ms)",
+      "ratio strict/native",
+      "golden fwd (s, fallback)"
+     ],
+     "rows": [
+      {
+       "row": "global_gated_attention",
+       "strict bwd total (ms)": "5.81",
+       "strict core w/o tree (ms)": "5.73",
+       "SDPA causal bwd (ms)": "2.42",
+       "ratio strict/native": "2.39x",
+       "golden fwd (s, fallback)": "2.86"
+      },
+      {
+       "row": "local_gated_attention_train",
+       "strict bwd total (ms)": "4.47",
+       "strict core w/o tree (ms)": "4.32",
+       "SDPA causal bwd (ms)": "2.42",
+       "ratio strict/native": "1.84x",
+       "golden fwd (s, fallback)": "2.61"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\n\nMuse-Glimmer gated attention backward, Tq=Tk=4096, 32x2 heads, D=128, bf16, A100\n| row | strict bwd total (ms) | strict core w/o tree (ms) | SDPA causal bwd (ms) | ratio strict/native | golden fwd (s, fallback) |\n|---|---|---|---|---|---|\n| global_gated_attention | 5.81 | 5.73 | 2.42 | 2.39x | 2.86 |\n| local_gated_attention_train | 4.47 | 4.32 | 2.42 | 1.84x | 2.61 |\n\ntrace: {'BLOCK_M': 64, 'BLOCK_N': 64, 'HEAD_DIM': 128, 'num_warps': 8, 'num_stages': 2, 'preprocess_num_warps': 4, 'allow_tf32': False, 'autotune': False, 'atomics': False}"
+  },
+  "benchmarks/models/muse_glimmer/bench_lm_head_softcap_logprob.py": {
+   "tables": [
+    {
+     "heading": "",
+     "columns": [
+      "pass",
+      "native ms",
+      "native peak MiB",
+      "strict ms",
+      "strict peak MiB",
+      "strict/native"
+     ],
+     "rows": [
+      {
+       "pass": "forward",
+       "native ms": "69.1",
+       "native peak MiB": "9474",
+       "strict ms": "97.3",
+       "strict peak MiB": "396",
+       "strict/native": "1.4x"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\ndevice: NVIDIA A100-SXM4-80GB\nshape: T=4096 H=6656 V=202048 (padded 202752, 8 tiles)\nstrict gemm backend: fast_det_gemm\nmax |native logp - strict logp| = 3.048e-03\n\n| pass | native ms | native peak MiB | strict ms | strict peak MiB | strict/native |\n| --- | ---: | ---: | ---: | ---: | ---: |\n| forward | 69.1 | 9474 | 97.3 | 396 | 1.4x |\n\nforward GEMM throughput: native 159.9 TFLOP/s, strict 113.6 TFLOP/s"
+  },
+  "benchmarks/models/muse_glimmer/bench_norms.py": {
+   "tables": [
+    {
+     "heading": "",
+     "columns": [
+      "op",
+      "strict ms",
+      "native ms",
+      "strict/native"
+     ],
+     "rows": [
+      {
+       "op": "centered_rmsnorm fwd",
+       "strict ms": "0.141",
+       "native ms": "0.805",
+       "strict/native": "0.18x"
+      },
+      {
+       "op": "weighted_rmsnorm fwd",
+       "strict ms": "0.136",
+       "native ms": "0.800",
+       "strict/native": "0.17x"
+      },
+      {
+       "op": "normalized_embedding fwd",
+       "strict ms": "0.231",
+       "native ms": "0.689",
+       "strict/native": "0.34x"
+      },
+      {
+       "op": "fused_post_norm_residual_pre_norm fwd",
+       "strict ms": "0.216",
+       "native ms": "1.593",
+       "strict/native": "0.14x"
+      },
+      {
+       "op": "centered_rmsnorm fwd+bwd",
+       "strict ms": "0.559",
+       "native ms": "2.625",
+       "strict/native": "0.21x"
+      },
+      {
+       "op": "fused_post_norm_residual_pre_norm fwd+bwd",
+       "strict ms": "0.933",
+       "native ms": "5.494",
+       "strict/native": "0.17x"
+      },
+      {
+       "op": "normalized_embedding fwd+bwd (V=202048)",
+       "strict ms": "5.145",
+       "native ms": "7.185",
+       "strict/native": "0.72x"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\ndevice=NVIDIA A100-SXM4-80GB T=4096 H=6656 V=202048 iters=50 (median ms)\n| op | strict ms | native ms | strict/native |\n|---|---:|---:|---:|\n| centered_rmsnorm fwd | 0.141 | 0.805 | 0.18x |\n| weighted_rmsnorm fwd | 0.136 | 0.800 | 0.17x |\n| normalized_embedding fwd | 0.231 | 0.689 | 0.34x |\n| fused_post_norm_residual_pre_norm fwd | 0.216 | 1.593 | 0.14x |\n| centered_rmsnorm fwd+bwd | 0.559 | 2.625 | 0.21x |\n| fused_post_norm_residual_pre_norm fwd+bwd | 0.933 | 5.494 | 0.17x |\n| normalized_embedding fwd+bwd (V=202048) | 5.145 | 7.185 | 0.72x |"
+  },
+  "benchmarks/models/muse_glimmer/bench_qknorm_rope.py": {
+   "tables": [],
+   "raw": "[gpu-lease] using GPUs [0]\ndevice: NVIDIA A100-SXM4-80GB  T=4096 q(4096, 32, 128) k(4096, 2, 128) bf16\npass                strict Triton ms  torch-native HF ms  native/strict\nforward                       0.0880              0.9593          10.90x\nforward+backward              0.3862              2.3927           6.20x\nstrict forward effective bandwidth: 858 GB/s (75.5 MB moved)"
+  },
+  "benchmarks/models/muse_glimmer/bench_swiglu_ffn.py": {
+   "tables": [
+    {
+     "heading": "",
+     "columns": [
+      "case",
+      "strict ms",
+      "native ms",
+      "strict / native"
+     ],
+     "rows": [
+      {
+       "case": "swiglu (T x F) fwd",
+       "strict ms": "0.359",
+       "native ms": "0.496",
+       "strict / native": "0.73x"
+      },
+      {
+       "case": "swiglu_ffn fwd (T tokens)",
+       "strict ms": "30.477",
+       "native ms": "12.895",
+       "strict / native": "2.36x"
+      },
+      {
+       "case": "GEMM share of strict FFN fwd",
+       "strict ms": "26.27",
+       "native ms": "-",
+       "strict / native": "98.7%"
+      },
+      {
+       "case": "swiglu share of strict FFN fwd",
+       "strict ms": "0.356",
+       "native ms": "-",
+       "strict / native": "1.3%"
+      }
+     ]
+    }
+   ],
+   "raw": "[gpu-lease] using GPUs [0]\ndevice=NVIDIA A100-SXM4-80GB tokens=4096 H=6656 F=19968 gemm=fast_det_gemm\ntorch=2.13.0+cu130\nswiglu  strict 0.359 ms (1365 GB/s)  native 0.496 ms\nffn fwd strict 30.48 ms (107 TFLOP/s)  native 12.90 ms (253 TFLOP/s)\nbreakdown: gate 9.21 + up 8.89 + down 8.18 = GEMMs 26.27 ms (98.7%), swiglu 0.36 ms (1.3%)\nper-GEMM throughput: gate 118 TFLOP/s, down 133 TFLOP/s\nadapter: gate GEMM single pass 11.00 ms vs 8-chunk tree 11.47 ms; down GEMM single pass 15.73 ms vs 8-chunk tree 10.21 ms\n\n| case | strict ms | native ms | strict / native |\n|---|---:|---:|---:|\n| swiglu (T x F) fwd | 0.359 | 0.496 | 0.73x |\n| swiglu_ffn fwd (T tokens) | 30.477 | 12.895 | 2.36x |\n| GEMM share of strict FFN fwd | 26.27 | - | 98.7% |\n| swiglu share of strict FFN fwd | 0.356 | - | 1.3% |"
+  }
+ }
+}
