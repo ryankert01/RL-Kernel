@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 RL-Kernel Contributors
 
-"""Render ``REPORT_vllm_runtime_adapter.md`` from ``reports/muse_glimmer_poc/data/vllm_runtime.json``.
+"""Render ``REPORT_vllm_runtime_adapter.md`` from ``data/vllm_runtime.json`` (the results JSON).
 
 Every number in the report is read from the results JSON (which is itself copied from run files),
 so the Markdown file and the data cannot disagree::

@@ -57,6 +57,38 @@ BACKEND_CLASS_PATH = (
 PAGE_SIZE = 16
 CALL_COUNTS: Counter[str] = Counter()
 _OPS: Any = None
+# Opt-in evidence counter (measurement mode, a few extra GPU ops per local-layer call): how many
+# block-table entries inside a sequence's page range are vLLM's null block 0, i.e. sliding-window
+# pages vLLM has already evicted when the strict op reads the table.  Read with
+# :func:`null_page_counts` (one host sync).
+COUNT_NULL_PAGES_ENV = "RL_KERNEL_MUSEGLIMMER_COUNT_NULL_PAGES"
+_NULL_PAGE_ACC: dict[str, Any] = {}
+
+
+def _count_null_pages_enabled() -> bool:
+    import os
+
+    return os.getenv(COUNT_NULL_PAGES_ENV, "").strip() in ("1", "true", "yes")
+
+
+def null_page_counts() -> dict[str, int]:
+    """Accumulated in-range null-block entries seen by local / global layers (opt-in)."""
+
+    return {key: int(acc.item()) for key, acc in _NULL_PAGE_ACC.items()}
+
+
+def _accumulate_null_pages(
+    key: str, block_table: torch.Tensor, seq_lens: torch.Tensor, num_reqs: int
+) -> None:
+    table = block_table[:num_reqs]
+    pages = (seq_lens[:num_reqs].to(torch.int64) + PAGE_SIZE - 1) // PAGE_SIZE
+    cols = torch.arange(table.shape[1], device=table.device)
+    hits = ((table == 0) & (cols[None, :] < pages[:, None])).sum()
+    acc = _NULL_PAGE_ACC.get(key)
+    if acc is None:
+        acc = torch.zeros((), dtype=torch.int64, device=table.device)
+        _NULL_PAGE_ACC[key] = acc
+    acc.add_(hits)
 
 
 def bind_ops(ops: Any) -> None:
@@ -203,6 +235,13 @@ def _build_classes() -> tuple[type, type, type]:
             cu_seqlens_q = query_start_loc[: num_reqs + 1]
             block_table = strict_block_table(attn_metadata.block_table[:num_reqs])
             window = None if self.sliding_window[0] < 0 else int(self.sliding_window[0]) + 1
+            if _count_null_pages_enabled():
+                _accumulate_null_pages(
+                    "local" if window is not None else "global",
+                    attn_metadata.block_table,
+                    seq_lens,
+                    num_reqs,
+                )
             y, _o, _lse = _ops().gated_attention_paged(
                 query[:num_tokens],
                 gate[:num_tokens],
@@ -281,9 +320,11 @@ def register(ops: Any) -> str:
 __all__ = [
     "BACKEND_CLASS_PATH",
     "CALL_COUNTS",
+    "COUNT_NULL_PAGES_ENV",
     "GATE_ATTR",
     "PAGE_SIZE",
     "bind_ops",
+    "null_page_counts",
     "register",
     "strict_block_table",
     "strict_kv_views",

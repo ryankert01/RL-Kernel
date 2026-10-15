@@ -236,6 +236,12 @@ class StrictBindingState:
             vllm_version = "unknown"
         counts = dict(self.call_counts)
         counts.update({k: int(v) for k, v in attn_backend.CALL_COUNTS.items()})
+        counts.update(
+            {
+                f"attention.{k}_null_pages_in_range": v
+                for k, v in attn_backend.null_page_counts().items()
+            }
+        )
         ops_prov = self.ops.provenance()
         return {
             "schema": SCHEMA,

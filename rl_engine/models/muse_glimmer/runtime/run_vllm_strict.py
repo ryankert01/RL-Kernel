@@ -393,6 +393,28 @@ def _step_summary(steps: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _null_pages(engine: Any) -> dict[str, int] | None:
+    """Rank-0 in-range null-page counters of the strict backend (None unless enabled)."""
+
+    if not engine.strict or not os.getenv("RL_KERNEL_MUSEGLIMMER_COUNT_NULL_PAGES"):
+        return None
+    workers = engine.provenance().get("workers") or [{}]
+    counts = workers[0].get("call_counts") or {}
+    return {k: int(v) for k, v in counts.items() if k.endswith("_null_pages_in_range")}
+
+
+def _null_pages_delta(before: Any, after: Any) -> Any:
+    if before is None or after is None:
+        return "not measured (run with --count-null-pages)"
+    return {
+        k: int(after.get(k, 0)) - int(before.get(k, 0)) for k in sorted(set(before) | set(after))
+    } | {
+        "definition": "block-table entries inside a sequence's page range that are vLLM's null "
+        "block 0 (evicted sliding-window pages) when the strict op read them, summed over "
+        "layer calls on rank 0"
+    }
+
+
 def run_batch_check(
     engine: Any,
     label: str,
@@ -663,6 +685,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--decode-batch-tokens", type=int, default=64)
     parser.add_argument("--contract-lora", action="store_true",
                         help="also run --long-window/--decode-batches with the random LoRA")
+    parser.add_argument(
+        "--count-null-pages",
+        action="store_true",
+        help="strict: count evicted (null) pages the attention reads (measurement mode)",
+    )
     parser.add_argument("--gpu-util", type=float, default=0.90)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--prefill-check", action="store_true")
@@ -718,6 +745,13 @@ def main(argv: list[str] | None = None) -> int:
     def flush() -> None:
         out_path.write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
 
+    if args.count_null_pages:
+        from rl_engine.models.muse_glimmer.runtime.vllm_attention_backend import (
+            COUNT_NULL_PAGES_ENV,
+        )
+
+        os.environ[COUNT_NULL_PAGES_ENV] = "1"
+        result["count_null_pages"] = True
     t_load = time.perf_counter()
     engine = StrictRolloutEngine(
         args.model,
@@ -892,6 +926,7 @@ def main(argv: list[str] | None = None) -> int:
                         args.xrt_score or args.prompt_file, tokenizer, False, args.long_window_id
                     )
                     copies = 1 + int(args.long_window_copies)
+                    null_before = _null_pages(engine)
                     rec = run_batch_check(
                         engine,
                         f"long_window_{lora_label}",
@@ -903,6 +938,7 @@ def main(argv: list[str] | None = None) -> int:
                         ids=[f"{long_ids[0]}#{i}" for i in range(copies)],
                     )
                     rec["lora_sha256"] = engine._lora_sha256
+                    rec["null_pages_read"] = _null_pages_delta(null_before, _null_pages(engine))
                     result["contract_shapes"].append(rec)
                     flush()
                 for width in [int(x) for x in args.decode_batches.split(",") if x.strip()]:
