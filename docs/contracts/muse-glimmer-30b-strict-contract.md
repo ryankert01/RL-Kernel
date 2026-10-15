@@ -59,6 +59,17 @@ rank owns 8/t consecutive chunks, reduces them locally in tree order, then the d
 all-gather + the same tree over ranks. This is `tp_canonical_tree` (WS2) and must be byte-equal
 to TP1.
 Backward: dX = det_gemm(dY, W), dW = det_gemm(dYᵀ, X) with the same chunking rule on K.
+Performance note (measured 2026-10-15, A100, Triton 3.7.1): the repo's existing
+`TritonDetGemmOp` (`rl_engine/kernels/ops/triton/matmul/det_gemm.py`, b in (K, N) layout) is
+batch-invariant and repeatable but runs 4096×6656×4096 bf16 at ~43 ms = 5 TFLOP/s. The POC
+needs a fast variant: one Triton program per (BLOCK_M, BLOCK_N) output tile that walks K in the
+8 canonical chunks in order, keeping at most 4 live fp32 accumulators and combining them in the
+fixed tree ((0+1)+(2+3))+((4+5)+(6+7)) in registers (no split-K across programs, no atomics,
+no autotune; fixed BLOCK_K, num_warps, num_stages recorded in `trace()`). Target ≥ 80 TFLOP/s on
+A100 for the Muse Glimmer shapes; any K that is not a multiple of 8 chunks is out of contract.
+For TP: a rank owning chunks {c..c+8/t−1} runs the same program over its chunks and emits the
+partial of its sub-tree; ranks combine partials with the deterministic all-gather and the same
+tree, so TP-t output bits equal TP-1 bits.
 
 ### O4 `qknorm_scaled_rope`  (row: qknorm_scaled_rope)
 Input q (…,32,128), k (…,2,128) bf16 from O3. Per head: fp32, x̂ = x * (mean(x²)+eps)^(-1/2),
