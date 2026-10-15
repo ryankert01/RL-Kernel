@@ -2919,8 +2919,8 @@
   "checkpoint_revision": "a4e59da52a7bc87ae7251dd5545c0dd437c44b68"
  },
  "commit": {
-  "sha": "422c33b41560e0d9b4c688c19a2a58a36d91398f",
-  "dirty": true
+  "sha": "39053b29f8515ae7715a3d1447ab57b29e4399e5",
+  "dirty": false
  },
  "device": "NVIDIA A100-SXM4-80GB",
  "torch": "2.13.0+cu130",
