@@ -24,8 +24,15 @@ With both fixes, the adapter and `fast_det_gemm` are bitwise twins for every K t
 300, 512, 4001, 6656; fp32 and bf16 out) and for the whole FFN forward + backward at T = 1, 64,
 255, 300 (H=256, F=512) and the forward at the real shape.
 
-**Performance (A100, before -> after, ms, median; FFN = gate + up + swiglu + down):** see the
-benchmark table in the next section; the no-copy backward is what moves the fwd+bwd numbers.
+**Performance (A100, base 6a61f6e -> 87cba55, median ms, default GEMM, real shape):**
+
+| pass | T | before | after | note |
+|---|---|---|---|---|
+| forward | 1 / 16 / 64 | 0.668 / 0.605 / 0.751 | 0.685 / 0.634 / 0.769 | launch-bound, within node noise |
+| forward | 256 / 1024 / 4096 | 1.82 / 6.93 / 26.42 | 1.84 / 6.97 / 26.46 | unchanged (123.5 TFLOP/s at 4096) |
+| fwd+bwd | 64 / 300 / 4001 | ValueError | 5.04 / 11.76 / 78.14 | swiglu_ffn:1 |
+| fwd+bwd | 256 | 12.20 | 7.67 | no transposed copies (0.064 -> 0.052 GiB peak) |
+| fwd+bwd | 4096 | 87.93 (111 TFLOP/s) | 79.28 (124 TFLOP/s) | no transposed copies (1.02 -> 0.81 GiB peak) |
 
 Branch `worktree-agent-ad5c4d3b6ebfb920f`, based on `feat/museglimmer-arch-fingerprint` (e2f4e64,
 the POC scaffold with the contract/manifest; `main` is **not** an ancestor of that branch, so the

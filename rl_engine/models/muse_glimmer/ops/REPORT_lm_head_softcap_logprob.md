@@ -27,9 +27,11 @@ The real tile (25344 = 99 x 256) is unaffected.
 bit ledger in the JSON). Backward: dW changes for T % 256 != 0 (legacy -> declared tree rule)
 and for 32 < T <= 512 (GEMM fix det_gemm:1); dh unchanged at the real geometry.
 
-**Performance (A100, fwd+bwd, before -> after):** T=4096 455.0 -> 407.4 ms (no transposed
-weight copies), T=4001 975.6 -> 404.1 ms (2.4x, no legacy dW), T=300 103.2 -> 60.8 ms, T=256
-59.3 -> 43.5 ms; forward unchanged (95.7 / 94.9 ms at T=4096 = 116 TFLOP/s). The real-weights
+**Performance (A100, base 6a61f6e -> 87cba55, fwd+bwd):** T=4096 455.0 -> 407.1 ms (no
+transposed copies), T=4001 975.6 -> 405.6 ms (2.4x, no legacy dW), T=300 103.2 -> 60.8 ms,
+T=256 59.3 -> 43.6 ms; forward unchanged (95.7 -> 95.9 ms at T=4096 = 115 TFLOP/s; decode T=1
+GPU kernel time 2.39 ms per call before and after, wall time is launch/sync-bound and varies
+2.9–3.6 ms run to run on the shared node). The real-weights
 forward at T=16 now reports 2 MiB peak extra memory (the 323 MiB below was the legacy GEMM's
 transposed weight copy).
 
@@ -50,7 +52,7 @@ Trace nodes: `lm_head`, `logit_softcap`, `logprob`. RFC #501 rows `lm_head_softc
 | G5 trace() | PASS — stable, JSON-serialisable, carries tree / tile / cast / gemm backend |
 | tanh convention (O7) | `libdevice.tanh` is **bitwise equal to `torch.tanh`** fp32 on the shipped test's 5,242,887 samples (**[stale]**: "5e7" overstated the shipped test); the fused soft-cap kernel is `torch.equal` to the torch golden soft cap |
 | Real weights | `lm_head.weight` (202048×6656 bf16) + `norm.weight` loaded from the pinned checkpoint, forward at T=16 finite, ≤0, batch invariant; 323 MiB peak extra memory |
-| Benchmark T=4096 | **[stale — legacy GEMM era]** strict fwd 668 ms vs native 69 ms (9.7×), fwd+bwd 2659 ms vs 183 ms (14.6×). Current (fast_det_gemm): fwd 94.9 ms, fwd+bwd 407.4 ms (see follow-up) |
+| Benchmark T=4096 | **[stale — legacy GEMM era]** strict fwd 668 ms vs native 69 ms (9.7×), fwd+bwd 2659 ms vs 183 ms (14.6×). Current (fast_det_gemm): fwd 95.9 ms, fwd+bwd 407.1 ms (see follow-up) |
 
 **[stale]** 15/15 tests pass — now 23 tests (see the follow-up and `kernels_gemm.json`). The op is model-scoped (`rl_engine/models/muse_glimmer/{ops,triton}`), nothing
 shared was edited.

@@ -69,6 +69,30 @@ num_chunks=8/t)` — chunk length N/8 at every t, so it is a node of the TP1 tre
 (`tree_reduce_over_ranks(collective)` = rank-ordered all-gather + `tp_canonical_tree.combine_tree`);
 one bf16 rounding. dW and row-parallel dA need no exchange. A tp > 1 call without a reduce raises.
 
+### Before / after benchmark (A100-SXM4-80GB, median CUDA-event ms, base 6a61f6e vs 87cba55)
+
+Forward (bf16 out) is unchanged within noise for every shape and M (the launch is identical for
+K = 6656 / 4096 / 19968): M=4096 q_proj 2.221 -> 2.219 ms (100.6 TFLOP/s), mlp_gate 9.04 -> 9.00
+(121), down_proj 8.35 -> 8.30 (131), lm_head 89.3 -> 89.4 (124); decode M=1 q_proj 0.148 ->
+0.143, k_proj 0.137 -> 0.125 (repeat runs on the shared node vary by +-10 % for the same code).
+The fix costs time only where it changes the arithmetic (shorter BLOCK_K for 32/64-wide chunks):
+
+| backward kernel | before ms (BLOCK_K) | after ms (BLOCK_K) | ratio |
+|---|---|---|---|
+| dA k_proj (N=256 reduce), M=4096 | 0.275 (32, 1 iter) | 0.325 (16, 2 iters) | 1.18x |
+| dA v_proj, M=4096 | 0.305 | 0.374 | 1.23x |
+| dW mlp_gate, T=256 / 300 / 512 | 1.13 / 1.50 / 1.66 | 1.29 / 2.31 / 2.44 | 1.15 / 1.54 / 1.47x |
+| dW down_proj, T=256 / 300 / 512 | 1.56 / 1.86 / 2.21 | 1.70 / 2.44 / 2.57 | 1.09 / 1.32 / 1.16x |
+| dW o_proj, T=256 / 300 / 512 | 0.29 / 0.37 / 0.40 | 0.38 / 0.55 / 0.56 | 1.31 / 1.47 / 1.40x |
+| dW any shape, T >= 1024 | — | — | 1.00x (unchanged launch) |
+| autograd fwd+bwd M=4096 (q, k, o, mlp_gate, down) | 5.53 / 0.80 / 5.69 / 26.73 / 26.06 | 5.53 / 0.80 / 5.63 / 26.72 / 26.06 | 1.00x |
+
+At a 4096-token micro-batch the k/v-proj dA adds ~0.1 ms per layer (< 0.2 % of a layer's
+fwd+bwd); short micro-batches (<= 512 tokens) pay up to 1.5x on their (sub-3 ms) dW GEMMs.
+Next optimisation (not done): start each chunk's accumulator from a runtime zero (opaque to the
+combine pass) so 64-wide chunks can keep BLOCK_K = 64 in one iteration; the TTGIR guard would
+prove the tree adds survive.
+
 ### Contract wording proposed (integrator / RFC)
 
 * O3, reduction order: "Within a chunk the fp32 accumulator starts at +0 and is advanced by an
@@ -85,6 +109,25 @@ one bf16 rounding. dW and row-parallel dA need no exchange. A tp > 1 call withou
   once. Column-parallel dW, row-parallel dX/dW need no cross-rank reduction."
 * O3, tiles: "BLOCK_M/N/K, num_warps, num_stages are performance-only *given* >= 2 iterations per
   chunk; record the effective BLOCK_K rule in trace()."
+
+### Tests and how to reproduce (follow-up)
+
+```
+# owned test files (fixed code): 204 passed, 1 skipped (2-GPU device test) in 221 s
+PYTHONPATH=$PWD ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_det_gemm.py tests/models/muse_glimmer/test_swiglu_ffn.py \
+    tests/models/muse_glimmer/test_lm_head_softcap_logprob.py -q -p no:cacheprovider
+# whole single-GPU muse_glimmer suite: 489 passed, 1 failed (pre-existing Megatron test-helper
+# bug, see JSON megatron_binding_lm_head_tp_test), 4 skipped
+PYTHONPATH=$PWD ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed -q
+```
+
+The same three test files run against the base commit's code fail 87 tests (35 on bits or
+behaviour, 52 on the new APIs); the grouped reasons, the probes (`probe_iters.py`,
+`probe_tp.py`, `probe_bits.py`, `probe_syncs.py`) and the benchmark (`bench_rows.py`) commands
+are listed in `reports/muse_glimmer_poc/data/kernels_gemm.json` (`commands`, `tests`). NOT RUN:
+the two-GPU device test (det_gemm:6) and the multi-process NCCL TP tests (`distributed/`).
 
 ## Summary
 
@@ -110,7 +153,10 @@ one bf16 rounding. dW and row-parallel dA need no exchange. A tp > 1 call withou
 * Key finding for the RFC: the bits depend only on (chunk rule, ascending-k MMA chain, fp32
   tree, one rounding).  BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages were all verified to be
   **performance-only** (24 configs, all `torch.equal`), so decode and prefill may use different
-  tiles and TP ranks may use any tile.
+  tiles and TP ranks may use any tile.  **[corrected]** The 24 configs were all checked at
+  K = 6656 only.  When a chunk is a single BLOCK_K step (32/64-wide chunks) the compiler folds the
+  tree adds into the MMA chain and BLOCK_K *does* change the bits (det_gemm:1); the statement holds
+  only with >= 2 BLOCK_K iterations per chunk, which `plan_chunks` now enforces.
 
 ## Design
 
@@ -126,6 +172,9 @@ For `y = a @ w.T`, `a (M, K)` bf16, `w (N, K)` bf16:
    at a time in ascending k.  On sm80 this lowers to a dependent chain of bf16
    `mma.sync.m16n8k16` with fp32 accumulate.  The chain is the same whatever BLOCK_K (64 or 32)
    the loop uses, so BLOCK_K is `64` when `chunk % 64 == 0`, else `32` (only N=256 in dA).
+   **[corrected]** BLOCK_K = largest of 64/32/16 dividing the chunk with >= 2 iterations: 16 for
+   32-wide chunks (N=256 dA, dW with T <= 256), 32 for 64-wide chunks (dW with 256 < T <= 512),
+   64 for every model forward; a 1-iteration chunk lets Triton fold the tree adds (det_gemm:1).
 3. Tree in registers, fp32 IEEE adds, chunk order 0..7:
    `s01=acc0+acc1; s23=acc2+acc3; s0123=s01+s23; s45=acc4+acc5; s67=acc6+acc7; s4567=s45+s67;
    root=s0123+s4567`.  Live accumulators peak at 4 (`s0123, s45, acc6, acc7`).
@@ -149,8 +198,11 @@ masked to zero, so empty chunk partials are exact zeros and `x + 0 == x` leaves 
 unchanged (test `test_g4_dw_ragged_rule_equals_zero_padded_tokens`: dW for 16 tokens ==
 dW for the same 16 tokens zero-padded to 256).  Repeatable (test) and independent of tile
 constants; batch invariance of dW is not a contract requirement and does not hold (dW depends on
-every token).  BLOCK_K = 64 if `M_pad/8 % 64 == 0` else 32.  The same masked rule is used for dA
-when N is not a multiple of 256 (never for the model shapes; it keeps dA batch-invariant).
+every token).  BLOCK_K = 64 if `M_pad/8 % 64 == 0` else 32 **[corrected: >= 2 iterations rule
+above]**.  The same masked rule is used for dA when N is not a multiple of 256 (never for the
+model shapes; it keeps dA batch-invariant).  It is also exposed for forward-form GEMMs that are
+really backward reductions (`fast_det_gemm(..., ragged_k=True)`: swiglu_ffn / lm_head dW and the
+lm_head dh over a toy-sized tile).
 
 ### TP partials
 
@@ -360,7 +412,8 @@ is emitted with `impl="muse_glimmer_fast_det_gemm", family="triton"`.
   ascending-k chain of bf16 tensor-core MMAs with fp32 accumulate, (3) fp32 tree
   `((0+1)+(2+3))+((4+5)+(6+7))`, (4) one rounding.  **Do not list BLOCK_K / BLOCK_M / BLOCK_N /
   num_warps / num_stages as part of the arithmetic** — they are performance-only (verified
-  bitwise over 24 configs) and must merely be recorded in `trace()`.  This also means decode and
+  bitwise over 24 configs) and must merely be recorded in `trace()`.  **[corrected]** ... provided
+  every chunk runs >= 2 BLOCK_K iterations; add that requirement (and an IR check) to the row.  This also means decode and
   prefill may use different tiles with no parity risk, and TP ranks may use any tile.
 * Specify the backward chunk rules: dA reduces over N with the same 8-chunk rule (N=256 gives
   32-wide chunks); dW reduces over the M tokens with `M_pad = roundup(M, 256)` and masked rows —
