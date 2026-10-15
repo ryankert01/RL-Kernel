@@ -21,13 +21,16 @@ Backward (contract O3/O6: det_gemm + row-local fp32 VJP, never cuBLAS)::
     dx        = gemm(dg, W_gateᵀ) + gemm(du, W_upᵀ)          both partials fp32, summed in fp32,
                                                     → bf16   one rounding (K = F, chunk rule)
     dW_gate   = gemm(dgᵀ, xᵀ), dW_up = gemm(duᵀ, xᵀ), dW_down = gemm(dyᵀ, hᵀ)   → bf16
-                                                             (K = T, same chunk rule)
+                (K = T, the declared ragged token rule: T_pad = roundup(T, 256), 8 chunks of
+                 T_pad/8 token rows, rows >= T masked to zero; every T >= 1 is accepted)
 
-The GEMM is pluggable: ``gemm(a (M,K) bf16, w (N,K) bf16, *, out_dtype=torch.bfloat16) -> a @ w.T``.
-``default_gemm()`` returns ``rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm`` when that
-module is importable and otherwise :class:`TritonDetGemmAdapter`, which drives the repo's
-fixed-order Triton GEMM kernel through the same arithmetic contract (fp32 accumulation per chunk,
-fixed tree, one rounding) at ~100 TFLOP/s on A100.
+The GEMM is pluggable: ``gemm(a (M,K) bf16, w (N,K) bf16, *, out_dtype=torch.bfloat16,
+ragged_k=False) -> a @ w.T`` where ``ragged_k=True`` selects the ragged token rule above (the
+three dW GEMMs pass it; every other GEMM must have an in-contract K).  ``default_gemm()`` is
+``rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm`` (no silent fallback: an import
+failure propagates).  :class:`TritonDetGemmAdapter` is an explicit, opt-in twin that drives the
+repo's fixed-order Triton GEMM kernel through the same arithmetic (8 chunk partials in fp32,
+fixed tree, one rounding; bitwise equal to ``fast_det_gemm`` wherever both accept the shape).
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ import torch
 import triton
 from torch import Tensor
 
+from rl_engine.models.muse_glimmer.ops import det_gemm as _det_gemm
 from rl_engine.models.muse_glimmer.triton.swiglu import (
     kernel_trace as _swiglu_kernel_trace,
 )
@@ -46,12 +50,19 @@ from rl_engine.models.muse_glimmer.triton.swiglu import (
     launch_swiglu_bwd,
     launch_swiglu_fwd,
 )
+from rl_engine.ops.autograd.backward_runtime import record_backward
 
 GemmFn = Callable[..., Tensor]
 
 _CONTRACT = "docs/contracts/muse-glimmer-30b-strict-contract.md O6 (+O3 GEMM rules)"
 _K_CHUNKS = 8
 _TREE = "((0+1)+(2+3))+((4+5)+(6+7))"
+# Ragged (token-axis) rule shared with fast_det_gemm: K padded to a multiple of 8 x 32.
+_RAGGED_UNIT = 256
+_DW_RULE = (
+    "K = T: T_pad = roundup(T, 256), 8 chunks of T_pad/8 token rows, rows >= T masked to zero "
+    "(declared ragged token rule, same as fast_det_gemm's dW; any T >= 1)"
+)
 
 
 # --------------------------------------------------------------------------------------------
@@ -141,13 +152,20 @@ def swiglu_trace() -> dict[str, Any]:
 class TritonDetGemmAdapter:
     """``y = a @ w.T`` through the repo's fixed-order Triton GEMM kernel in the O3 K-chunk tree.
 
+    Explicit, opt-in twin of ``fast_det_gemm`` (never selected implicitly).
+
     Arithmetic (contract O3): K is split into 8 canonical chunks of K/8 (K=19968 → 2496,
     K=6656 → 832, K=4096 → 512). For every chunk one program per (BLOCK_M, BLOCK_N) = (64, 64)
     output tile walks the chunk in ascending BLOCK_K=32 steps with a bf16 tensor-core ``tl.dot``
-    into an fp32 accumulator (no split-K across programs, no atomics) and stores the fp32 partial.
-    The 8 fp32 partials are summed in the fixed tree ((0+1)+(2+3))+((4+5)+(6+7)) with fp32
-    elementwise adds and rounded once to ``out_dtype``. A K that is not a multiple of 8 is out of
-    contract and is computed as a single chunk (same kernel, whole K ascending).
+    into an fp32 accumulator starting at +0 (no split-K across programs, no atomics) and stores the
+    fp32 partial. The 8 fp32 partials are summed in the fixed tree ((0+1)+(2+3))+((4+5)+(6+7))
+    with fp32 elementwise adds and rounded once to ``out_dtype``. Because each chunk is a separate
+    launch, this is the declared tree by construction (and bitwise equal to ``fast_det_gemm``
+    wherever both accept K). K % 8 != 0 raises ``ValueError`` (out of contract) unless
+    ``ragged_k=True``, which applies the declared ragged token rule of ``fast_det_gemm``:
+    K_pad = roundup(K, 256), chunk c = columns [c*K_pad/8, (c+1)*K_pad/8) clipped to K, an empty
+    chunk is an exact fp32 zero partial (``ragged_k`` also applies to K % 256 == 0, where it is the
+    plain 8-chunk rule).
 
     ``a`` and ``w`` may have arbitrary positive strides: the weight is read in its native (N, K)
     layout through strides, so no transposed copy is cached and the transposed views needed by
@@ -171,7 +189,12 @@ class TritonDetGemmAdapter:
         self._kernel = _det_gemm_fp32_kernel
 
     def __call__(
-        self, a: Tensor, w: Tensor, *, out_dtype: torch.dtype = torch.bfloat16
+        self,
+        a: Tensor,
+        w: Tensor,
+        *,
+        out_dtype: torch.dtype = torch.bfloat16,
+        ragged_k: bool = False,
     ) -> Tensor:
         if a.dim() != 2 or w.dim() != 2:
             raise ValueError("TritonDetGemmAdapter expects a (M, K) and w (N, K).")
@@ -187,27 +210,33 @@ class TritonDetGemmAdapter:
             raise ValueError(f"K mismatch: a is {tuple(a.shape)}, w is {tuple(w.shape)}.")
         if a.stride(1) == 0 or w.stride(1) == 0:
             raise ValueError("TritonDetGemmAdapter rejects broadcast (zero-stride) operands.")
+        if out_dtype not in (torch.bfloat16, torch.float32):
+            raise TypeError(f"TritonDetGemmAdapter out_dtype must be bf16 or fp32, got {out_dtype}.")
         if m_size == 0 or n_size == 0:
             return torch.zeros((m_size, n_size), dtype=out_dtype, device=a.device)
         if k_size == 0:
             return torch.zeros((m_size, n_size), dtype=out_dtype, device=a.device)
-        chunks = self.K_CHUNKS if k_size % self.K_CHUNKS == 0 else 1
-        step = k_size // chunks
+        if ragged_k:
+            step = -(-k_size // _RAGGED_UNIT) * _RAGGED_UNIT // self.K_CHUNKS
+        elif k_size % self.K_CHUNKS:
+            raise ValueError(
+                f"TritonDetGemmAdapter: K={k_size} is not a multiple of {self.K_CHUNKS} canonical "
+                "chunks (out of contract); token-axis reductions must pass ragged_k=True"
+            )
+        else:
+            step = k_size // self.K_CHUNKS
 
         def partial(i: int) -> Tensor:
-            return self._partial(a, w, i * step, (i + 1) * step)
+            return self._partial(a, w, min(i * step, k_size), min((i + 1) * step, k_size))
 
-        if chunks == 1:
-            y = partial(0)
-        else:
-            # Fixed tree ((0+1)+(2+3))+((4+5)+(6+7)); in-place fp32 adds keep <= 4 live partials.
-            s01 = partial(0).add_(partial(1))
-            s23 = partial(2).add_(partial(3))
-            s0123 = s01.add_(s23)
-            s45 = partial(4).add_(partial(5))
-            s67 = partial(6).add_(partial(7))
-            s4567 = s45.add_(s67)
-            y = s0123.add_(s4567)
+        # Fixed tree ((0+1)+(2+3))+((4+5)+(6+7)); in-place fp32 adds keep <= 4 live partials.
+        s01 = partial(0).add_(partial(1))
+        s23 = partial(2).add_(partial(3))
+        s0123 = s01.add_(s23)
+        s45 = partial(4).add_(partial(5))
+        s67 = partial(6).add_(partial(7))
+        s4567 = s45.add_(s67)
+        y = s0123.add_(s4567)
         return y if out_dtype == torch.float32 else y.to(out_dtype)
 
     def _partial(self, a: Tensor, w: Tensor, k0: int, k1: int) -> Tensor:
@@ -215,6 +244,8 @@ class TritonDetGemmAdapter:
         w_c = w[:, k0:k1]
         m_size, k_size = a_c.shape
         n_size = w_c.shape[0]
+        if k_size == 0:  # empty ragged chunk: exact zero partial (x + 0 == x in the tree)
+            return torch.zeros((m_size, n_size), dtype=torch.float32, device=a.device)
         out = torch.empty((m_size, n_size), dtype=torch.float32, device=a.device)
         grid = (triton.cdiv(m_size, self.BLOCK_M), triton.cdiv(n_size, self.BLOCK_N))
         self._kernel[grid](
@@ -248,11 +279,17 @@ class TritonDetGemmAdapter:
             "dtype_acc": "float32",
             "dtype_out": "bfloat16 (fp32 on request)",
             "reduction_order": (
-                f"K split in {self.K_CHUNKS} canonical chunks (single chunk when K % 8 != 0, "
-                "out of contract); per chunk one program per output tile walks K ascending in "
-                "BLOCK_K steps (bf16 tl.dot, fp32 accumulate, no split-K); fp32 partials summed "
+                f"K split in {self.K_CHUNKS} canonical chunks of K/8 (K % 8 != 0 raises unless "
+                "ragged_k); per chunk one program per output tile walks K ascending in BLOCK_K "
+                "steps (bf16 tl.dot, fp32 accumulate from +0, no split-K); fp32 partials summed "
                 f"{_TREE}; one rounding to the output dtype"
             ),
+            "k_rule": "K % 8 == 0 (chunk K/8); otherwise ValueError unless ragged_k=True",
+            "ragged_k_rule": (
+                "K_pad = roundup(K, 256), chunk c = columns [c*K_pad/8, (c+1)*K_pad/8) clipped "
+                "to K, empty chunk = exact fp32 zero partial (== fast_det_gemm's dW rule)"
+            ),
+            "selection": "explicit only (never an implicit fallback)",
             "tile_config": {
                 "BLOCK_M": self.BLOCK_M,
                 "BLOCK_N": self.BLOCK_N,
@@ -266,38 +303,42 @@ class TritonDetGemmAdapter:
 
 
 class _FastDetGemm:
-    """Shim over the sibling ``fast_det_gemm``: hands it contiguous operands (transposed views
-    from the backward are materialised), forwards ``out_dtype`` and exposes its ``trace``."""
+    """Shim over the sibling ``fast_det_gemm``: forwards ``out_dtype``/``ragged_k`` and the
+    operands as they are (the kernel reads strided/transposed views through their strides, so the
+    backward's ``w.t()`` views cost no copy) and exposes the sibling's full ``trace()``."""
+
+    name = "fast_det_gemm"
 
     def __init__(self, fn: GemmFn) -> None:
         self._fn = fn
 
     def __call__(
-        self, a: Tensor, w: Tensor, *, out_dtype: torch.dtype = torch.bfloat16
+        self,
+        a: Tensor,
+        w: Tensor,
+        *,
+        out_dtype: torch.dtype = torch.bfloat16,
+        ragged_k: bool = False,
     ) -> Tensor:
-        return self._fn(a.contiguous(), w.contiguous(), out_dtype=out_dtype)
+        return self._fn(a, w, out_dtype=out_dtype, ragged_k=ragged_k)
 
     def trace(self) -> dict[str, Any]:
         tracer = getattr(self._fn, "trace", None)
-        if callable(tracer):
-            return tracer()
-        return {"op": "det_gemm", "impl": "fast_det_gemm", "kernel": self._fn.__module__}
+        if not callable(tracer):
+            tracer = _det_gemm.trace
+        return tracer()
 
 
 _DEFAULT_GEMM: GemmFn | None = None
 
 
 def default_gemm() -> GemmFn:
-    """``fast_det_gemm`` from ``rl_engine.models.muse_glimmer.ops.det_gemm`` when importable,
-    otherwise :class:`TritonDetGemmAdapter`. Resolved once per process."""
+    """``fast_det_gemm`` (``rl_engine.models.muse_glimmer.ops.det_gemm``), resolved once per
+    process. There is no implicit fallback; pass ``gemm=TritonDetGemmAdapter()`` explicitly to use
+    the twin kernel."""
     global _DEFAULT_GEMM
     if _DEFAULT_GEMM is None:
-        try:
-            from rl_engine.models.muse_glimmer.ops.det_gemm import fast_det_gemm
-        except ImportError:
-            _DEFAULT_GEMM = TritonDetGemmAdapter()
-        else:
-            _DEFAULT_GEMM = _FastDetGemm(fast_det_gemm)
+        _DEFAULT_GEMM = _FastDetGemm(_det_gemm.fast_det_gemm)
     return _DEFAULT_GEMM
 
 
@@ -306,6 +347,10 @@ def _gemm_trace(gemm: GemmFn) -> dict[str, Any]:
     if callable(tracer):
         return tracer()
     return {"op": "det_gemm", "impl": getattr(gemm, "__name__", type(gemm).__name__)}
+
+
+def _gemm_name(gemm: GemmFn) -> str:
+    return str(getattr(gemm, "name", None) or getattr(gemm, "__name__", type(gemm).__name__))
 
 
 # --------------------------------------------------------------------------------------------
@@ -389,8 +434,9 @@ class _SwiGLUFFNFunction(torch.autograd.Function):
         needs_x, needs_wg, needs_wu, needs_wd = ctx.needs_input_grad[:4]
         dy = grad_y.to(torch.bfloat16).contiguous()
         dx = dw_gate = dw_up = dw_down = None
+        # Weight gradients reduce over the T tokens: declared ragged token rule (any T >= 1).
         if needs_wd:
-            dw_down = gemm(dy.t(), h.t())
+            dw_down = gemm(dy.t(), h.t(), ragged_k=True)
         if needs_x or needs_wg or needs_wu:
             dh = gemm(dy, w_down.t())
             dg, du = launch_swiglu_bwd(dh, g, u)
@@ -401,9 +447,15 @@ class _SwiGLUFFNFunction(torch.autograd.Function):
                 dx = dx_gate.add_(dx_up).to(torch.bfloat16)
                 del dx_gate, dx_up
             if needs_wg:
-                dw_gate = gemm(dg.t(), x.t())
+                dw_gate = gemm(dg.t(), x.t(), ragged_k=True)
             if needs_wu:
-                dw_up = gemm(du.t(), x.t())
+                dw_up = gemm(du.t(), x.t(), ragged_k=True)
+        record_backward(
+            "swiglu_ffn",
+            kernel_id=f"{_gemm_name(gemm)}+rl_engine.models.muse_glimmer.triton.swiglu",
+            impl="muse_glimmer_swiglu_ffn",
+            family="triton",
+        )
         return dx, dw_gate, dw_up, dw_down, None
 
 
@@ -450,8 +502,9 @@ def trace(gemm: GemmFn | None = None) -> dict[str, Any]:
             "dh = gemm(dy, W_down^T) -> bf16; (dg, du) = row-local fp32 VJP -> bf16; "
             "dx = gemm(dg, W_gate^T) + gemm(du, W_up^T) summed in fp32 -> bf16 once; "
             "dW_gate = gemm(dg^T, x^T), dW_up = gemm(du^T, x^T), dW_down = gemm(dy^T, h^T) -> bf16 "
-            "(K = T, same chunk rule)"
+            "with ragged_k=True"
         ),
+        "dw_chunk_rule": _DW_RULE,
         "tile_config": {
             "swiglu": _swiglu_kernel_trace(),
             "gemm": _gemm_trace(gemm),

@@ -24,17 +24,27 @@ once.  No cuBLAS / ``torch.matmul`` anywhere on the strict path.
 Backward (deterministic, tile by tile, same tree)::
 
     dz_t  = (onehot_t - exp(zhat_t - logZ)) * dlogp * (m * (1 - tanh**2))   fp32 -> bf16 once
-    dh    = tree_t( gemm(dz_t, W_lm[tile t]^T) )  fp32 partials -> bf16 once
-    dW_lm[tile t] = gemm(dz_t^T, h) fp32 -> bf16 ; padded rows are exactly 0
+    dh    = tree_t( gemm(dz_t, W_lm[tile t]^T) )  fp32 partials -> bf16 once   (K = tile, 8 chunks)
+    dW_lm[tile t] = gemm(dz_t^T, h, ragged_k=True) fp32 -> bf16 ; padded rows are exactly 0
+                    (K = T tokens: T_pad = roundup(T, 256), 8 chunks of T_pad/8, rows >= T masked)
 
-The GEMM is pluggable (``gemm(a (M,K) bf16, w (N,K) bf16, *, out_dtype) -> a @ w.T``).  The
-default is ``fast_det_gemm`` from ``rl_engine.models.muse_glimmer.ops.det_gemm`` when that
-module exists, else an adapter around the repo ``det_gemm`` fp32 path
-(``rl_engine.backends.shared.triton.gemm.det_gemm._triton_gemm_fp32``: one program per output
-tile, K walked in BLOCK_K=32 order, no split-K, inputs promoted to fp32 inside the kernel).
+The GEMM is pluggable (``gemm(a (M,K) bf16, w (N,K) bf16, *, out_dtype, ragged_k=False) ->
+a @ w.T``).  The default is ``fast_det_gemm`` from ``rl_engine.models.muse_glimmer.ops.det_gemm``
+(imported eagerly; an import failure propagates, there is no silent fallback).  Operands are
+passed as strided views (no transposed copies).  The repo ``det_gemm`` fp32 path
+(:func:`legacy_det_gemm_fp32`: one program per output tile, whole K walked in BLOCK_K=32 order,
+no K tree, inputs promoted to fp32) is available only as an explicit ``gemm=`` argument
+(benchmarks); its bits differ from the default.
 
-Golden: ``lm_head_softcap_logprob_fp32`` — hand-written fixed-order torch (per-row ``torch.mv``
-per tile, same chunked sum, same tree) in fp32 or fp64; it never uses a batched matmul.
+Targets: ``validate_targets=True`` (default) checks ``0 <= target < vocab_size`` once on the host
+(one device sync per call).  Bindings that must not sync (CUDA-graph capture) pass
+``validate_targets=False``: a target outside the real vocabulary then yields ``logp = NaN`` on the
+device (never a silent ``-logZ``).
+
+Golden: ``lm_head_softcap_logprob_fp32`` with ``compute_dtype=torch.float64`` is the contract R4
+golden (per-row ``torch.mv`` per tile, same chunked sum, same tree).  The fp32 mode is a
+convenience: its ``torch.mv`` runs cuBLAS gemv in fp32, whose order is cuBLAS's, so it is a
+tolerance reference only.
 """
 
 from __future__ import annotations
@@ -45,6 +55,8 @@ from typing import Any, Callable, Sequence
 
 import torch
 
+from rl_engine.models.muse_glimmer.ops import det_gemm as _det_gemm
+from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree as _canonical_combine
 from rl_engine.models.muse_glimmer.workload import (
     CANONICAL_TP,
     OFFICIAL_FINGERPRINT,
@@ -101,8 +113,15 @@ def tile_geometry(padded_vocab: int, vocab_size: int) -> tuple[int, list[tuple[i
 
 
 def _check_inputs(
-    h: torch.Tensor, w_padded: torch.Tensor, targets: torch.Tensor, vocab_size: int
+    h: torch.Tensor,
+    w_padded: torch.Tensor,
+    targets: torch.Tensor,
+    vocab_size: int,
+    *,
+    check_targets: bool = True,
 ) -> None:
+    """Shape/dtype/device checks; ``check_targets`` adds the target range check (one sync)."""
+
     if h.dim() != 2 or w_padded.dim() != 2:
         raise ValueError("h must be (T, H) and w_padded (Vp, H)")
     if h.shape[1] != w_padded.shape[1]:
@@ -116,7 +135,7 @@ def _check_inputs(
     if not (h.device == w_padded.device == targets.device):
         raise ValueError("h, w_padded and targets must share a device")
     tile_geometry(w_padded.shape[0], vocab_size)
-    if targets.numel() and bool(((targets < 0) | (targets >= vocab_size)).any()):
+    if check_targets and targets.numel() and bool(((targets < 0) | (targets >= vocab_size)).any()):
         raise ValueError(
             f"targets must lie in [0, vocab_size={vocab_size}); a target in the padded "
             f"region [{vocab_size}, {w_padded.shape[0]}) has no probability mass"
@@ -129,23 +148,39 @@ def _check_inputs(
 
 
 def legacy_det_gemm_fp32(
-    a: torch.Tensor, w: torch.Tensor, *, out_dtype: torch.dtype = torch.float32
+    a: torch.Tensor,
+    w: torch.Tensor,
+    *,
+    out_dtype: torch.dtype = torch.float32,
+    ragged_k: bool = False,
 ) -> torch.Tensor:
     """``a @ w.T`` through the repo ``det_gemm`` fp32 path (``_triton_gemm_fp32(a, w.T)``).
 
-    Fixed BLOCK_M/N/K = 64/64/32, one program per output tile, K walked in order (no split-K),
-    ``tl.dot(allow_tf32=False)`` with inputs promoted to fp32 inside the kernel, fp32 output.
-    Slow (CUDA cores) but batch invariant and deterministic; ``fast_det_gemm`` replaces it.
+    Explicit opt-in only (``gemm=legacy_det_gemm_fp32``; never selected implicitly).  Fixed
+    BLOCK_M/N/K = 64/64/32, one program per output tile, the whole K walked in order (no K tree,
+    no split-K), ``tl.dot(allow_tf32=False)`` with inputs promoted to fp32 inside the kernel, fp32
+    output.  Any K is accepted (``ragged_k`` is accepted for interface parity and ignored).
+    Slow (CUDA cores) and NOT bitwise equal to the default ``fast_det_gemm``.
     """
 
+    del ragged_k
     if out_dtype != torch.float32:
         raise ValueError("legacy_det_gemm_fp32 only emits float32 (contract O7 logits)")
     det_gemm = importlib.import_module("rl_engine.backends.shared.triton.gemm.det_gemm")
     return det_gemm._triton_gemm_fp32(a, w.t())
 
 
+legacy_det_gemm_fp32.name = (  # type: ignore[attr-defined]
+    "rl_engine.backends.shared.triton.gemm.det_gemm._triton_gemm_fp32"
+)
+
+
 class _FastDetGemmAdapter:
-    """Call the sibling ``fast_det_gemm`` with contiguous operands."""
+    """The default GEMM: ``fast_det_gemm`` on strided views (no transposed copies), fail closed.
+
+    A reduction length that is not a multiple of 256 raises inside ``fast_det_gemm`` unless the
+    call site opts into the declared ragged token rule (``ragged_k=True``, used only for dW).
+    """
 
     name = "fast_det_gemm"
 
@@ -153,52 +188,45 @@ class _FastDetGemmAdapter:
         self._fn = fn
 
     def __call__(
-        self, a: torch.Tensor, w: torch.Tensor, *, out_dtype: torch.dtype = torch.float32
+        self,
+        a: torch.Tensor,
+        w: torch.Tensor,
+        *,
+        out_dtype: torch.dtype = torch.float32,
+        ragged_k: bool = False,
     ) -> torch.Tensor:
-        # fast_det_gemm's 8-chunk tree needs K % 256 == 0; every model shape satisfies it
-        # (H=6656, and dW's K=T is tile-padded by callers), but tiny test shapes and
-        # short-T weight gradients fall back to the legacy fixed-order fp32 kernel.
-        if a.shape[-1] % 256 != 0:
-            return legacy_det_gemm_fp32(a, w, out_dtype=out_dtype)
-        return self._fn(a.contiguous(), w.contiguous(), out_dtype=out_dtype)
+        return self._fn(a, w, out_dtype=out_dtype, ragged_k=ragged_k)
+
+    def trace(self) -> dict[str, Any]:
+        return _det_gemm.trace(out_dtype=torch.float32)
 
 
-_RESOLVED_GEMM: GemmFn | None = None
+_RESOLVED_GEMM: GemmFn = _FastDetGemmAdapter(_det_gemm.fast_det_gemm)
 
 
 def resolve_gemm(gemm: GemmFn | None = None) -> GemmFn:
-    """``gemm`` if given, else ``fast_det_gemm`` when importable, else the legacy adapter."""
+    """``gemm`` if given, else the default ``fast_det_gemm`` adapter (no implicit fallback)."""
 
-    global _RESOLVED_GEMM
-    if gemm is not None:
-        return gemm
-    if _RESOLVED_GEMM is None:
-        try:
-            mod = importlib.import_module("rl_engine.models.muse_glimmer.ops.det_gemm")
-            _RESOLVED_GEMM = _FastDetGemmAdapter(mod.fast_det_gemm)
-        except (ImportError, AttributeError):
-            _RESOLVED_GEMM = legacy_det_gemm_fp32
-    return _RESOLVED_GEMM
+    return _RESOLVED_GEMM if gemm is None else gemm
 
 
 def gemm_backend_name(gemm: GemmFn | None = None) -> str:
     fn = resolve_gemm(gemm)
-    if fn is legacy_det_gemm_fp32:
-        return "rl_engine.backends.shared.triton.gemm.det_gemm._triton_gemm_fp32"
-    return getattr(fn, "name", None) or getattr(fn, "__qualname__", repr(fn))
+    return str(getattr(fn, "name", None) or getattr(fn, "__qualname__", repr(fn)))
+
+
+def _gemm_provenance(gemm: GemmFn | None) -> dict[str, Any]:
+    fn = resolve_gemm(gemm)
+    tracer = getattr(fn, "trace", None)
+    if callable(tracer):
+        return tracer()
+    return {"op": "det_gemm", "impl": gemm_backend_name(gemm)}
 
 
 def _combine_tree_sum(partials: Sequence[torch.Tensor]) -> torch.Tensor:
-    """Fixed-tree fp32 sum of GEMM partials; prefers the sibling ``combine_tree`` if present."""
+    """Fixed-tree fp32 sum of GEMM partials with the canonical ``combine_tree``."""
 
-    try:
-        mod = importlib.import_module("rl_engine.models.muse_glimmer.ops.canonical_tree")
-        combine = mod.combine_tree
-    except (ImportError, AttributeError):
-        combine = None
-    if combine is not None:
-        return combine(list(partials))
-    return _combine_tree(list(partials), torch.add)
+    return _canonical_combine(list(partials))
 
 
 # --------------------------------------------------------------------------------------
@@ -316,13 +344,34 @@ def compute_tile_stats(
     softcap: float = FINAL_LOGIT_SOFTCAP,
     vocab_size: int = VOCAB_SIZE,
     gemm: GemmFn | None = None,
+    validate_targets: bool = True,
 ) -> list[TileStats]:
     """GEMM + soft cap + statistics for the requested tiles (default: all 8, in order).
 
     One fp32 logits tile is alive at a time.  A TP rank calls this with the tiles it owns.
+    ``validate_targets`` runs the host-side target range check (one device sync).
     """
 
-    _check_inputs(h, w_padded, targets, vocab_size)
+    _check_inputs(h, w_padded, targets, vocab_size, check_targets=validate_targets)
+    return _compute_tile_stats(
+        h, w_padded, targets, tiles=tiles, multiplier=multiplier, softcap=softcap,
+        vocab_size=vocab_size, gemm=gemm,
+    )
+
+
+def _compute_tile_stats(
+    h: torch.Tensor,
+    w_padded: torch.Tensor,
+    targets: torch.Tensor,
+    *,
+    tiles: Sequence[int] | None,
+    multiplier: float,
+    softcap: float,
+    vocab_size: int,
+    gemm: GemmFn | None,
+) -> list[TileStats]:
+    """:func:`compute_tile_stats` without input validation (callers validated once)."""
+
     gemm_fn = resolve_gemm(gemm)
     tile, geometry = tile_geometry(w_padded.shape[0], vocab_size)
     order = list(range(NUM_VOCAB_TILES)) if tiles is None else [int(t) for t in tiles]
@@ -343,15 +392,28 @@ def compute_tile_stats(
     return out
 
 
+def _select_target(stats: Sequence[TileStats], like: torch.Tensor) -> torch.Tensor:
+    """zhat[target] from the tile that holds it; NaN where no real column holds the target.
+
+    Device-side fail-loud rule for targets outside ``[0, vocab_size)`` when the host check is
+    skipped (``validate_targets=False``): the row's logp becomes NaN instead of ``-logZ``.
+    Valid rows are untouched (``torch.where`` selects the same value).
+    """
+
+    target_logit = torch.zeros_like(like)
+    found = torch.zeros_like(like, dtype=torch.bool)
+    for st in stats:
+        target_logit = torch.where(st.target_in_tile, st.target_logit, target_logit)
+        found = found | st.target_in_tile
+    return torch.where(found, target_logit, torch.full_like(target_logit, float("nan")))
+
+
 def _finish_logp(stats: Sequence[TileStats]) -> tuple[torch.Tensor, torch.Tensor]:
     ordered = sorted(stats, key=lambda st: st.tile)
     if [st.tile for st in ordered] != list(range(NUM_VOCAB_TILES)):
         raise ValueError("all 8 tiles are required to finish the log-probability")
     _, logz = combine_tile_stats([(st.m, st.s) for st in ordered])
-    target_logit = torch.zeros_like(logz)
-    for st in ordered:
-        target_logit = torch.where(st.target_in_tile, st.target_logit, target_logit)
-    return target_logit - logz, logz
+    return _select_target(ordered, logz) - logz, logz
 
 
 def _forward_tiles(
@@ -365,7 +427,9 @@ def _forward_tiles(
     gemm: GemmFn | None,
     tile_order: Sequence[int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    stats = compute_tile_stats(
+    """Forward over the 8 tiles; inputs must already be validated by the caller."""
+
+    stats = _compute_tile_stats(
         h, w_padded, targets, tiles=tile_order, multiplier=multiplier, softcap=softcap,
         vocab_size=vocab_size, gemm=gemm,
     )
@@ -410,9 +474,10 @@ def _backward_tiles(
             # dh_t = dz_t @ W_t  ->  gemm(a=dz_t (T,Vt), w=W_t^T (H,Vt)) = dz_t @ W_t
             dh_partials.append(gemm_fn(dz_t, w_t.t(), out_dtype=torch.float32))
         if dw is not None:
-            # dW_t = dz_t^T @ h  ->  gemm(a=dz_t^T (Vt,T), w=h^T (H,T)) = dz_t^T @ h
+            # dW_t = dz_t^T @ h  ->  gemm(a=dz_t^T (Vt,T), w=h^T (H,T)) = dz_t^T @ h.  K = T is the
+            # token axis: declared ragged rule (T_pad = roundup(T, 256), masked rows), any T.
             dw[t * tile : (t + 1) * tile] = gemm_fn(
-                dz_t.t(), h.t(), out_dtype=torch.float32
+                dz_t.t(), h.t(), out_dtype=torch.float32, ragged_k=True
             ).to(torch.bfloat16)
         del dz_t
     dh = _combine_tree_sum(dh_partials).to(torch.bfloat16) if need_dh else None
@@ -465,10 +530,15 @@ def lm_head_softcap_logprob(
     softcap: float = FINAL_LOGIT_SOFTCAP,
     vocab_size: int = VOCAB_SIZE,
     gemm: GemmFn | None = None,
+    validate_targets: bool = True,
 ) -> torch.Tensor:
-    """Strict selected-token log-probability ``logp (T,) fp32`` with deterministic autograd."""
+    """Strict selected-token log-probability ``logp (T,) fp32`` with deterministic autograd.
 
-    _check_inputs(h, w_padded, targets, vocab_size)
+    ``validate_targets=True`` raises ``ValueError`` for a target outside ``[0, vocab_size)``
+    (one host sync per call); with ``False`` there is no sync and such a row's logp is NaN.
+    """
+
+    _check_inputs(h, w_padded, targets, vocab_size, check_targets=validate_targets)
     return _LMHeadSoftcapLogprobFn.apply(
         h, w_padded, targets, float(multiplier), float(softcap), int(vocab_size), gemm
     )
@@ -497,21 +567,19 @@ def simulate_tp_logprob(
 
     if tp not in (1, 2, 4, 8):
         raise ValueError("tp must be 1, 2, 4 or 8")
+    _check_inputs(h, w_padded, targets, vocab_size)
     per_rank = NUM_VOCAB_TILES // tp
     rank_stats: list[Stats] = []
-    target_logit = None
+    all_stats: list[TileStats] = []
     for r in range(tp):
-        stats = compute_tile_stats(
+        stats = _compute_tile_stats(
             h, w_padded, targets, tiles=range(r * per_rank, (r + 1) * per_rank),
             multiplier=multiplier, softcap=softcap, vocab_size=vocab_size, gemm=gemm,
         )
         rank_stats.append(merge_tile_stats([(st.m, st.s) for st in stats]))
-        for st in stats:
-            if target_logit is None:
-                target_logit = torch.zeros_like(st.target_logit)
-            target_logit = torch.where(st.target_in_tile, st.target_logit, target_logit)
+        all_stats.extend(stats)
     _, logz = combine_tile_stats(rank_stats)
-    return target_logit - logz
+    return _select_target(all_stats, logz) - logz
 
 
 # --------------------------------------------------------------------------------------
@@ -530,12 +598,15 @@ def lm_head_softcap_logprob_fp32(
     compute_dtype: torch.dtype = torch.float32,
     block_v: int = 1024,
 ) -> torch.Tensor:
-    """Fixed-order torch golden (R4 ``forward_fp32``); ``compute_dtype=torch.float64`` for fp64.
+    """Torch golden (R4 ``forward_fp32``); ``compute_dtype=torch.float64`` is THE contract golden.
 
     Order: tile-major, row-minor.  Per (tile, row): ``z = torch.mv(W_t, h_i)`` (one gemv of a
     fixed shape, so a row's bits never depend on ``T``), soft cap as :func:`softcap_golden`,
     ``m = max`` over the real columns, ``s = sum_c sum(exp(zhat_c - m))`` over ``block_v``-wide
     chunks in order, then the same canonical tree as the strict path.  Output fp32.
+    ``torch.mv`` is cuBLAS gemv, whose internal order is cuBLAS's: in fp64 that noise is far below
+    every tolerance (the header of the contract allows an FP64 reference); the fp32 mode is a
+    convenience tolerance reference, never a bitwise target (finding lm_head_softcap_logprob:8).
     """
 
     _check_inputs(h, w_padded, targets, vocab_size)
@@ -660,6 +731,16 @@ def trace(*, gemm: GemmFn | None = None) -> dict[str, Any]:
         block_v, num_warps = int(kernels.BLOCK_V), int(kernels.NUM_WARPS)
     except ImportError:  # CPU-only host; constants are still the contract values
         block_v, num_warps = 1024, 4
+    backend = gemm_backend_name(gemm)
+    if backend == "fast_det_gemm":
+        gemm_order = (
+            "logits z_t = gemm(h, W_t) fp32 out, K = H in 8 canonical chunks (mma.sync chain per "
+            "chunk, fixed fp32 tree ((0+1)+(2+3))+((4+5)+(6+7)), no split-K); dh_t = gemm(dz_t, "
+            "W_t^T) K = tile in 8 chunks; dW_t = gemm(dz_t^T, h, ragged_k=True) K = T: "
+            "T_pad = roundup(T, 256), 8 chunks, rows >= T masked; backend fast_det_gemm"
+        )
+    else:
+        gemm_order = f"explicit non-default backend {backend} (see gemm.reduction_order)"
     return {
         "op": OP_NAME,
         "rows": ["lm_head_softcap_logprob", "vocab_parallel_softcap_logp"],
@@ -675,8 +756,7 @@ def trace(*, gemm: GemmFn | None = None) -> dict[str, Any]:
             "padded_vocab_size": PADDED_VOCAB_SIZE,
         },
         "reduction_order": {
-            "gemm": "det_gemm fp32 accumulation, K walked in block order, no split-K; backend "
-            + gemm_backend_name(gemm),
+            "gemm": gemm_order,
             "softcap": "fp32: RN mul by m, IEEE RN div by T (tl.div_rn), libdevice.tanh "
             "(== torch.tanh bitwise), RN mul by T; HF order mul_m -> div_T -> tanh -> mul_T",
             "tile_stats": f"one program per (row, tile); columns walked in BLOCK_V={block_v} "
@@ -694,6 +774,12 @@ def trace(*, gemm: GemmFn | None = None) -> dict[str, Any]:
             "dh": "float32 tree -> bfloat16 once",
             "dw": "float32 -> bfloat16 per tile",
         },
+        "targets": (
+            "validate_targets=True (default): host range check, ValueError outside "
+            "[0, vocab_size); validate_targets=False: no sync, logp = NaN for such rows"
+        ),
+        "golden": "lm_head_softcap_logprob_fp32(compute_dtype=float64) (fp32 mode: tolerance only)",
+        "gemm": _gemm_provenance(gemm),
         "tile_config": {
             "num_tiles": NUM_VOCAB_TILES,
             "tile_size": TILE_SIZE,
