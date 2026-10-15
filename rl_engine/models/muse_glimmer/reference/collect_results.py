@@ -95,7 +95,8 @@ def chain_record(payload: dict[str, Any] | None) -> dict[str, Any]:
     return rec
 
 
-def xrt_record(golden: dict[str, Any] | None, triton: dict[str, Any] | None) -> dict[str, Any]:
+def xrt_record(golden: dict[str, Any] | None, triton: dict[str, Any] | None,
+               hf: dict[str, Any] | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, x in (("golden", golden), ("triton", triton)):
         if x is None:
@@ -123,6 +124,26 @@ def xrt_record(golden: dict[str, Any] | None, triton: dict[str, Any] | None) -> 
             "note": "two different strict op sets (fp32 golden fallbacks vs Triton kernels): "
                     "NOT expected to be byte-equal; tolerance comparison only",
         }
+    if hf is not None:
+        out["hf_bf16"] = {
+            "backend": hf.get("backend"),
+            "n_tokens": sum(s["n_tokens"] for s in hf["sequences"]),
+            "logprobs": {s["id"]: s["logprobs"] for s in hf["sequences"]},
+            "argmax_is_token": {s["id"]: s["argmax_is_token"] for s in hf["sequences"]},
+            "note": hf.get("note"),
+        }
+        for name, x in (("golden", golden), ("triton", triton)):
+            if x is None:
+                continue
+            d = compare_xrt(x, hf)
+            allabs = [v for r in d["sequences"] for v in r.get("abs_diff", [])]
+            out[f"{name}_vs_hf_bf16"] = {
+                "n_tokens": d["n_tokens"],
+                "equal_tokens": d["equal_tokens"],
+                "max_abs_dlogp": max(allabs) if allabs else None,
+                "mean_abs_dlogp": sum(allabs) / len(allabs) if allabs else None,
+                "per_sequence": d["sequences"],
+            }
     return out
 
 
@@ -229,7 +250,8 @@ def main(argv=None) -> int:
     runs = pathlib.Path(args.runs)
     golden = _load(runs / "xrt_reference_golden.json")
     triton = _load(runs / "xrt_reference_triton.json")
-    for name, payload in (("golden", golden), ("triton", triton)):
+    hf_x = _load(runs / "xrt_reference_hf_bf16.json")
+    for name, payload in (("golden", golden), ("triton", triton), ("hf_bf16", hf_x)):
         if payload is not None:
             shutil.copyfile(runs / f"xrt_reference_{name}.json",
                             DATA / f"xrt_reference_{name}.json")
@@ -257,7 +279,7 @@ def main(argv=None) -> int:
             "chain_triton_512_hf": chain_record(_load(runs / "chain_triton_512_hf.json")),
             "chain_triton_2100_hf": chain_record(_load(runs / "chain_triton_2100_hf.json")),
             "chain_golden_2100": chain_record(_load(runs / "chain_golden_2100.json")),
-            "xrt_scoring": xrt_record(golden, triton),
+            "xrt_scoring": xrt_record(golden, triton, hf_x),
             "profile": profile_record(strict, hf),
             "decode_batch_invariance": (strict or {}).get("decode_batch_invariance",
                                                           {"status": "NOT RUN"}),

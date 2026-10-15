@@ -193,5 +193,84 @@ def compare_xrt(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return {"n_tokens": n, "equal_tokens": eq, "sequences": rows}
 
 
+@torch.no_grad()
+def score_token_file_hf(
+    hf_model: Any,
+    score_file: str | pathlib.Path,
+    *,
+    log: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Native anchor: the same tokens through transformers' bf16 model (one forward per
+    sequence, its softcapped bf16 logits, fp32 log_softmax + gather). NOT a strict path; its
+    logprobs are the "what a native runtime would say" reference for the drift plots."""
+    raw = pathlib.Path(score_file).read_bytes()
+    data = json.loads(raw)
+    dev = next(hf_model.parameters()).device
+    seqs_out = []
+    for seq in data["sequences"]:
+        ids = torch.tensor(seq["token_ids"], dtype=torch.long, device=dev)
+        cs = int(seq["completion_start"])
+        out = hf_model(input_ids=ids[None], use_cache=False)
+        logits = out.logits[0, cs - 1 : -1].float()
+        lp = torch.log_softmax(logits, dim=-1).gather(-1, ids[cs:, None])[:, 0].cpu()
+        argmax_hit = (logits.argmax(-1) == ids[cs:]).cpu()
+        seqs_out.append({
+            "id": seq["id"],
+            "logprobs_hex": fp32_hex(lp),
+            "n_tokens": int(lp.numel()),
+            "completion_start": cs,
+            "length": int(ids.numel()),
+            "logprobs": [float(x) for x in lp.tolist()],
+            "argmax_is_token": [int(x) for x in argmax_hit.tolist()],
+        })
+        if log:
+            log(f"[score:hf] {seq['id']}: {lp.numel()} tokens, sum logp "
+                f"{float(lp.double().sum()):.4f}")
+        del out, logits
+    return {
+        "schema": SCHEMA_OUT,
+        "runtime": "hf",
+        "mode": "native_bf16",
+        "tp": 1,
+        "backend": f"transformers_{hf_model.config.text_config._attn_implementation}",
+        "sequences": seqs_out,
+        "source": {"path": str(score_file), "sha256": hashlib.sha256(raw).hexdigest(),
+                   "checkpoint_revision": data.get("checkpoint_revision")},
+        "commit": source_commit(),
+        "device": torch.cuda.get_device_name(dev),
+        "torch": torch.__version__,
+        "note": "HF MuseGlimmerForConditionalGeneration bf16; logits are HF's bf16 softcapped "
+                "logits; logp = fp32 log_softmax. Tolerance anchor only, not a strict path.",
+    }
+
+
+def _main(argv: Sequence[str] | None = None) -> int:
+    """``python -m rl_engine.models.muse_glimmer.reference.xrt_scoring --hf ...``: the HF bf16
+    anchor for the token file (the strict scoring CLI is ``run_chain.py --score-file``)."""
+    import argparse
+
+    p = argparse.ArgumentParser(description=_main.__doc__)
+    p.add_argument("--checkpoint", default="~/models/Muse-Glimmer-30B")
+    p.add_argument("--score-file", required=True)
+    p.add_argument("--score-out", required=True)
+    p.add_argument("--attn", default="sdpa")
+    args = p.parse_args(argv)
+    from transformers import MuseGlimmerForConditionalGeneration
+
+    ckpt = str(pathlib.Path(args.checkpoint).expanduser())
+    model = MuseGlimmerForConditionalGeneration.from_pretrained(
+        ckpt, dtype=torch.bfloat16, attn_implementation=args.attn
+    )
+    model.eval().to("cuda")
+    out = score_token_file_hf(model, args.score_file, log=print)
+    pathlib.Path(args.score_out).write_text(json.dumps(out, indent=1))
+    print(f"wrote {args.score_out}")
+    return 0
+
+
 __all__ = ["SCHEMA_IN", "SCHEMA_OUT", "compare_xrt", "fp32_hex", "hex_to_fp32",
-           "score_token_file", "source_commit"]
+           "score_token_file", "score_token_file_hf", "source_commit"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())
