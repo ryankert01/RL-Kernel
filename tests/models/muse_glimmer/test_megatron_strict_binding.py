@@ -89,39 +89,66 @@ def test_fused_qkv_slicing_matches_bridge_layout(heads, kv_heads, head_dim, hidd
 
 
 class RecordReplayComm:
-    """Single-process TP emulation: pass 1 records each rank's all-gather inputs, pass 2
-    replays with the peers' recorded inputs (every gathered value is rank-local)."""
+    """Single-process TP emulation by fixed-point iteration over all-gather calls.
 
-    def __init__(self, world: int, rank: int, book: dict):
-        self.world, self.rank, self.book = world, rank, book
+    Every pass runs each rank's function once. All-gather call ``idx`` returns this rank's live
+    input in its own slot and the peers' inputs recorded at the same call index in the PREVIOUS
+    pass (the rank's own value as a placeholder in the first pass), and records the live input
+    for the next pass. A value gathered at call ``idx`` may depend on values gathered at
+    earlier calls (e.g. the LM-head backward partials depend on the forward's gathered tile
+    statistics through ``logZ``), so one record pass + one replay pass is NOT enough: after
+    ``d + 1`` passes every gathered value of dependency depth ``d`` is exact. ``_simulate``
+    iterates until two consecutive passes record bitwise-identical values.
+    """
+
+    def __init__(self, world: int, rank: int):
+        self.world, self.rank = world, rank
         self.backend = "record_replay"
-        self.mode = "record"
+        self.prev: dict[int, dict[int, torch.Tensor]] = {}
+        self.book: dict[int, dict[int, torch.Tensor]] = {}
         self.counter = 0
+
+    def start_pass(self, prev: dict[int, dict[int, torch.Tensor]]) -> None:
+        self.prev, self.book, self.counter = prev, {}, 0
 
     def all_gather(self, x):
         idx = self.counter
         self.counter += 1
-        if self.mode == "record":
-            self.book.setdefault(idx, {})[self.rank] = x.detach().clone()
-            return [x.detach().clone() for _ in range(self.world)]
-        return [self.book[idx][r] for r in range(self.world)]
+        self.book.setdefault(idx, {})[self.rank] = x.detach().clone()
+        peers = self.prev.get(idx, {})
+        return [x if r == self.rank else peers.get(r, x).clone() for r in range(self.world)]
 
     def all_gather_tree(self, p):
         return sk.gemm_backend().combine(self.all_gather(p)) if self.world > 1 else p
 
 
-def _simulate(world, fn):
-    """Run ``fn(comm)`` per rank in record mode, then replay; return per-rank replay results."""
-    book: dict = {}
-    comms = [RecordReplayComm(world, r, book) for r in range(world)]
-    for c in comms:
-        fn(c)
-    outs = []
-    for c in comms:
-        c.mode = "replay"
-        c.counter = 0
-        outs.append(fn(c))
-    return outs
+def _books_equal(a: dict, b: dict) -> bool:
+    if a.keys() != b.keys():
+        return False
+    for idx in a:
+        if a[idx].keys() != b[idx].keys():
+            return False
+        if not all(torch.equal(a[idx][r], b[idx][r]) for r in a[idx]):
+            return False
+    return True
+
+
+def _simulate(world, fn, max_passes: int = 6):
+    """Iterate ``fn(comm)`` over all ranks until the gathered values reach a fixed point."""
+    comms = [RecordReplayComm(world, r) for r in range(world)]
+    prev: dict = {}
+    for _ in range(max_passes):
+        for c in comms:
+            c.start_pass(prev)
+        outs = [fn(c) for c in comms]
+        book: dict = {}
+        for c in comms:
+            for idx, per_rank in c.book.items():
+                book.setdefault(idx, {}).update(per_rank)
+        if world == 1 or _books_equal(book, prev):
+            return outs
+        prev = book
+    raise AssertionError(f"TP simulation did not converge in {max_passes} passes")
 
 
 # --------------------------------------------------------------------------------------
