@@ -32,6 +32,7 @@ XRT_FILES = {
 XRT_LORA_FILES = {
     ("strict", 1): "xrt_vllm_strict_lora_tp1.json",
     ("strict", 2): "xrt_vllm_strict_lora_tp2.json",
+    ("native", 1): "xrt_vllm_native_lora_tp1.json",
 }
 
 
@@ -170,7 +171,12 @@ def _generate_records(run: dict) -> list[dict[str, Any]]:
     return out
 
 
-def collect(runs_dir: Path, data_dir: Path, extra: dict[str, Any] | None) -> dict[str, Any]:
+def collect(
+    runs_dir: Path,
+    data_dir: Path,
+    extra: dict[str, Any] | None,
+    references: list[Path] | None = None,
+) -> dict[str, Any]:
     runs = []
     for path in sorted(runs_dir.glob("*.json")):
         doc = _load(path)
@@ -240,6 +246,7 @@ def collect(runs_dir: Path, data_dir: Path, extra: dict[str, Any] | None) -> dic
         "strict_tp1_vs_native_tp1": (docs, ("strict", 1), ("native", 1)),
         "strict_tp2_vs_native_tp2": (docs, ("strict", 2), ("native", 2)),
         "strict_lora_tp2_vs_strict_lora_tp1": (lora_docs, ("strict", 2), ("strict", 1)),
+        "strict_lora_tp1_vs_native_lora_tp1": (lora_docs, ("strict", 1), ("native", 1)),
     }
     for name, (pool, ka, kb) in pairs.items():
         if ka in pool and kb in pool:
@@ -250,6 +257,18 @@ def collect(runs_dir: Path, data_dir: Path, extra: dict[str, Any] | None) -> dic
         comparisons["strict_lora_tp1_vs_strict_tp1"] = compare_xrt(
             lora_docs[("strict", 1)], docs[("strict", 1)]
         )
+    for ref_path in references or []:
+        ref = _load(ref_path)
+        label = ref.get("backend", ref_path.name).split("mode=")[-1]
+        xrt[f"reference_chain_{label}"] = {
+            k: v for k, v in _xrt_summary(ref).items() if k != "logprobs_per_sequence"
+        }
+        xrt[f"reference_chain_{label}"]["file"] = str(ref_path)
+        for key in (("strict", 1), ("strict", 2), ("native", 1), ("native", 2)):
+            if key in docs:
+                comparisons[f"{key[0]}_tp{key[1]}_vs_reference_chain_{label}"] = compare_xrt(
+                    docs[key], ref
+                )
     xrt["comparisons"] = comparisons
     result["xrt"] = xrt
     bench = []
@@ -297,10 +316,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runs", required=True)
     parser.add_argument("--data", default="reports/muse_glimmer_poc/data")
     parser.add_argument("--extra", default=None, help="JSON merged at top level")
+    parser.add_argument(
+        "--reference", action="append", default=[], help="reference-chain xrt file(s)"
+    )
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
     extra = _load(Path(args.extra)) if args.extra else None
-    result = collect(Path(args.runs), Path(args.data), extra)
+    result = collect(
+        Path(args.runs), Path(args.data), extra, [Path(p) for p in args.reference]
+    )
     Path(args.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
     print(json.dumps(result["xrt"].get("comparisons", {}), default=str)[:2000])
     return 0
