@@ -446,6 +446,16 @@ def compare_strict_to_hf_outputs(
         "logp_completion": _tensor_diff(strict_logp[comp], hf_logp[comp]),
         "strict_logp_completion_mean": float(strict_logp[comp].mean()),
         "hf_logp_completion_mean": float(hf_logp[comp].mean()),
+        # per-position series for plots: position i scores token i+1
+        "series": {
+            "strict_logp": [float(x) for x in strict_logp.tolist()],
+            "hf_logp": [float(x) for x in hf_logp.tolist()],
+            "abs_dlogp": [float(x) for x in (strict_logp - hf_logp).abs().tolist()],
+            "max_abs_dlogit": [float(x) for x in (logits - hf_logits).abs().amax(-1).tolist()],
+            "argmax_equal": [
+                int(x) for x in (logits.argmax(-1) == hf_logits.argmax(-1)).tolist()
+            ],
+        },
     }
     if hf_hidden_states is not None:
         hs = [h.reshape(-1, h.shape[-1]).float() for h in hf_hidden_states]

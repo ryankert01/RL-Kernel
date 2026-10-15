@@ -68,6 +68,15 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--json-out", default=None)
     p.add_argument("--save-dir", default=None,
                    help="also torch.save strict_ref.pt / hf_bf16.pt (logits, hidden states)")
+    p.add_argument("--score-file", default=None,
+                   help="scoring mode: a muse_glimmer_xrt_v1 token file (e.g. "
+                        "reports/muse_glimmer_poc/data/xrt_tokens.json); writes the train-"
+                        "forward logp of every completion token (muse_glimmer_xrt_logprobs_v1) "
+                        "to --score-out and skips the random-token chain")
+    p.add_argument("--score-out", default=None)
+    p.add_argument("--score-check-modes", default="prefill,decode",
+                   help="scoring mode: forms compared bitwise with the train forward (comma "
+                        "list of prefill, decode, per_token, chunked:<n1>/<n2>/...; '' = none)")
     return p.parse_args(argv)
 
 
@@ -78,8 +87,30 @@ def make_tokens(prompt_len: int, completion_len: int, seed: int, vocab: int) -> 
     return ids
 
 
+def _score_main(args: argparse.Namespace, model: MuseGlimmerStrictModel, weights) -> int:
+    """Scoring mode (``--score-file``): see :mod:`...reference.xrt_scoring`."""
+    from rl_engine.models.muse_glimmer.reference.xrt_scoring import score_token_file
+
+    if not args.score_out:
+        raise SystemExit("--score-file needs --score-out")
+    modes = [m for m in args.score_check_modes.split(",") if m]
+    t0 = time.perf_counter()
+    scored = score_token_file(model, args.score_file, check_modes=modes, log=_log)
+    scored["seconds"] = time.perf_counter() - t0
+    scored["checkpoint_revision_loaded"] = weights.checkpoint_report.revision
+    scored["peak_allocated_gib"] = torch.cuda.max_memory_allocated(model.device) / 2**30
+    pathlib.Path(args.score_out).write_text(json.dumps(scored, indent=1))
+    n = sum(s["n_tokens"] for s in scored["sequences"])
+    ok = scored["checks"]["all_byte_equal_to_train"]
+    _log(f"wrote {args.score_out}: {n} tokens; {modes} byte-equal to train: {ok}")
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
+    from rl_engine.models.muse_glimmer.reference.xrt_scoring import source_commit
+
+    commit = source_commit()
     device = torch.device(args.device)
     disable_tf32(device.type)
     _log(f"loading strict weights from {args.checkpoint} (layout for backend {args.backend})")
@@ -95,6 +126,8 @@ def main(argv=None) -> int:
         weights, args.backend, allow_partial=args.allow_partial, gemm_impl=args.gemm_impl
     )
     _log(f"ops: golden={model.ops.golden_nodes()} sibling={model.ops.sibling_nodes()}")
+    if args.score_file:
+        return _score_main(args, model, weights)
     ids = make_tokens(args.prompt_len, args.completion_len, args.seed, weights.cfg.vocab_size)
     prompt, completion = ids[: args.prompt_len], ids[args.prompt_len :]
     specs = default_path_specs(args.prompt_len, args.completion_len,
@@ -112,6 +145,7 @@ def main(argv=None) -> int:
         "model": model.describe(),
         "chain": report.to_dict(),
         "torch": torch.__version__,
+        "commit": commit,
         "device": torch.cuda.get_device_name(device) if device.type == "cuda" else str(device),
     }
     if args.hf_compare:

@@ -1,5 +1,214 @@
 # REPORT — RFC #501 row `full_model_chain` (Muse-Glimmer-30B strict POC)
 
+STATUS (follow-up, wave A, 2026-10-15): complete. The shared token file is scored by the strict
+reference on both backends (`xrt_reference_{golden,triton}.json`, 933 tokens each) and every token is
+byte-equal across train / one-shot prefill / prompt prefill + decode / chunked prefills, including the
+2047/2048/2049 window boundaries. The real-weights chain still holds on the current branch (512+32 triton and
+2100+32 triton and golden, every path byte-equal). Batched decode was added: batch 1 == batch 16 == a permuted
+batch of 4, bitwise, on real weights. The single-GPU op-class profile of the strict model and of HF bf16 (sdpa)
+is in `reports/muse_glimmer_poc/data/reference_profile.json`. Tiny gates: 19/19 (+ fingerprint 32 passed,
+1 skipped).
+
+## Follow-up (wave A): scoring, re-run, profiling
+
+### What was done
+1. **Scoring mode** `run_chain.py --score-file <muse_glimmer_xrt_v1> --score-out <path>` (code in
+   `xrt_scoring.py`). It computes `log p(token[i] | token[:i])` for `i ∈ [completion_start, len)` with the TRAIN
+   forward (varlen attention, every position in one pass). It writes `muse_glimmer_xrt_logprobs_v1`:
+   `{schema, runtime: "reference", mode: "train", tp: 1, backend, sequences: [{id, logprobs_hex}]}` with
+   `logprobs_hex[k] = '%08x' % uint32(fp32 bits)`. Extra keys (`logprobs` floats, `checks`, `commit`, `source.sha256`)
+   are for plots and provenance. In the same run, `--score-check-modes` replays the tokens through other forms
+   and compares every token bitwise with the train forward: `prefill` (one-shot paged), `decode` (prompt
+   prefill, then one paged decode step per completion token), `per_token`, and `chunked:<prompt_boundary | halves
+   | block64 | ragged | window_boundary_<b> | n1/n2/…>`. A chunking that does not fit a sequence is recorded
+   as `skipped`.
+   `python -m rl_engine.models.muse_glimmer.reference.xrt_scoring` writes the same format for HF bf16 (sdpa) as
+   a native anchor (`xrt_reference_hf_bf16.json`). It is not a strict path.
+2. **Re-ran the real-weights chain** on the current branch: triton 512+32 with the HF anchor (before and after
+   this row's code changes), triton 2100+32 with the HF anchor (new), and golden 2100+32 (the window case from
+   the original report). The HF anchor now stores per-position series: strict and HF logp, |Δlogp|,
+   max|Δlogit| and argmax agreement.
+3. **Batched decode.** `strict_model._run` now takes a `KVPlan` (several sequences of one paged cache packed
+   into one call). It is still ONE composition: a `Session` is the one-sequence plan, and single-sequence bits
+   are unchanged (the pre- and post-change 512+32 train logp series are identical). New
+   `MuseGlimmerStrictModel.decode_batch(cache, seqs, tokens, targets, commit=…)` and `new_batch_cache`.
+4. **Profiler** (`profiling.py`, CLI `run_profile.py`). Strict triton model and HF bf16 (sdpa) at prefill
+   T ∈ {512, 2048, 4096} (and a strict paged prefill at the same T) and at decode batch 1 and 16 with context
+   2048. Two views per configuration:
+   - *wall*: CUDA events around every op call in nested regions. Each region gets its exclusive time, and the
+     median is taken over 3 prefill / 5 decode repeats. A region also absorbs the CPU launch gaps inside it.
+   - *gpu*: one extra call under `torch.profiler`. Each kernel's device time is charged to the innermost region
+     that was open when its launch API ran (CUPTI correlation id). 100 % of kernels were matched in every
+     configuration.
+
+   `clean_total_ms` is the same call without regions. Peak memory is `torch.cuda.max_memory_allocated` over the
+   clean repeats. Op classes are embedding, norm, qkvg_gemm, qknorm_rope, attention (global/local), o_gemm,
+   ffn_gemm, ffn_act, lm_head_gemm, softcap_logprob, kv_write/kv_evict (strict paged), plus HF-only glue
+   (layer_glue = residual adds, attn_glue = transposes, scale, cache update, sigmoid·mul). They are grouped for
+   stacked bars as in `profile.stacked_bars`.
+5. `collect_results.py` assembles everything into `reference_profile.json` (one object: row, status, commit,
+   env, commands, notes, experiments) and copies the xrt files next to it.
+
+### Results (all observed in the runs listed under "How to reproduce")
+**Cross-runtime token file (933 scored tokens: 8 GSM8K chat prompts + gold answers; one 2439-token sequence
+with completion from 2261, so it crosses W=2048).**
+
+| backend | tokens | train == prefill | train == decode | chunked checks | wall time | peak |
+|---|---|---|---|---|---|---|
+| triton (final HEAD f7d3723) | 933 | 933/933 | 933/933 | prompt_boundary, block64, ragged 933/933; window_boundary_2047/2048/2049 178/178 (long seq) | 152 s | 54.5 GiB |
+| triton (first run, 69b4409) | 933 | 933/933 | 933/933 | prompt_boundary 933/933; window 2047/2048/2049 178/178 | 128 s | 54.5 GiB |
+| golden (69b4409) | 933 | 933/933 | 933/933 | prompt_boundary 933/933; window_boundary_2048 178/178 | 1176 s | 57.0 GiB |
+
+- Repeat: the two triton runs (separate processes, different commits) are byte-equal on 933/933 tokens.
+- golden vs triton: 32/933 byte-equal (different op sets, so not expected), max |Δlogp| 0.216, mean 0.0078.
+- vs HF bf16 (sdpa, native anchor): 0/933 byte-equal. Triton max 0.392, mean 0.0137; golden max 0.246, mean
+  0.0147. Per sequence, triton max |Δlogp| is 0.10–0.18 except gsm8k_test_7 (0.39); the long-window sequence
+  is 0.12 / mean 0.0099. HF's argmax equals the gold token on 77 % of the scored positions.
+- Decode is the slow form: triton 0.11–0.17 s/token (e.g. 29.3 s for the 178 long-window steps at context
+  2261–2438), golden 0.6–1.0 s/token for short contexts and 2.3 s/token at 2.3k context (415.6 s for 178 steps).
+
+**Real-weights chain re-run (current branch).**
+
+| run | paths | byte-equal | train / prefill / decode s | peak GiB | HF anchor (completion) max / mean |Δlogp| | argmax all / completion |
+|---|---|---|---|---|---|---|
+| triton 512+32, before changes (307fcf2) | 7 | 32/32 each | 1.01 / 0.39 / 3.92 | 52.0–52.1 | 0.0656 / 0.0254 | 98.90 % / 100 % |
+| triton 512+32, after (69b4409) | 7 | 32/32 each | 1.10 / 0.39 / 3.79 | 52.0–52.1 | 0.0656 / 0.0254 | 98.90 % / 100 % |
+| triton 2100+32 (69b4409), new | 10 incl. W−1/W/W+1 | 32/32 each | 2.28 / 1.28 / 5.35 | 52.1–52.6 | 0.0852 / 0.0187 | 98.08 % / 100 % |
+| golden 2100+32 (86d1087) | 10 incl. W−1/W/W+1 | 32/32 each | 40.98 / 32.08 / 103.88 | 52.3–54.3 | – | – |
+
+The 512+32 HF numbers equal the original report's (0.836 / 0.257 max |Δlogit| all / completion), and the
+pre- and post-change train logp series are identical. At 2132 tokens the HF anchor gives max |Δlogit| 0.637
+(all) / 0.395 (completion) and all-position logp max 0.134 / mean 0.0218. Per-layer residual mean |Δ| vs HF-bf16
+is 0.020 at layer 9, 0.023 at 19, 0.023 at 29, 0.022 at 39, 0.045 at 49 (rms 1.95 → 5.81). The strict
+reference stays as close to HF past the window as before it. Pytest real-weights gate
+(`test_full_model_chain.py`, triton, 256+32): 1 passed.
+
+**Batched decode, contract G2 at the model level (real weights).** 16 sequences of 2048 random tokens in one
+paged cache. One decode step at batch 16 equals the same step replayed at batch 1 for every sequence (16/16
+bitwise), and a permuted batch of 4 (seqs [3, 0, 15, 8]) also matches 4/4. The tiny test checks the same over
+3 committed steps with page eviction, against the single-sequence `logprobs(mode="decode")` path.
+
+**Profile (A100-SXM4-80GB, triton backend, `clean_total_ms`; strict / HF bf16 sdpa).**
+
+| config | strict ms | HF ms | strict/HF | strict GPU-busy ms | HF GPU-busy ms | strict peak GiB | HF peak GiB |
+|---|---|---|---|---|---|---|---|
+| forward T=512 | 269.8 | 149.6 | 1.80 | 251.8 | 139.8 | 52.10 | 56.52 |
+| forward T=2048 | 972.8 | 603.5 | 1.61 | 963.3 | 598.3 | 52.44 | 59.41 |
+| forward T=4096 | 1938.3 | 1248.1 | 1.55 | 1930.5 | 1249.7 | 52.91 | 63.26 |
+| paged prefill T=512/2048/4096 (strict) | 308.0 / 1011.5 / 1980.4 | – | – | 255.6 / 961.6 / 1941.1 | – | 52.28 / 53.16 / 54.33 | – |
+| decode B=1, ctx 2048 (per step) | 132.0 | 130.3 | 1.01 | 50.5 | 50.8 | 53.63* | 55.71 |
+| decode B=16, ctx 2048 (per step) | 281.9 | 136.1 | 2.07 | 71.8 | 106.5 | 53.63* | 57.69 |
+
+\*The decode peak includes the 16-sequence paged cache (≈1.7 GiB). Strict weights are 51.89 GiB. HF holds
+55.55 GiB because it also loads the vision tower. HF's prefill peak grows with T because it materializes
+full-vocab bf16 logits and their fp32 log_softmax. The strict head keeps one fp32 25344-column tile alive at a
+time.
+
+GPU-time shares (gpu view):
+- **forward T=4096, strict:** ffn_gemm 72.6 %, q/k/v/gate/o GEMMs 16.7 %, lm_head + softcap + logp 5.1 %,
+  attention 4.0 % (local 54.2 ms, global 23.2 ms), ffn_act 0.8 %, norms 0.6 %, qknorm+rope 0.2 %.
+  `det_gemm_tree_kernel` alone is 1817.5 ms of 1930.5 ms.
+- **forward T=4096, HF:** ffn_gemm 51.4 %, norms + residual 13.3 %, attention 13.5 % (local 155.2 ms, global
+  13.4 ms), q/k/v/gate/o 11.6 %, lm head 5.0 %, qknorm+rope 3.3 %.
+
+Derived GEMM throughput: 2·T·(52 × 483.9 M + 202 752 × 6656) = 217.2 TFLOP at T=4096.
+- strict `det_gemm_tree_kernel` in 1.8175 s ≈ **119.5 TFLOP/s** (meets the contract's ≥ 80 TFLOP/s target).
+- HF cuBLAS GEMMs in 0.829 s ≈ 262 TFLOP/s.
+
+So the strict path is GEMM-bound and its GEMM is ≈ 2.2× slower than cuBLAS. Strict attention, norms and
+qknorm/rope are each faster than HF's eager/sdpa equivalents. Per layer at T=4096:
+- strict local 1.39 ms, global 1.79 ms;
+- HF sdpa local 3.84 ms, global 0.89 ms (HF's sliding layers pass an explicit mask, and the explicit mask
+  rules out a flash kernel).
+
+Decode at batch 1 is launch-bound for both: GPU busy ≈ 38–39 % of the step, 2690 strict kernel launches and
+4552 HF. The strict GEMM kernel time at decode (37.5 ms for ≈ 53 GB of weights) is ≈ 1.4 TB/s effective. At
+batch 16 the strict step is dominated by the reference's paged-cache WRITE: `PagedKVCache.append` is called
+in Python once per sequence per layer. It costs 158.4 ms of wall (kv_cache group) and 20.8 ms of GPU
+(index kernels), against 23.8 + 8.0 ms for the attention kernels themselves. That is reference-harness
+overhead, not kernel cost; a vLLM-style single scatter per layer removes it.
+
+### Contract deviations / caveats
+- Profile wall-view fractions include CPU launch gaps; read the gpu view for kernel cost. Instrumentation
+  overhead (instrumented vs clean total) is ≤ 1 % at T ≥ 2048, +9 % at T=512 and +29 %/+12 % at decode B=1/16
+  for strict; HF +5 % at T=512 and +51–55 % at decode.
+- HF anchors use different attention backends: the chain runs use eager (as in the original report), while
+  the xrt anchor and the HF profile use sdpa. Both are tolerance references only.
+- Commit provenance: `xrt_reference_golden.json` says 86d1087 in its `commit` field. The run actually started
+  from 69b4409: the sha was taken when the file was written, and that bug is fixed in f7d3723. The strict
+  code (strict_model, chain_harness core, golden_ops, paged_kv, weights, backend, every ops/triton file) is
+  identical from 69b4409 to HEAD. `reference_profile.json` → `notes.measured_commits` lists the commit of
+  every run.
+
+### RFC feedback (new)
+- `full_model_chain`: make **batched decode** part of the gate (batch 1 == batch N == permuted sub-batch, per
+  token, on one op set). It is cheap and caught nothing here, but it is the property rollout engines rely on.
+  Also include **window-crossing real text** (here: 2439 tokens, completion from 2261) in the cross-runtime
+  token file. Random tokens alone keep attention mass diffuse.
+- Cross-runtime file format: `muse_glimmer_xrt_logprobs_v1` (fp32 bit patterns as hex) worked as-is. Add an
+  optional `logprobs` float list and a `commit` captured at run start to the schema text.
+- Performance contract: on A100 the strict forward is GEMM-bound (94–95 % of GPU time in `det_gemm_tree_kernel`
+  at T = 512–4096). The 8-chunk tree GEMM reaches ≈ 120 TFLOP/s against ≈ 260 for cuBLAS, which accounts for
+  essentially all of the 1.55× prefill gap to HF bf16. The RFC's performance item should target the GEMM, not
+  attention or norms.
+- Strict kernels should take host-side metadata (`max_seqlen_q`, sequence lengths) instead of reading it back
+  from the device. `strict_gated_attention_fwd_*` calls `.item()` when `max_seqlen_q` is not passed (one sync
+  per layer), and decode at batch 1 is ≈ 60 % CPU/launch time. CUDA-graph capture of the strict decode step is
+  the obvious next step and needs sync-free wrappers.
+
+### How to reproduce
+```
+WT=$(git rev-parse --show-toplevel); CK=~/models/Muse-Glimmer-30B; R=<runs dir>
+~/bin/gpu-lease -n 1 --pool 6-7 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_strict_model_tiny.py tests/models/muse_glimmer/test_museglimmer_fingerprint.py -q
+# -> 51 passed, 1 skipped (41.7 s)
+~/bin/gpu-lease -n 1 --pool 6-7 -- env PYTHONPATH=$WT MUSEGLIMMER_CHECKPOINT=$CK MUSEGLIMMER_BACKEND=triton \
+    ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_full_model_chain.py -q -s   # -> 1 passed
+# scoring (golden: --backend golden, ~20 min; triton ~2.5 min)
+~/bin/gpu-lease -n 1 --pool 6-7 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python \
+    rl_engine/models/muse_glimmer/reference/run_chain.py --checkpoint $CK --backend triton \
+    --score-file reports/muse_glimmer_poc/data/xrt_tokens.json --score-out $R/xrt_reference_triton.json \
+    --score-check-modes prefill,decode,chunked:prompt_boundary,chunked:block64,chunked:ragged,chunked:window_boundary_2047,chunked:window_boundary_2048,chunked:window_boundary_2049
+~/bin/gpu-lease -n 1 --pool 6-7 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m \
+    rl_engine.models.muse_glimmer.reference.xrt_scoring --checkpoint $CK \
+    --score-file reports/muse_glimmer_poc/data/xrt_tokens.json --score-out $R/xrt_reference_hf_bf16.json
+# chain re-runs
+... run_chain.py --checkpoint $CK --backend triton --prompt-len 512 --completion-len 32 --hf-compare --json-out $R/chain_triton_512_hf.json
+... run_chain.py --checkpoint $CK --backend triton --prompt-len 2100 --completion-len 32 --hf-compare --json-out $R/chain_triton_2100_hf.json
+... run_chain.py --checkpoint $CK --backend golden --prompt-len 2100 --completion-len 32 --json-out $R/chain_golden_2100.json
+# profiles (one GPU each; ~2 min strict, ~1 min HF)
+... run_profile.py --target strict --checkpoint $CK --json-out $R/profile_strict.json
+... run_profile.py --target hf --checkpoint $CK --json-out $R/profile_hf.json
+# assemble
+env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/reference/collect_results.py \
+    --runs $R --commands commands.json --notes notes.json
+```
+Exact command lines are in `reference_profile.json` → `commands`.
+
+### Plot map for the blog (keys in `reference_profile.json` → `experiments`)
+- Stacked bars, strict vs HF per config: `profile.stacked_bars.{strict_triton,hf_bf16_sdpa}.{gpu_ms,wall_ms,
+  gpu_frac,wall_frac}[group][config]`, with configs in `profile.stacked_bars.configs`; totals in
+  `clean_total_ms`, `gpu_busy_ms`, `peak_allocated_gib`.
+- Per-layer bars: `profile.<target>.runs[i].per_layer_ms[class][layer]` (wall) and
+  `.kernel_profile.per_layer_gpu_ms` (gpu); per layer type: `per_layer_type_ms` and `per_layer_type_gpu_ms`.
+- Per-token drift: `xrt_scoring.{golden,triton,hf_bf16}.logprobs[seq_id]` and
+  `xrt_scoring.{golden_vs_triton,triton_vs_hf_bf16,golden_vs_hf_bf16}.per_sequence[*].abs_diff`.
+- Equality matrix (form × sequence): `xrt_scoring.{triton,golden}.per_sequence[*].modes`.
+- HF anchor per position: `chain_triton_{512,2100}_hf.hf_anchor.series.{abs_dlogp,max_abs_dlogit,argmax_equal}`;
+  per-layer residual drift: `hf_anchor.per_layer[*].{mean_abs,max_abs,ref_rms}`.
+- Path timing bars: `chain_*.paths[*].{seconds,peak_alloc_gib,n_chunks}`.
+
+### Files (this follow-up)
+`reference/{strict_model.py (KVPlan, decode_batch, timer hook), xrt_scoring.py, profiling.py, run_profile.py,
+collect_results.py, run_chain.py (--score-*), chain_harness.py (HF series)}`,
+`tests/models/muse_glimmer/test_strict_model_tiny.py` (+4 tests),
+`reports/muse_glimmer_poc/data/{reference_profile.json, xrt_reference_golden.json, xrt_reference_triton.json,
+xrt_reference_hf_bf16.json}`.
+
+---
+
+## Original hand-back (HEAD 09eef9d)
+
 STATUS: complete. Chain gate byte-equal on real weights for both backends; HF bf16 and HF fp32 anchors
 measured; tiny gates 15/15; real-weights pytest gate passed (triton backend). (Committed by the integrator
 from the implementing agent's hand-back; the agent's harness blocked it from writing REPORT files.)
