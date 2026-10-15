@@ -497,7 +497,47 @@ def hidden_padded(
     return rows
 
 
-DRIVERS = ("alone", "prefill_minus_last", "chunked", "decode", "padded_right", "padded_left")
+@torch.no_grad()
+def hidden_batched_decode(
+    model: nn.Module, seqs: Sequence[SeqSpec], pad_id: int | None = None
+) -> list[torch.Tensor]:
+    """Rollout-engine style for HF: the 9 prompts prefilled together LEFT-padded (2-D mask),
+    then teacher-forced decode steps that feed one token of every sequence at once; a
+    sequence whose completion is done is fed a masked pad.  Rows ``cs-1 .. L-2`` per sequence."""
+    from transformers import DynamicCache
+
+    dev = model.embed_tokens.weight.device
+    if pad_id is None:
+        pad_id = DEFAULT_PAD_ID if DEFAULT_PAD_ID < model.config.vocab_size else 0
+    prompts = [SeqSpec(s.id, s.token_ids[: s.completion_start], s.completion_start - 1)
+               for s in seqs]
+    ids, mask, pos, offsets = padded_batch(prompts, "left", pad_id)
+    cache = DynamicCache(config=model.config)
+    out = model(input_ids=ids.to(dev), attention_mask=mask.to(dev), position_ids=pos.to(dev),
+                past_key_values=cache, use_cache=True).last_hidden_state
+    rows: list[list[torch.Tensor]] = [[out[b, -1:]] for b in range(len(seqs))]
+    mask = mask.to(dev)
+    steps = max(s.n_completion for s in seqs) - 1
+    for j in range(steps):
+        tok, msk, p_ids = [], [], []
+        for s in seqs:
+            p = s.completion_start + j
+            live = p < s.length - 1
+            tok.append(s.token_ids[p] if live else pad_id)
+            msk.append(1 if live else 0)
+            p_ids.append(p if live else 0)
+        mask = torch.cat([mask, torch.tensor(msk, device=dev)[:, None]], dim=1)
+        o = model(input_ids=torch.tensor(tok, device=dev)[:, None], attention_mask=mask,
+                  position_ids=torch.tensor(p_ids, device=dev)[:, None], past_key_values=cache,
+                  use_cache=True).last_hidden_state
+        for b, live in enumerate(msk):
+            if live:
+                rows[b].append(o[b, -1:])
+    return [torch.cat(r, dim=0) for r in rows]
+
+
+DRIVERS = ("alone", "prefill_minus_last", "chunked", "decode", "padded_right", "padded_left",
+           "batched_decode_left")
 
 
 # --------------------------------------------------------------------------------------------
@@ -653,9 +693,12 @@ def score_all(
     _sync(dev)
     t_all = time.perf_counter()
     scores: list[SeqScore] = []
-    if driver in ("padded_right", "padded_left"):
+    if driver in ("padded_right", "padded_left", "batched_decode_left"):
         t0 = time.perf_counter()
-        rows = hidden_padded(model, seqs, driver.split("_")[1])
+        if driver == "batched_decode_left":
+            rows = hidden_batched_decode(model, seqs)
+        else:
+            rows = hidden_padded(model, seqs, driver.split("_")[1])
         _sync(dev)
         fwd_ms = (time.perf_counter() - t0) * 1e3 / len(seqs)
         for s, h in zip(seqs, rows):
@@ -741,6 +784,12 @@ HF_SETTINGS: tuple[Setting, ...] = (
     Setting("bf16_reduced_reduction_off", "gemm_reduction", 10,
             "allow_bf16_reduced_precision_reduction=False (cuBLAS bf16 split-K in fp32)",
             contexts=("bf16_rr_off",)),
+    Setting("rollout_like_batched_decode", "combination_rollout_like", 11,
+            "factors 1+2 together: 9 prompts left-padded prefill + batched teacher-forced decode",
+            driver="batched_decode_left"),
+    Setting("rollout_like_batched_decode_sdpa", "combination_rollout_like", 11,
+            "factors 1+2+4 together: the same with SDPA", driver="batched_decode_left",
+            contexts=("sdpa",)),
 )
 SKIPPED_SETTINGS = (
     {"name": "flash_attention_2", "factor": "attention_impl", "factor_id": 4,
@@ -876,6 +925,7 @@ __all__ = [
     "fp32_hex",
     "head_logits",
     "hidden_alone",
+    "hidden_batched_decode",
     "hidden_chunked",
     "hidden_decode",
     "hidden_padded",

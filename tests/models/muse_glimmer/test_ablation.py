@@ -95,7 +95,7 @@ def test_shared_token_file():
 
 def test_settings_registry_covers_required_factors():
     ids = {s.factor_id for s in A.HF_SETTINGS}
-    assert {1, 2, 3, 4, 5, 6, 7, 9} <= ids  # 8 (second GPU) is a separate process
+    assert {1, 2, 3, 4, 5, 6, 7, 9, 11} <= ids  # 8 (second GPU) is a separate process
     names = [s.name for s in A.HF_SETTINGS]
     assert len(names) == len(set(names))
     for want in ("padded_batch9_right", "padded_batch9_left", "kv_cache_decode",
@@ -137,6 +137,9 @@ def test_hf_drivers_agree_in_fp32(tiny_hf):
         rows = A.hidden_padded(model, seqs, side)
         for h, r in zip(rows, ref):
             torch.testing.assert_close(h, r, atol=1e-4, rtol=1e-4)
+    for h, r in zip(A.hidden_batched_decode(model, seqs), ref):  # rollout-like combination
+        assert h.shape == r.shape
+        torch.testing.assert_close(h, r, atol=1e-4, rtol=1e-4)
 
 
 def test_score_all_and_head_modes(tiny_hf):

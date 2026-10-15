@@ -367,11 +367,24 @@ def cmd_merge(args: argparse.Namespace) -> int:
         by_kind.setdefault(p["part"], []).append(p)
     if "hf" not in by_kind:
         raise SystemExit("merge needs the main 'hf' part")
-    hf = by_kind["hf"][0]
+    hf_parts = sorted(by_kind["hf"], key=lambda p: -len(p["settings"]))
+    hf = hf_parts[0]
     seqs, _ = A.load_xrt_tokens(args.tokens)
     records = list(hf["records"])
     settings = list(hf["settings"])
     hf_base = _scores_from_baseline(hf["baseline"])
+    # Later HF runs (extra settings) count only if their own baseline is bitwise the main one.
+    base_hex = [p["logp_hex"] for p in hf["baseline"]["per_sequence"]]
+    extra_hf = []
+    for other in hf_parts[1:]:
+        same = [p["logp_hex"] for p in other["baseline"]["per_sequence"]] == base_hex
+        extra_hf.append({"path": other["_path"], "gpu_lease": other["env"].get("gpu_lease"),
+                         "baseline_bitwise_equal_to_main": same})
+        if not same:
+            continue
+        have = {s["setting"] for s in settings}
+        records.extend(r for r in other["records"] if r["setting"] not in have)
+        settings.extend(s for s in other["settings"] if s["setting"] not in have)
     # Factor 8: the same baseline on another GPU (separate process, separate lease).
     for other in by_kind.get("hf_baseline_only", []):
         gpu_a, gpu_b = hf["env"].get("gpu_lease"), other["env"].get("gpu_lease")
@@ -458,6 +471,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         "rope_inv_freq_hex": hf.get("rope_inv_freq_hex"),
         "strict_ops": strict_parts[0].get("ops") if strict_parts else None,
         "skipped": hf.get("skipped", []),
+        "extra_hf_parts": extra_hf,
         "tf32_probe": layer_parts[0].get("tf32_probe") if layer_parts else None,
         "layer_records": [r for p in layer_parts for r in p.get("layer_records", [])],
         "settings": settings,
