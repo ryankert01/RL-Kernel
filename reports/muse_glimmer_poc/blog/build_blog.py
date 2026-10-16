@@ -1058,6 +1058,20 @@ def train_step_ratios() -> list[tuple[str, int, float]]:
     return out
 
 
+
+def _layout_note(e: dict, ss: dict) -> str:
+    """One sentence comparing the per-step LoRA hashes of the labelled extra strict/strict run with the main one."""
+    ex = next((m for m in e.get("modes", []) if m.get("label") and m.get("mode") == ss.get("mode")), None)
+    if not ex:
+        return ""
+    a = [r.get("lora_sha256") for r in ss.get("steps", [])]
+    b = [r.get("lora_sha256") for r in ex.get("steps", [])]
+    if a and a == b:
+        c, d = ss.get("config", {}), ex.get("config", {})
+        return (f"换成 rollout TP{d.get('rollout_tp')} + 训练 TP{d.get('train_tp')} 再跑一次，{len(a)} 步每一步更新后的 LoRA 哈希都和 "
+                f"TP{c.get('rollout_tp')} + TP{c.get('train_tp')} 相同。")
+    return ""
+
 def sec_verdict() -> str:
     x, v, m, e, a = load("xrt_summary.json"), load("vllm_runtime.json"), load("megatron_runtime.json"), load("e2e_run.json"), load("ablation.json")
     tiles = []
@@ -1098,7 +1112,8 @@ def sec_verdict() -> str:
         if ss:
             dt = ss.get("drift_totals") or {}
             tiles.append(("ok" if dt.get("bitwise_mismatch_count") == 0 else "bad", f"GRPO：{dt.get('bitwise_mismatch_count')}/{dt.get('token_count')} 漂移",
-                          f"严格/严格的 30B LoRA GRPO，{ss.get('steps_completed')} 步里 trainer 重算的 logprob 与 rollout 记下的逐 bit 比较。"))
+                          f"严格/严格的 30B LoRA GRPO，{ss.get('steps_completed')} 步里 trainer 重算的 logprob 与 rollout 记下的逐 bit 比较。"
+                          + _layout_note(e, ss)))
     else:
         tiles.append(("pend", "GRPO：运行中", "四种模式的 30B LoRA GRPO 还没有结果。"))
     if a:
