@@ -33,7 +33,7 @@
    "strict_group": "base",
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
   },
   "megatron strict tp2": {
    "file": "xrt_megatron_strict_tp2.json",
@@ -44,7 +44,18 @@
    "strict_group": "base",
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
+  },
+  "megatron strict tp4": {
+   "file": "xrt_megatron_strict_tp4.json",
+   "runtime": "megatron_bridge",
+   "mode": "strict",
+   "tp": 4,
+   "backend": "triton_strict",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
   },
   "reference golden": {
    "file": "xrt_reference_golden.json",
@@ -77,106 +88,147 @@
    "strict_group": "base",
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
+  },
+  "reference triton repeat": {
+   "file": "xrt_reference_triton_repeat.json",
+   "runtime": "reference",
+   "mode": "train",
+   "tp": 1,
+   "backend": "triton",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
   },
   "vllm native lora tp1": {
    "file": "xrt_vllm_native_lora_tp1.json",
    "runtime": "vllm-0.31.0",
    "mode": "native",
    "tp": 1,
-   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
-   "sha256": "1fd0f57d1b55074777f1ad1bb6354c54c984893fb5b912143765adb828b72827"
+   "sha256": "e381694ceae0f5eb929dbc5169992455a969c3d63ea3593bfacaebac572efcc7"
   },
   "vllm native tp1": {
    "file": "xrt_vllm_native_tp1.json",
    "runtime": "vllm-0.31.0",
    "mode": "native",
    "tp": 1,
-   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "5ca8acdd645307f7f8dfa3342ee1bb2be587ee1d8f772cad1d43c9e962bd5823"
+   "sha256": "209dde3dfffc7037738c7344fd22649d2991c354c707f6b1f223f92d20b328db"
   },
   "vllm native tp2": {
    "file": "xrt_vllm_native_tp2.json",
    "runtime": "vllm-0.31.0",
    "mode": "native",
    "tp": 2,
-   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce)",
+   "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "9007ba93778a94daa19ef2c8171a5fc3eba0fbe1d6dcad85c536bb32217a25f2"
+   "sha256": "dcc3c1aa31e2d7a5b3d6c1d33cf1bc99031b43ca4101b3af883a990ff98a4921"
   },
   "vllm strict lora tp1": {
    "file": "xrt_vllm_strict_lora_tp1.json",
    "runtime": "vllm-0.31.0",
    "mode": "strict",
    "tp": 1,
-   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
-   "sha256": "c61000bb77f772221a27f5068fb090f1818e997dce823e052d3caa6703a26b54"
+   "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
   },
   "vllm strict lora tp2": {
    "file": "xrt_vllm_strict_lora_tp2.json",
    "runtime": "vllm-0.31.0",
    "mode": "strict",
    "tp": 2,
-   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
-   "sha256": "c61000bb77f772221a27f5068fb090f1818e997dce823e052d3caa6703a26b54"
+   "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
+  },
+  "vllm strict lora tp4": {
+   "file": "xrt_vllm_strict_lora_tp4.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 4,
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
+   "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "n_tokens": 933,
+   "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
   },
   "vllm strict tp1": {
    "file": "xrt_vllm_strict_tp1.json",
    "runtime": "vllm-0.31.0",
    "mode": "strict",
    "tp": 1,
-   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "base",
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
   },
   "vllm strict tp2": {
    "file": "xrt_vllm_strict_tp2.json",
    "runtime": "vllm-0.31.0",
    "mode": "strict",
    "tp": 2,
-   "backend": "rl_engine strict binding (Triton strict ops, KV-replicated attention at TP>1)",
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "base",
    "lora_sha256": null,
    "n_tokens": 933,
-   "sha256": "ff93233e38bc3218ca3afa2c6265b11ff93409dbe163fe4928895a5c8373dbfd"
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
+  },
+  "vllm strict tp4": {
+   "file": "xrt_vllm_strict_tp4.json",
+   "runtime": "vllm-0.31.0",
+   "mode": "strict",
+   "tp": 4,
+   "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
+   "strict_group": "base",
+   "lora_sha256": null,
+   "n_tokens": 933,
+   "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
   }
  },
  "strict_labels": [
   "megatron strict tp1",
   "megatron strict tp2",
+  "megatron strict tp4",
   "reference triton",
+  "reference triton repeat",
   "vllm strict tp1",
   "vllm strict tp2",
+  "vllm strict tp4",
   "vllm strict lora tp1",
-  "vllm strict lora tp2"
+  "vllm strict lora tp2",
+  "vllm strict lora tp4"
  ],
  "strict_groups": {
   "base": [
    "megatron strict tp1",
    "megatron strict tp2",
+   "megatron strict tp4",
    "reference triton",
+   "reference triton repeat",
    "vllm strict tp1",
-   "vllm strict tp2"
+   "vllm strict tp2",
+   "vllm strict tp4"
   ],
   "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5": [
    "vllm strict lora tp1",
-   "vllm strict lora tp2"
+   "vllm strict lora tp2",
+   "vllm strict lora tp4"
   ]
  },
  "strict_all_equal": true,
@@ -186,224 +238,360 @@
    "megatron native tp2": 927,
    "megatron strict tp1": 932,
    "megatron strict tp2": 932,
+   "megatron strict tp4": 932,
    "reference golden": 932,
    "reference hf bf16": 930,
    "reference triton": 932,
-   "vllm native lora tp1": 930,
-   "vllm native tp1": 922,
-   "vllm native tp2": 930,
+   "reference triton repeat": 932,
+   "vllm native lora tp1": 928,
+   "vllm native tp1": 923,
+   "vllm native tp2": 924,
    "vllm strict lora tp1": 932,
    "vllm strict lora tp2": 932,
+   "vllm strict lora tp4": 932,
    "vllm strict tp1": 932,
-   "vllm strict tp2": 932
+   "vllm strict tp2": 932,
+   "vllm strict tp4": 932
   },
   "megatron native tp2": {
    "megatron native tp1": 927,
    "megatron native tp2": 0,
    "megatron strict tp1": 933,
    "megatron strict tp2": 933,
+   "megatron strict tp4": 933,
    "reference golden": 933,
    "reference hf bf16": 926,
    "reference triton": 933,
+   "reference triton repeat": 933,
    "vllm native lora tp1": 933,
    "vllm native tp1": 926,
-   "vllm native tp2": 929,
+   "vllm native tp2": 921,
    "vllm strict lora tp1": 933,
    "vllm strict lora tp2": 933,
+   "vllm strict lora tp4": 933,
    "vllm strict tp1": 933,
-   "vllm strict tp2": 933
+   "vllm strict tp2": 933,
+   "vllm strict tp4": 933
   },
   "megatron strict tp1": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
    "megatron strict tp1": 0,
    "megatron strict tp2": 0,
-   "reference golden": 901,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
    "reference hf bf16": 933,
    "reference triton": 0,
+   "reference triton repeat": 0,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
-   "vllm strict lora tp1": 924,
-   "vllm strict lora tp2": 924,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
    "vllm strict tp1": 0,
-   "vllm strict tp2": 0
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
   },
   "megatron strict tp2": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
    "megatron strict tp1": 0,
    "megatron strict tp2": 0,
-   "reference golden": 901,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
    "reference hf bf16": 933,
    "reference triton": 0,
+   "reference triton repeat": 0,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
-   "vllm strict lora tp1": 924,
-   "vllm strict lora tp2": 924,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
    "vllm strict tp1": 0,
-   "vllm strict tp2": 0
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
+  },
+  "megatron strict tp4": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "reference triton repeat": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
   },
   "reference golden": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
-   "megatron strict tp1": 901,
-   "megatron strict tp2": 901,
+   "megatron strict tp1": 894,
+   "megatron strict tp2": 894,
+   "megatron strict tp4": 894,
    "reference golden": 0,
    "reference hf bf16": 933,
-   "reference triton": 901,
+   "reference triton": 894,
+   "reference triton repeat": 894,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
    "vllm strict lora tp1": 916,
    "vllm strict lora tp2": 916,
-   "vllm strict tp1": 901,
-   "vllm strict tp2": 901
+   "vllm strict lora tp4": 916,
+   "vllm strict tp1": 894,
+   "vllm strict tp2": 894,
+   "vllm strict tp4": 894
   },
   "reference hf bf16": {
    "megatron native tp1": 930,
    "megatron native tp2": 926,
    "megatron strict tp1": 933,
    "megatron strict tp2": 933,
+   "megatron strict tp4": 933,
    "reference golden": 933,
    "reference hf bf16": 0,
    "reference triton": 933,
-   "vllm native lora tp1": 932,
+   "reference triton repeat": 933,
+   "vllm native lora tp1": 928,
    "vllm native tp1": 925,
-   "vllm native tp2": 922,
+   "vllm native tp2": 926,
    "vllm strict lora tp1": 933,
    "vllm strict lora tp2": 933,
+   "vllm strict lora tp4": 933,
    "vllm strict tp1": 933,
-   "vllm strict tp2": 933
+   "vllm strict tp2": 933,
+   "vllm strict tp4": 933
   },
   "reference triton": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
    "megatron strict tp1": 0,
    "megatron strict tp2": 0,
-   "reference golden": 901,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
    "reference hf bf16": 933,
    "reference triton": 0,
+   "reference triton repeat": 0,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
-   "vllm strict lora tp1": 924,
-   "vllm strict lora tp2": 924,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
    "vllm strict tp1": 0,
-   "vllm strict tp2": 0
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
+  },
+  "reference triton repeat": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "reference triton repeat": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
   },
   "vllm native lora tp1": {
-   "megatron native tp1": 930,
+   "megatron native tp1": 928,
    "megatron native tp2": 933,
    "megatron strict tp1": 933,
    "megatron strict tp2": 933,
+   "megatron strict tp4": 933,
    "reference golden": 933,
-   "reference hf bf16": 932,
+   "reference hf bf16": 928,
    "reference triton": 933,
+   "reference triton repeat": 933,
    "vllm native lora tp1": 0,
-   "vllm native tp1": 931,
-   "vllm native tp2": 930,
+   "vllm native tp1": 932,
+   "vllm native tp2": 931,
    "vllm strict lora tp1": 933,
    "vllm strict lora tp2": 933,
+   "vllm strict lora tp4": 933,
    "vllm strict tp1": 933,
-   "vllm strict tp2": 933
+   "vllm strict tp2": 933,
+   "vllm strict tp4": 933
   },
   "vllm native tp1": {
-   "megatron native tp1": 922,
+   "megatron native tp1": 923,
    "megatron native tp2": 926,
    "megatron strict tp1": 933,
    "megatron strict tp2": 933,
+   "megatron strict tp4": 933,
    "reference golden": 933,
    "reference hf bf16": 925,
    "reference triton": 933,
-   "vllm native lora tp1": 931,
+   "reference triton repeat": 933,
+   "vllm native lora tp1": 932,
    "vllm native tp1": 0,
    "vllm native tp2": 921,
    "vllm strict lora tp1": 933,
    "vllm strict lora tp2": 933,
+   "vllm strict lora tp4": 933,
    "vllm strict tp1": 933,
-   "vllm strict tp2": 933
+   "vllm strict tp2": 933,
+   "vllm strict tp4": 933
   },
   "vllm native tp2": {
-   "megatron native tp1": 930,
-   "megatron native tp2": 929,
+   "megatron native tp1": 924,
+   "megatron native tp2": 921,
    "megatron strict tp1": 933,
    "megatron strict tp2": 933,
+   "megatron strict tp4": 933,
    "reference golden": 933,
-   "reference hf bf16": 922,
+   "reference hf bf16": 926,
    "reference triton": 933,
-   "vllm native lora tp1": 930,
+   "reference triton repeat": 933,
+   "vllm native lora tp1": 931,
    "vllm native tp1": 921,
    "vllm native tp2": 0,
    "vllm strict lora tp1": 933,
    "vllm strict lora tp2": 933,
+   "vllm strict lora tp4": 933,
    "vllm strict tp1": 933,
-   "vllm strict tp2": 933
+   "vllm strict tp2": 933,
+   "vllm strict tp4": 933
   },
   "vllm strict lora tp1": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
-   "megatron strict tp1": 924,
-   "megatron strict tp2": 924,
+   "megatron strict tp1": 921,
+   "megatron strict tp2": 921,
+   "megatron strict tp4": 921,
    "reference golden": 916,
    "reference hf bf16": 933,
-   "reference triton": 924,
+   "reference triton": 921,
+   "reference triton repeat": 921,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
    "vllm strict lora tp1": 0,
    "vllm strict lora tp2": 0,
-   "vllm strict tp1": 924,
-   "vllm strict tp2": 924
+   "vllm strict lora tp4": 0,
+   "vllm strict tp1": 921,
+   "vllm strict tp2": 921,
+   "vllm strict tp4": 921
   },
   "vllm strict lora tp2": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
-   "megatron strict tp1": 924,
-   "megatron strict tp2": 924,
+   "megatron strict tp1": 921,
+   "megatron strict tp2": 921,
+   "megatron strict tp4": 921,
    "reference golden": 916,
    "reference hf bf16": 933,
-   "reference triton": 924,
+   "reference triton": 921,
+   "reference triton repeat": 921,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
    "vllm strict lora tp1": 0,
    "vllm strict lora tp2": 0,
-   "vllm strict tp1": 924,
-   "vllm strict tp2": 924
+   "vllm strict lora tp4": 0,
+   "vllm strict tp1": 921,
+   "vllm strict tp2": 921,
+   "vllm strict tp4": 921
+  },
+  "vllm strict lora tp4": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 921,
+   "megatron strict tp2": 921,
+   "megatron strict tp4": 921,
+   "reference golden": 916,
+   "reference hf bf16": 933,
+   "reference triton": 921,
+   "reference triton repeat": 921,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 0,
+   "vllm strict lora tp2": 0,
+   "vllm strict lora tp4": 0,
+   "vllm strict tp1": 921,
+   "vllm strict tp2": 921,
+   "vllm strict tp4": 921
   },
   "vllm strict tp1": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
    "megatron strict tp1": 0,
    "megatron strict tp2": 0,
-   "reference golden": 901,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
    "reference hf bf16": 933,
    "reference triton": 0,
+   "reference triton repeat": 0,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
-   "vllm strict lora tp1": 924,
-   "vllm strict lora tp2": 924,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
    "vllm strict tp1": 0,
-   "vllm strict tp2": 0
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
   },
   "vllm strict tp2": {
    "megatron native tp1": 932,
    "megatron native tp2": 933,
    "megatron strict tp1": 0,
    "megatron strict tp2": 0,
-   "reference golden": 901,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
    "reference hf bf16": 933,
    "reference triton": 0,
+   "reference triton repeat": 0,
    "vllm native lora tp1": 933,
    "vllm native tp1": 933,
    "vllm native tp2": 933,
-   "vllm strict lora tp1": 924,
-   "vllm strict lora tp2": 924,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
    "vllm strict tp1": 0,
-   "vllm strict tp2": 0
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
+  },
+  "vllm strict tp4": {
+   "megatron native tp1": 932,
+   "megatron native tp2": 933,
+   "megatron strict tp1": 0,
+   "megatron strict tp2": 0,
+   "megatron strict tp4": 0,
+   "reference golden": 894,
+   "reference hf bf16": 933,
+   "reference triton": 0,
+   "reference triton repeat": 0,
+   "vllm native lora tp1": 933,
+   "vllm native tp1": 933,
+   "vllm native tp2": 933,
+   "vllm strict lora tp1": 921,
+   "vllm strict lora tp2": 921,
+   "vllm strict lora tp4": 921,
+   "vllm strict tp1": 0,
+   "vllm strict tp2": 0,
+   "vllm strict tp4": 0
   }
  },
  "max_abs": {
@@ -412,224 +600,360 @@
    "megatron native tp2": 0.37395429611206055,
    "megatron strict tp1": 0.3140144348144531,
    "megatron strict tp2": 0.3140144348144531,
+   "megatron strict tp4": 0.3140144348144531,
    "reference golden": 0.30080318450927734,
    "reference hf bf16": 0.4769010543823242,
    "reference triton": 0.3140144348144531,
-   "vllm native lora tp1": 1.1677207946777344,
+   "reference triton repeat": 0.3140144348144531,
+   "vllm native lora tp1": 1.1676368713378906,
    "vllm native tp1": 0.3125,
-   "vllm native tp2": 0.290648877620697,
+   "vllm native tp2": 0.28119468688964844,
    "vllm strict lora tp1": 1.1216411590576172,
    "vllm strict lora tp2": 1.1216411590576172,
+   "vllm strict lora tp4": 1.1216411590576172,
    "vllm strict tp1": 0.3140144348144531,
-   "vllm strict tp2": 0.3140144348144531
+   "vllm strict tp2": 0.3140144348144531,
+   "vllm strict tp4": 0.3140144348144531
   },
   "megatron native tp2": {
    "megatron native tp1": 0.37395429611206055,
    "megatron native tp2": 0.0,
    "megatron strict tp1": 0.28242063522338867,
    "megatron strict tp2": 0.28242063522338867,
+   "megatron strict tp4": 0.28242063522338867,
    "reference golden": 0.29044532775878906,
    "reference hf bf16": 0.42457008361816406,
    "reference triton": 0.28242063522338867,
-   "vllm native lora tp1": 1.1445980072021484,
+   "reference triton repeat": 0.28242063522338867,
+   "vllm native lora tp1": 1.1445140838623047,
    "vllm native tp1": 0.3045315742492676,
-   "vllm native tp2": 0.24958372116088867,
+   "vllm native tp2": 0.24952268600463867,
    "vllm strict lora tp1": 1.0985183715820312,
    "vllm strict lora tp2": 1.0985183715820312,
+   "vllm strict lora tp4": 1.0985183715820312,
    "vllm strict tp1": 0.28242063522338867,
-   "vllm strict tp2": 0.28242063522338867
+   "vllm strict tp2": 0.28242063522338867,
+   "vllm strict tp4": 0.28242063522338867
   },
   "megatron strict tp1": {
    "megatron native tp1": 0.3140144348144531,
    "megatron native tp2": 0.28242063522338867,
    "megatron strict tp1": 0.0,
    "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
    "reference golden": 0.21625804901123047,
    "reference hf bf16": 0.39235591888427734,
    "reference triton": 0.0,
-   "vllm native lora tp1": 1.1228961944580078,
-   "vllm native tp1": 0.19246435165405273,
-   "vllm native tp2": 0.21176385879516602,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
    "vllm strict lora tp1": 1.0768165588378906,
    "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
    "vllm strict tp1": 0.0,
-   "vllm strict tp2": 0.0
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
   },
   "megatron strict tp2": {
    "megatron native tp1": 0.3140144348144531,
    "megatron native tp2": 0.28242063522338867,
    "megatron strict tp1": 0.0,
    "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
    "reference golden": 0.21625804901123047,
    "reference hf bf16": 0.39235591888427734,
    "reference triton": 0.0,
-   "vllm native lora tp1": 1.1228961944580078,
-   "vllm native tp1": 0.19246435165405273,
-   "vllm native tp2": 0.21176385879516602,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
    "vllm strict lora tp1": 1.0768165588378906,
    "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
    "vllm strict tp1": 0.0,
-   "vllm strict tp2": 0.0
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
+  },
+  "megatron strict tp4": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
   },
   "reference golden": {
    "megatron native tp1": 0.30080318450927734,
    "megatron native tp2": 0.29044532775878906,
    "megatron strict tp1": 0.21625804901123047,
    "megatron strict tp2": 0.21625804901123047,
+   "megatron strict tp4": 0.21625804901123047,
    "reference golden": 0.0,
    "reference hf bf16": 0.2458171844482422,
    "reference triton": 0.21625804901123047,
-   "vllm native lora tp1": 1.0560073852539062,
+   "reference triton repeat": 0.21625804901123047,
+   "vllm native lora tp1": 1.0559234619140625,
    "vllm native tp1": 0.29241371154785156,
-   "vllm native tp2": 0.25500059127807617,
+   "vllm native tp2": 0.25493955612182617,
    "vllm strict lora tp1": 1.009927749633789,
    "vllm strict lora tp2": 1.009927749633789,
+   "vllm strict lora tp4": 1.009927749633789,
    "vllm strict tp1": 0.21625804901123047,
-   "vllm strict tp2": 0.21625804901123047
+   "vllm strict tp2": 0.21625804901123047,
+   "vllm strict tp4": 0.21625804901123047
   },
   "reference hf bf16": {
    "megatron native tp1": 0.4769010543823242,
    "megatron native tp2": 0.42457008361816406,
    "megatron strict tp1": 0.39235591888427734,
    "megatron strict tp2": 0.39235591888427734,
+   "megatron strict tp4": 0.39235591888427734,
    "reference golden": 0.2458171844482422,
    "reference hf bf16": 0.0,
    "reference triton": 0.39235591888427734,
-   "vllm native lora tp1": 1.1291141510009766,
+   "reference triton repeat": 0.39235591888427734,
+   "vllm native lora tp1": 1.1290302276611328,
    "vllm native tp1": 0.3546104431152344,
-   "vllm native tp2": 0.3827390670776367,
+   "vllm native tp2": 0.3493843078613281,
    "vllm strict lora tp1": 1.0830345153808594,
    "vllm strict lora tp2": 1.0830345153808594,
+   "vllm strict lora tp4": 1.0830345153808594,
    "vllm strict tp1": 0.39235591888427734,
-   "vllm strict tp2": 0.39235591888427734
+   "vllm strict tp2": 0.39235591888427734,
+   "vllm strict tp4": 0.39235591888427734
   },
   "reference triton": {
    "megatron native tp1": 0.3140144348144531,
    "megatron native tp2": 0.28242063522338867,
    "megatron strict tp1": 0.0,
    "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
    "reference golden": 0.21625804901123047,
    "reference hf bf16": 0.39235591888427734,
    "reference triton": 0.0,
-   "vllm native lora tp1": 1.1228961944580078,
-   "vllm native tp1": 0.19246435165405273,
-   "vllm native tp2": 0.21176385879516602,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
    "vllm strict lora tp1": 1.0768165588378906,
    "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
    "vllm strict tp1": 0.0,
-   "vllm strict tp2": 0.0
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
+  },
+  "reference triton repeat": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
   },
   "vllm native lora tp1": {
-   "megatron native tp1": 1.1677207946777344,
-   "megatron native tp2": 1.1445980072021484,
-   "megatron strict tp1": 1.1228961944580078,
-   "megatron strict tp2": 1.1228961944580078,
-   "reference golden": 1.0560073852539062,
-   "reference hf bf16": 1.1291141510009766,
-   "reference triton": 1.1228961944580078,
+   "megatron native tp1": 1.1676368713378906,
+   "megatron native tp2": 1.1445140838623047,
+   "megatron strict tp1": 1.122812271118164,
+   "megatron strict tp2": 1.122812271118164,
+   "megatron strict tp4": 1.122812271118164,
+   "reference golden": 1.0559234619140625,
+   "reference hf bf16": 1.1290302276611328,
+   "reference triton": 1.122812271118164,
+   "reference triton repeat": 1.122812271118164,
    "vllm native lora tp1": 0.0,
-   "vllm native tp1": 1.1288795471191406,
-   "vllm native tp2": 1.1209526062011719,
-   "vllm strict lora tp1": 0.2954893112182617,
-   "vllm strict lora tp2": 0.2954893112182617,
-   "vllm strict tp1": 1.1228961944580078,
-   "vllm strict tp2": 1.1228961944580078
+   "vllm native tp1": 1.1287956237792969,
+   "vllm native tp2": 1.1598243713378906,
+   "vllm strict lora tp1": 0.2693948745727539,
+   "vllm strict lora tp2": 0.2693948745727539,
+   "vllm strict lora tp4": 0.2693948745727539,
+   "vllm strict tp1": 1.122812271118164,
+   "vllm strict tp2": 1.122812271118164,
+   "vllm strict tp4": 1.122812271118164
   },
   "vllm native tp1": {
    "megatron native tp1": 0.3125,
    "megatron native tp2": 0.3045315742492676,
-   "megatron strict tp1": 0.19246435165405273,
-   "megatron strict tp2": 0.19246435165405273,
+   "megatron strict tp1": 0.19246244430541992,
+   "megatron strict tp2": 0.19246244430541992,
+   "megatron strict tp4": 0.19246244430541992,
    "reference golden": 0.29241371154785156,
    "reference hf bf16": 0.3546104431152344,
-   "reference triton": 0.19246435165405273,
-   "vllm native lora tp1": 1.1288795471191406,
+   "reference triton": 0.19246244430541992,
+   "reference triton repeat": 0.19246244430541992,
+   "vllm native lora tp1": 1.1287956237792969,
    "vllm native tp1": 0.0,
-   "vllm native tp2": 0.2495102882385254,
+   "vllm native tp2": 0.21423625946044922,
    "vllm strict lora tp1": 1.0827999114990234,
    "vllm strict lora tp2": 1.0827999114990234,
-   "vllm strict tp1": 0.19246435165405273,
-   "vllm strict tp2": 0.19246435165405273
+   "vllm strict lora tp4": 1.0827999114990234,
+   "vllm strict tp1": 0.19246244430541992,
+   "vllm strict tp2": 0.19246244430541992,
+   "vllm strict tp4": 0.19246244430541992
   },
   "vllm native tp2": {
-   "megatron native tp1": 0.290648877620697,
-   "megatron native tp2": 0.24958372116088867,
-   "megatron strict tp1": 0.21176385879516602,
-   "megatron strict tp2": 0.21176385879516602,
-   "reference golden": 0.25500059127807617,
-   "reference hf bf16": 0.3827390670776367,
-   "reference triton": 0.21176385879516602,
-   "vllm native lora tp1": 1.1209526062011719,
-   "vllm native tp1": 0.2495102882385254,
+   "megatron native tp1": 0.28119468688964844,
+   "megatron native tp2": 0.24952268600463867,
+   "megatron strict tp1": 0.22678565979003906,
+   "megatron strict tp2": 0.22678565979003906,
+   "megatron strict tp4": 0.22678565979003906,
+   "reference golden": 0.25493955612182617,
+   "reference hf bf16": 0.3493843078613281,
+   "reference triton": 0.22678565979003906,
+   "reference triton repeat": 0.22678565979003906,
+   "vllm native lora tp1": 1.1598243713378906,
+   "vllm native tp1": 0.21423625946044922,
    "vllm native tp2": 0.0,
-   "vllm strict lora tp1": 1.0748729705810547,
-   "vllm strict lora tp2": 1.0748729705810547,
-   "vllm strict tp1": 0.21176385879516602,
-   "vllm strict tp2": 0.21176385879516602
+   "vllm strict lora tp1": 1.1138286590576172,
+   "vllm strict lora tp2": 1.1138286590576172,
+   "vllm strict lora tp4": 1.1138286590576172,
+   "vllm strict tp1": 0.22678565979003906,
+   "vllm strict tp2": 0.22678565979003906,
+   "vllm strict tp4": 0.22678565979003906
   },
   "vllm strict lora tp1": {
    "megatron native tp1": 1.1216411590576172,
    "megatron native tp2": 1.0985183715820312,
    "megatron strict tp1": 1.0768165588378906,
    "megatron strict tp2": 1.0768165588378906,
+   "megatron strict tp4": 1.0768165588378906,
    "reference golden": 1.009927749633789,
    "reference hf bf16": 1.0830345153808594,
    "reference triton": 1.0768165588378906,
-   "vllm native lora tp1": 0.2954893112182617,
+   "reference triton repeat": 1.0768165588378906,
+   "vllm native lora tp1": 0.2693948745727539,
    "vllm native tp1": 1.0827999114990234,
-   "vllm native tp2": 1.0748729705810547,
+   "vllm native tp2": 1.1138286590576172,
    "vllm strict lora tp1": 0.0,
    "vllm strict lora tp2": 0.0,
+   "vllm strict lora tp4": 0.0,
    "vllm strict tp1": 1.0768165588378906,
-   "vllm strict tp2": 1.0768165588378906
+   "vllm strict tp2": 1.0768165588378906,
+   "vllm strict tp4": 1.0768165588378906
   },
   "vllm strict lora tp2": {
    "megatron native tp1": 1.1216411590576172,
    "megatron native tp2": 1.0985183715820312,
    "megatron strict tp1": 1.0768165588378906,
    "megatron strict tp2": 1.0768165588378906,
+   "megatron strict tp4": 1.0768165588378906,
    "reference golden": 1.009927749633789,
    "reference hf bf16": 1.0830345153808594,
    "reference triton": 1.0768165588378906,
-   "vllm native lora tp1": 0.2954893112182617,
+   "reference triton repeat": 1.0768165588378906,
+   "vllm native lora tp1": 0.2693948745727539,
    "vllm native tp1": 1.0827999114990234,
-   "vllm native tp2": 1.0748729705810547,
+   "vllm native tp2": 1.1138286590576172,
    "vllm strict lora tp1": 0.0,
    "vllm strict lora tp2": 0.0,
+   "vllm strict lora tp4": 0.0,
    "vllm strict tp1": 1.0768165588378906,
-   "vllm strict tp2": 1.0768165588378906
+   "vllm strict tp2": 1.0768165588378906,
+   "vllm strict tp4": 1.0768165588378906
+  },
+  "vllm strict lora tp4": {
+   "megatron native tp1": 1.1216411590576172,
+   "megatron native tp2": 1.0985183715820312,
+   "megatron strict tp1": 1.0768165588378906,
+   "megatron strict tp2": 1.0768165588378906,
+   "megatron strict tp4": 1.0768165588378906,
+   "reference golden": 1.009927749633789,
+   "reference hf bf16": 1.0830345153808594,
+   "reference triton": 1.0768165588378906,
+   "reference triton repeat": 1.0768165588378906,
+   "vllm native lora tp1": 0.2693948745727539,
+   "vllm native tp1": 1.0827999114990234,
+   "vllm native tp2": 1.1138286590576172,
+   "vllm strict lora tp1": 0.0,
+   "vllm strict lora tp2": 0.0,
+   "vllm strict lora tp4": 0.0,
+   "vllm strict tp1": 1.0768165588378906,
+   "vllm strict tp2": 1.0768165588378906,
+   "vllm strict tp4": 1.0768165588378906
   },
   "vllm strict tp1": {
    "megatron native tp1": 0.3140144348144531,
    "megatron native tp2": 0.28242063522338867,
    "megatron strict tp1": 0.0,
    "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
    "reference golden": 0.21625804901123047,
    "reference hf bf16": 0.39235591888427734,
    "reference triton": 0.0,
-   "vllm native lora tp1": 1.1228961944580078,
-   "vllm native tp1": 0.19246435165405273,
-   "vllm native tp2": 0.21176385879516602,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
    "vllm strict lora tp1": 1.0768165588378906,
    "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
    "vllm strict tp1": 0.0,
-   "vllm strict tp2": 0.0
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
   },
   "vllm strict tp2": {
    "megatron native tp1": 0.3140144348144531,
    "megatron native tp2": 0.28242063522338867,
    "megatron strict tp1": 0.0,
    "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
    "reference golden": 0.21625804901123047,
    "reference hf bf16": 0.39235591888427734,
    "reference triton": 0.0,
-   "vllm native lora tp1": 1.1228961944580078,
-   "vllm native tp1": 0.19246435165405273,
-   "vllm native tp2": 0.21176385879516602,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
    "vllm strict lora tp1": 1.0768165588378906,
    "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
    "vllm strict tp1": 0.0,
-   "vllm strict tp2": 0.0
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
+  },
+  "vllm strict tp4": {
+   "megatron native tp1": 0.3140144348144531,
+   "megatron native tp2": 0.28242063522338867,
+   "megatron strict tp1": 0.0,
+   "megatron strict tp2": 0.0,
+   "megatron strict tp4": 0.0,
+   "reference golden": 0.21625804901123047,
+   "reference hf bf16": 0.39235591888427734,
+   "reference triton": 0.0,
+   "reference triton repeat": 0.0,
+   "vllm native lora tp1": 1.122812271118164,
+   "vllm native tp1": 0.19246244430541992,
+   "vllm native tp2": 0.22678565979003906,
+   "vllm strict lora tp1": 1.0768165588378906,
+   "vllm strict lora tp2": 1.0768165588378906,
+   "vllm strict lora tp4": 1.0768165588378906,
+   "vllm strict tp1": 0.0,
+   "vllm strict tp2": 0.0,
+   "vllm strict tp4": 0.0
   }
  },
  "per_sequence": {
@@ -728,6 +1052,53 @@
    }
   },
   "megatron native tp1 | megatron strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | megatron strict tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -915,6 +1286,53 @@
     "of": 178
    }
   },
+  "megatron native tp1 | reference triton repeat": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "megatron native tp1 | vllm native lora tp1": {
    "gsm8k_test_0": {
     "mismatches": 54,
@@ -957,7 +1375,7 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 177,
+    "mismatches": 175,
     "first": 0,
     "of": 178
    }
@@ -969,7 +1387,7 @@
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 46,
+    "mismatches": 47,
     "first": 0,
     "of": 47
    },
@@ -1021,8 +1439,8 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 129,
-    "first": 0,
+    "mismatches": 127,
+    "first": 1,
     "of": 129
    },
    "gsm8k_test_3": {
@@ -1031,28 +1449,28 @@
     "of": 39
    },
    "gsm8k_test_4": {
-    "mismatches": 92,
-    "first": 0,
+    "mismatches": 91,
+    "first": 1,
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 148,
+    "mismatches": 149,
     "first": 0,
     "of": 149
    },
    "gsm8k_test_6": {
-    "mismatches": 88,
+    "mismatches": 87,
     "first": 0,
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
-    "first": 0,
+    "mismatches": 155,
+    "first": 1,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 177,
-    "first": 0,
+    "mismatches": 175,
+    "first": 1,
     "of": 178
    }
   },
@@ -1104,6 +1522,53 @@
    }
   },
   "megatron native tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp1 | vllm strict lora tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -1244,6 +1709,53 @@
     "of": 178
    }
   },
+  "megatron native tp1 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "megatron native tp2 | megatron strict tp1": {
    "gsm8k_test_0": {
     "mismatches": 55,
@@ -1292,6 +1804,53 @@
    }
   },
   "megatron native tp2 | megatron strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | megatron strict tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -1479,6 +2038,53 @@
     "of": 178
    }
   },
+  "megatron native tp2 | reference triton repeat": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "megatron native tp2 | vllm native lora tp1": {
    "gsm8k_test_0": {
     "mismatches": 55,
@@ -1580,33 +2186,33 @@
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 46,
-    "first": 0,
+    "mismatches": 45,
+    "first": 1,
     "of": 47
    },
    "gsm8k_test_2": {
     "mismatches": 128,
-    "first": 0,
+    "first": 1,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 39,
-    "first": 0,
+    "mismatches": 38,
+    "first": 1,
     "of": 39
    },
    "gsm8k_test_4": {
-    "mismatches": 91,
-    "first": 1,
+    "mismatches": 92,
+    "first": 0,
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 149,
+    "mismatches": 148,
     "first": 0,
     "of": 149
    },
    "gsm8k_test_6": {
-    "mismatches": 88,
-    "first": 0,
+    "mismatches": 86,
+    "first": 1,
     "of": 88
    },
    "gsm8k_test_7": {
@@ -1615,8 +2221,8 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 178,
-    "first": 0,
+    "mismatches": 174,
+    "first": 1,
     "of": 178
    }
   },
@@ -1668,6 +2274,53 @@
    }
   },
   "megatron native tp2 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron native tp2 | vllm strict lora tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -1808,24 +2461,24 @@
     "of": 178
    }
   },
-  "megatron strict tp1 | reference golden": {
+  "megatron native tp2 | vllm strict tp4": {
    "gsm8k_test_0": {
-    "mismatches": 52,
+    "mismatches": 55,
     "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 44,
+    "mismatches": 47,
     "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 129,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
+    "mismatches": 39,
     "first": 0,
     "of": 39
    },
@@ -1835,7 +2488,54 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 144,
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp1 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 51,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 124,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 143,
     "first": 0,
     "of": 149
    },
@@ -1850,7 +2550,7 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 167,
+    "mismatches": 164,
     "first": 0,
     "of": 178
    }
@@ -2055,7 +2755,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -2080,12 +2780,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -2102,7 +2802,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -2127,34 +2827,34 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
   },
-  "megatron strict tp2 | reference golden": {
+  "megatron strict tp1 | vllm strict lora tp4": {
    "gsm8k_test_0": {
-    "mismatches": 52,
+    "mismatches": 55,
     "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 44,
+    "mismatches": 46,
     "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
+    "mismatches": 39,
     "first": 0,
     "of": 39
    },
@@ -2164,7 +2864,54 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 144,
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 51,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 124,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 143,
     "first": 0,
     "of": 149
    },
@@ -2179,7 +2926,7 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 167,
+    "mismatches": 164,
     "first": 0,
     "of": 178
    }
@@ -2384,7 +3131,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -2409,12 +3156,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -2431,7 +3178,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -2456,12 +3203,435 @@
     "of": 88
    },
    "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp2 | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | reference golden": {
+   "gsm8k_test_0": {
+    "mismatches": 51,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 124,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 143,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 164,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | reference hf bf16": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
     "mismatches": 156,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "megatron strict tp4 | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -2515,22 +3685,22 @@
   },
   "reference golden | reference triton": {
    "gsm8k_test_0": {
-    "mismatches": 52,
+    "mismatches": 51,
     "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 44,
+    "mismatches": 43,
     "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 124,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
+    "mismatches": 39,
     "first": 0,
     "of": 39
    },
@@ -2540,7 +3710,7 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 144,
+    "mismatches": 143,
     "first": 0,
     "of": 149
    },
@@ -2555,7 +3725,54 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 167,
+    "mismatches": 164,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | reference triton repeat": {
+   "gsm8k_test_0": {
+    "mismatches": 51,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 124,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 143,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 164,
     "first": 0,
     "of": 178
    }
@@ -2713,7 +3930,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 128,
+    "mismatches": 127,
     "first": 0,
     "of": 129
    },
@@ -2728,7 +3945,7 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 145,
+    "mismatches": 146,
     "first": 0,
     "of": 149
    },
@@ -2738,12 +3955,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 155,
+    "mismatches": 156,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 169,
+    "mismatches": 168,
     "first": 0,
     "of": 178
    }
@@ -2760,7 +3977,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 128,
+    "mismatches": 127,
     "first": 0,
     "of": 129
    },
@@ -2775,7 +3992,7 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 145,
+    "mismatches": 146,
     "first": 0,
     "of": 149
    },
@@ -2785,34 +4002,81 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 155,
+    "mismatches": 156,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 169,
+    "mismatches": 168,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 127,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 146,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 168,
     "first": 0,
     "of": 178
    }
   },
   "reference golden | vllm strict tp1": {
    "gsm8k_test_0": {
-    "mismatches": 52,
+    "mismatches": 51,
     "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 44,
+    "mismatches": 43,
     "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 124,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
+    "mismatches": 39,
     "first": 0,
     "of": 39
    },
@@ -2822,7 +4086,7 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 144,
+    "mismatches": 143,
     "first": 0,
     "of": 149
    },
@@ -2837,29 +4101,29 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 167,
+    "mismatches": 164,
     "first": 0,
     "of": 178
    }
   },
   "reference golden | vllm strict tp2": {
    "gsm8k_test_0": {
-    "mismatches": 52,
+    "mismatches": 51,
     "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 44,
+    "mismatches": 43,
     "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 124,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
+    "mismatches": 39,
     "first": 0,
     "of": 39
    },
@@ -2869,7 +4133,7 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 144,
+    "mismatches": 143,
     "first": 0,
     "of": 149
    },
@@ -2884,12 +4148,106 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 167,
+    "mismatches": 164,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference golden | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 51,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 124,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 143,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 83,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 164,
     "first": 0,
     "of": 178
    }
   },
   "reference hf bf16 | reference triton": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | reference triton repeat": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -2948,7 +4306,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 128,
+    "mismatches": 129,
     "first": 0,
     "of": 129
    },
@@ -2963,13 +4321,13 @@
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 149,
-    "first": 0,
+    "mismatches": 147,
+    "first": 1,
     "of": 149
    },
    "gsm8k_test_6": {
-    "mismatches": 88,
-    "first": 0,
+    "mismatches": 87,
+    "first": 1,
     "of": 88
    },
    "gsm8k_test_7": {
@@ -2978,7 +4336,7 @@
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 178,
+    "mismatches": 176,
     "first": 0,
     "of": 178
    }
@@ -3037,32 +4395,32 @@
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 46,
-    "first": 0,
+    "mismatches": 45,
+    "first": 1,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
-    "first": 1,
+    "mismatches": 129,
+    "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
-    "first": 1,
+    "mismatches": 39,
+    "first": 0,
     "of": 39
    },
    "gsm8k_test_4": {
-    "mismatches": 92,
-    "first": 0,
+    "mismatches": 91,
+    "first": 1,
     "of": 92
    },
    "gsm8k_test_5": {
     "mismatches": 148,
-    "first": 0,
+    "first": 1,
     "of": 149
    },
    "gsm8k_test_6": {
-    "mismatches": 86,
+    "mismatches": 88,
     "first": 0,
     "of": 88
    },
@@ -3171,6 +4529,53 @@
     "of": 178
    }
   },
+  "reference hf bf16 | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "reference hf bf16 | vllm strict tp1": {
    "gsm8k_test_0": {
     "mismatches": 55,
@@ -3219,6 +4624,53 @@
    }
   },
   "reference hf bf16 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference hf bf16 | vllm strict tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -3418,7 +4870,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -3443,12 +4895,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -3465,7 +4917,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -3490,12 +4942,341 @@
     "of": 88
    },
    "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm native lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
     "mismatches": 156,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm strict lora tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference triton repeat | vllm strict lora tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -3507,7 +5288,7 @@
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 46,
+    "mismatches": 47,
     "first": 0,
     "of": 47
    },
@@ -3575,12 +5356,12 @@
    },
    "gsm8k_test_5": {
     "mismatches": 148,
-    "first": 0,
+    "first": 1,
     "of": 149
    },
    "gsm8k_test_6": {
-    "mismatches": 87,
-    "first": 1,
+    "mismatches": 88,
+    "first": 0,
     "of": 88
    },
    "gsm8k_test_7": {
@@ -3642,6 +5423,53 @@
    }
   },
   "vllm native lora tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native lora tp1 | vllm strict lora tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -3782,34 +5610,34 @@
     "of": 178
    }
   },
-  "vllm native tp1 | vllm native tp2": {
+  "vllm native lora tp1 | vllm strict tp4": {
    "gsm8k_test_0": {
-    "mismatches": 54,
-    "first": 1,
+    "mismatches": 55,
+    "first": 0,
     "of": 55
    },
    "gsm8k_test_1": {
-    "mismatches": 45,
-    "first": 1,
+    "mismatches": 47,
+    "first": 0,
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 128,
+    "mismatches": 129,
     "first": 0,
     "of": 129
    },
    "gsm8k_test_3": {
-    "mismatches": 38,
-    "first": 1,
+    "mismatches": 39,
+    "first": 0,
     "of": 39
    },
    "gsm8k_test_4": {
-    "mismatches": 91,
+    "mismatches": 92,
     "first": 0,
     "of": 92
    },
    "gsm8k_test_5": {
-    "mismatches": 148,
+    "mismatches": 149,
     "first": 0,
     "of": 149
    },
@@ -3819,13 +5647,60 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 154,
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm native tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 54,
     "first": 1,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 45,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 127,
+    "first": 1,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 91,
+    "first": 1,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 86,
+    "first": 1,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
     "mismatches": 175,
-    "first": 0,
+    "first": 1,
     "of": 178
    }
   },
@@ -3877,6 +5752,53 @@
    }
   },
   "vllm native tp1 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict lora tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -4017,6 +5939,53 @@
     "of": 178
    }
   },
+  "vllm native tp1 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "vllm native tp2 | vllm strict lora tp1": {
    "gsm8k_test_0": {
     "mismatches": 55,
@@ -4065,6 +6034,53 @@
    }
   },
   "vllm native tp2 | vllm strict lora tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp2 | vllm strict lora tp4": {
    "gsm8k_test_0": {
     "mismatches": 55,
     "first": 0,
@@ -4205,6 +6221,53 @@
     "of": 178
    }
   },
+  "vllm native tp2 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 47,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 129,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 149,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 156,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 178,
+    "first": 0,
+    "of": 178
+   }
+  },
   "vllm strict lora tp1 | vllm strict tp1": {
    "gsm8k_test_0": {
     "mismatches": 55,
@@ -4217,7 +6280,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -4242,12 +6305,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -4264,7 +6327,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -4289,12 +6352,59 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp1 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -4311,7 +6421,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -4336,12 +6446,12 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -4358,7 +6468,7 @@
     "of": 47
    },
    "gsm8k_test_2": {
-    "mismatches": 126,
+    "mismatches": 128,
     "first": 0,
     "of": 129
    },
@@ -4383,12 +6493,200 @@
     "of": 88
    },
    "gsm8k_test_7": {
-    "mismatches": 156,
+    "mismatches": 155,
     "first": 0,
     "of": 156
    },
    "gsm8k_long_window": {
-    "mismatches": 174,
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp2 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp4 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp4 | vllm strict tp2": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm strict lora tp4 | vllm strict tp4": {
+   "gsm8k_test_0": {
+    "mismatches": 55,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 46,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 128,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 39,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 92,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 148,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 88,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 155,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 170,
     "first": 0,
     "of": 178
    }
@@ -4412,7 +6710,19 @@
    "strict": true
   },
   {
+   "label": "megatron strict tp4",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
    "label": "reference triton",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "reference triton repeat",
    "hex": "0xc20758d0",
    "value": -33.83673095703125,
    "strict": true
@@ -4430,6 +6740,12 @@
    "strict": true
   },
   {
+   "label": "vllm strict lora tp4",
+   "hex": "0xc2065292",
+   "value": -33.58063507080078,
+   "strict": true
+  },
+  {
    "label": "vllm strict tp1",
    "hex": "0xc20758d0",
    "value": -33.83673095703125,
@@ -4437,6 +6753,12 @@
   },
   {
    "label": "vllm strict tp2",
+   "hex": "0xc20758d0",
+   "value": -33.83673095703125,
+   "strict": true
+  },
+  {
+   "label": "vllm strict tp4",
    "hex": "0xc20758d0",
    "value": -33.83673095703125,
    "strict": true
@@ -4467,8 +6789,8 @@
   },
   {
    "label": "vllm native lora tp1",
-   "hex": "0xc206c000",
-   "value": -33.6875,
+   "hex": "0xc2068000",
+   "value": -33.625,
    "strict": false
   },
   {
@@ -4479,8 +6801,8 @@
   },
   {
    "label": "vllm native tp2",
-   "hex": "0xc2070000",
-   "value": -33.75,
+   "hex": "0xc2078000",
+   "value": -33.875,
    "strict": false
   }
  ],
