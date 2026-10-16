@@ -1,0 +1,22 @@
+poc(muse_glimmer): cp_global_attention / cp_local_attention on the allgather layout
+
+WS2 context-parallel rows of RFC #501 for the strict Muse-Glimmer-30B POC:
+
+* runtime/cp_attention.py: CPAttentionPlan (contiguous allgather chunks only;
+  zigzag/striped/ring and permuted positions raise CPLayoutError, fail closed),
+  cp_gated_attention_forward (deterministic rank-ordered AG of K/V/positions,
+  then the strict kernel on the local queries against the full K/V with
+  ABSOLUTE positions and the window; gate applied in the kernel epilogue, no
+  (out,lse) merge exists on this layout), TPCPTopology +
+  cp_tp_gated_attention_forward (TP2 x CP2), CP backward with the canonical
+  two-level dK/dV tree (8 head groups x 8 query chunks, rank roots combined by
+  all_gather + local tree), make_cp_collective (torch.distributed transport when
+  rl_engine._C is absent), fixed-shape pure-torch fallback for the sibling
+  kernel (labelled, follows the O5 block order), trace().
+* runtime/check_cp_parity.py: torchrun parity matrix + AG timing.
+* tests/models/muse_glimmer/distributed: spawn harness; CP2/CP4 == CP1 bitwise
+  (y, o, lse) for global and local layers at T in {2048, 4096, 8192}; TP2 x CP2
+  == single GPU; fail-closed layout tests; absolute-window test.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

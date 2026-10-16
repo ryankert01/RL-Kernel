@@ -1,0 +1,28 @@
+USDT:2026-10-15 16:41:02 252698:252698 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:41:02 252698:252698 SyncActivityProfilerHandler.cpp:59] profiler_stop
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+autograd::engine::evaluate_function: _QKNormScaledRo...         3.18%     438.380us        51.35%       7.081ms     141.629us            50  
+                      _QKNormScaledRopeFunctionBackward        43.05%       5.936ms        48.17%       6.643ms     132.861us            50  
+                              _QKNormScaledRopeFunction        36.64%       5.053ms        40.98%       5.652ms     113.032us            50  
+                                       aten::empty_like         2.06%     284.706us         9.47%       1.306ms       6.530us           200  
+                                    aten::empty_strided         7.41%       1.021ms         7.41%       1.021ms       5.106us           200  
+autograd::engine::evaluate_function: torch::autograd...         4.32%     595.652us         4.50%     620.893us      12.418us            50  
+                                           aten::detach         0.89%     123.328us         1.89%     261.307us       2.613us           100  
+autograd::engine::evaluate_function: torch::autograd...         1.27%     175.271us         1.27%     175.271us       1.753us           100  
+                                                 detach         1.00%     137.979us         1.00%     137.979us       1.380us           100  
+                             torch::autograd::GraphRoot         0.18%      25.241us         0.18%      25.241us       0.505us            50  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 13.791ms
+
+{
+ "T": 64,
+ "fwd_bwd_us": 364.39335333852796,
+ "fwd_bwd_without_record_backward_us": 369.7132033327459,
+ "fwd_only_us": 66.54770667106882,
+ "rope_rows_us": 109.45960333629046,
+ "rope_rows_check_range_false_us": 34.608076669731716,
+ "qknorm_scaled_rope_at_local_us": 223.95078667007814,
+ "fwd_only_explicit_local_us": 66.53894666669657
+}

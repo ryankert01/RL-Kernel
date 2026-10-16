@@ -1,0 +1,12 @@
+[gpu-lease] using GPUs [7]
+[20:45:08] rope GEMM tf32 probe: {'alone_b1_L2439': 0, 'padded_left_b9_L2439': 0, 'padded_right_b9_L2439': 0, 'decode_b9_L1': 0, 'decode_b1_L1': 0}
+[20:45:34] model loaded
+[20:45:38] baseline vs committed: 0
+[20:45:47] padded_right: vs committed 0, vs base 927
+[20:45:56] padded_right tf32 on vs off: 0
+[20:46:13] chunk 64: vs L-1 per seq [54, 46, 128, 38, 91, 148, 86, 156, 178], vs committed 0
+[20:46:16] chunk 256: vs L-1 per seq [0, 0, 0, 0, 91, 148, 0, 155, 177], vs committed 0
+[20:46:18] chunk 1024: vs L-1 per seq [0, 0, 0, 0, 0, 0, 0, 0, 176], vs committed 0
+[20:46:48] batched decode tf32 on vs committed off: 0
+[20:46:50] bf16 baseline argmax ties (top1 == top2): 16
+[20:46:50] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_ablation/probe_hf_out.json

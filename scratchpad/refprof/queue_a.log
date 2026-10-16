@@ -1,0 +1,13 @@
+=== smoke strict profile Thu Oct 15 16:38:24 UTC 2026
+rc=0
+=== xrt triton Thu Oct 15 16:40:08 UTC 2026
+rc=0
+=== chain triton 512+32 hf Thu Oct 15 16:42:29 UTC 2026
+rc=0
+=== chain triton 2100+32 hf Thu Oct 15 16:43:22 UTC 2026
+rc=0
+=== profile strict Thu Oct 15 16:44:52 UTC 2026
+rc=0
+=== pytest real weights triton Thu Oct 15 16:52:50 UTC 2026
+rc=0
+=== done Thu Oct 15 16:53:10 UTC 2026

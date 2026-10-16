@@ -1,0 +1,651 @@
+FFFFFFFFFFFFFFFFFFFFFFFFFFFF.FFFFFF                                      [100%]
+=================================== FAILURES ===================================
+_____________ TestPerRankHeads.test_rank_head_counts[1-expected0] ______________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502f410>, tp = 1
+expected = (32, 2)
+
+    @pytest.mark.parametrize("tp,expected", [(1, (32, 2)), (2, (16, 1)), (4, (8, 1)), (8, (4, 1))])
+    def test_rank_head_counts(self, tp, expected):
+>       assert vs.rank_head_counts(tp) == expected
+               ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:476: AttributeError
+_____________ TestPerRankHeads.test_rank_head_counts[2-expected1] ______________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502eae0>, tp = 2
+expected = (16, 1)
+
+    @pytest.mark.parametrize("tp,expected", [(1, (32, 2)), (2, (16, 1)), (4, (8, 1)), (8, (4, 1))])
+    def test_rank_head_counts(self, tp, expected):
+>       assert vs.rank_head_counts(tp) == expected
+               ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:476: AttributeError
+_____________ TestPerRankHeads.test_rank_head_counts[4-expected2] ______________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502ed80>, tp = 4
+expected = (8, 1)
+
+    @pytest.mark.parametrize("tp,expected", [(1, (32, 2)), (2, (16, 1)), (4, (8, 1)), (8, (4, 1))])
+    def test_rank_head_counts(self, tp, expected):
+>       assert vs.rank_head_counts(tp) == expected
+               ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:476: AttributeError
+_____________ TestPerRankHeads.test_rank_head_counts[8-expected3] ______________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502d550>, tp = 8
+expected = (4, 1)
+
+    @pytest.mark.parametrize("tp,expected", [(1, (32, 2)), (2, (16, 1)), (4, (8, 1)), (8, (4, 1))])
+    def test_rank_head_counts(self, tp, expected):
+>       assert vs.rank_head_counts(tp) == expected
+               ^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:476: AttributeError
+_________ TestPerRankHeads.test_kv_ownership_matches_vllm_sharding[1] __________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502e150>, tp = 1
+
+    @pytest.mark.parametrize("tp", [1, 2, 4, 8])
+    def test_kv_ownership_matches_vllm_sharding(self, tp):
+        for rank in range(tp):
+            state = vs.StrictBindingState(ops=resolve_ops(force_fallback=True))
+            state.tp_size, state.tp_rank = tp, rank
+            own = state.kv_ownership()
+>           hq, hkv = vs.rank_head_counts(tp)
+                      ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:486: AttributeError
+_________ TestPerRankHeads.test_kv_ownership_matches_vllm_sharding[2] __________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e502e930>, tp = 2
+
+    @pytest.mark.parametrize("tp", [1, 2, 4, 8])
+    def test_kv_ownership_matches_vllm_sharding(self, tp):
+        for rank in range(tp):
+            state = vs.StrictBindingState(ops=resolve_ops(force_fallback=True))
+            state.tp_size, state.tp_rank = tp, rank
+            own = state.kv_ownership()
+>           hq, hkv = vs.rank_head_counts(tp)
+                      ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:486: AttributeError
+_________ TestPerRankHeads.test_kv_ownership_matches_vllm_sharding[4] __________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e5060b90>, tp = 4
+
+    @pytest.mark.parametrize("tp", [1, 2, 4, 8])
+    def test_kv_ownership_matches_vllm_sharding(self, tp):
+        for rank in range(tp):
+            state = vs.StrictBindingState(ops=resolve_ops(force_fallback=True))
+            state.tp_size, state.tp_rank = tp, rank
+            own = state.kv_ownership()
+>           hq, hkv = vs.rank_head_counts(tp)
+                      ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:486: AttributeError
+_________ TestPerRankHeads.test_kv_ownership_matches_vllm_sharding[8] __________
+
+self = <test_new_on_old.TestPerRankHeads object at 0x7214e5060aa0>, tp = 8
+
+    @pytest.mark.parametrize("tp", [1, 2, 4, 8])
+    def test_kv_ownership_matches_vllm_sharding(self, tp):
+        for rank in range(tp):
+            state = vs.StrictBindingState(ops=resolve_ops(force_fallback=True))
+            state.tp_size, state.tp_rank = tp, rank
+            own = state.kv_ownership()
+>           hq, hkv = vs.rank_head_counts(tp)
+                      ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'rank_head_counts'
+
+.tmp_oldtree/test_new_on_old.py:486: AttributeError
+____________ TestFailClosedEngineFeatures.test_clean_config_passes _____________
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5060740>
+
+    def test_clean_config_passes(self):
+>       verdicts = vs.check_strict_engine_config(_engine_config())
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:530: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[cache_config.enable_prefix_caching-True] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5061130>
+path = 'cache_config.enable_prefix_caching', value = True
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[cache_config.kv_offloading_size-4.0] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e50614f0>
+path = 'cache_config.kv_offloading_size', value = 4.0
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[kv_transfer_config-value2] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e50615b0>
+path = 'kv_transfer_config', value = <object object at 0x7214e5020050>
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[speculative_config-value3] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5061670>
+path = 'speculative_config', value = <object object at 0x7214e5020070>
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[cache_config.kv_sharing_fast_prefill-True] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5061730>
+path = 'cache_config.kv_sharing_fast_prefill', value = True
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[parallel_config.decode_context_parallel_size-2] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e50617f0>
+path = 'parallel_config.decode_context_parallel_size', value = 2
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[parallel_config.prefill_context_parallel_size-2] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e50618b0>
+path = 'parallel_config.prefill_context_parallel_size', value = 2
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_ TestFailClosedEngineFeatures.test_kv_page_features_raise[model_config.logprobs_mode-processed_logprobs] _
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5061970>
+path = 'model_config.logprobs_mode', value = 'processed_logprobs'
+
+    @pytest.mark.parametrize(
+        "path,value",
+        [
+            ("cache_config.enable_prefix_caching", True),
+            ("cache_config.kv_offloading_size", 4.0),
+            ("kv_transfer_config", object()),
+            ("speculative_config", object()),
+            ("cache_config.kv_sharing_fast_prefill", True),
+            ("parallel_config.decode_context_parallel_size", 2),
+            ("parallel_config.prefill_context_parallel_size", 2),
+            ("model_config.logprobs_mode", "processed_logprobs"),
+        ],
+    )
+    def test_kv_page_features_raise(self, path, value):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_strict_engine_config(_engine_config(**{path: value}))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_strict_engine_config'
+
+.tmp_oldtree/test_new_on_old.py:549: AttributeError
+_________ TestFailClosedEngineFeatures.test_native_page_writers_raise __________
+
+self = <test_new_on_old.TestFailClosedEngineFeatures object at 0x7214e5061c40>
+
+    def test_native_page_writers_raise(self):
+        state = vs.StrictBindingState(ops=resolve_ops(force_fallback=True))
+>       guard = vs._forbid(state, "copy_kv_cache_blocks_inplace")
+                ^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute '_forbid'
+
+.tmp_oldtree/test_new_on_old.py:553: AttributeError
+_______________ TestFailClosedSampling.test_plain_request_passes _______________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e5061f70>
+
+    def test_plain_request_passes(self):
+>       vs.check_sampling_request(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:563: AttributeError
+__________ TestFailClosedSampling.test_native_columns_raise[kwargs0] ___________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e5062480>
+kwargs = {'num_logprobs': 5}
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"num_logprobs": 5},
+            {"max_token_ids": 3},
+            {"top_k": torch.tensor([5])},
+            {"top_p": torch.tensor([0.9])},
+            {"logprobs_mode": "processed_logprobs"},
+        ],
+    )
+    def test_native_columns_raise(self, kwargs):
+        base = dict(
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+        base.update(kwargs)
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_sampling_request(**base)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:584: AttributeError
+__________ TestFailClosedSampling.test_native_columns_raise[kwargs1] ___________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e5062750>
+kwargs = {'max_token_ids': 3}
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"num_logprobs": 5},
+            {"max_token_ids": 3},
+            {"top_k": torch.tensor([5])},
+            {"top_p": torch.tensor([0.9])},
+            {"logprobs_mode": "processed_logprobs"},
+        ],
+    )
+    def test_native_columns_raise(self, kwargs):
+        base = dict(
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+        base.update(kwargs)
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_sampling_request(**base)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:584: AttributeError
+__________ TestFailClosedSampling.test_native_columns_raise[kwargs2] ___________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e502df70>
+kwargs = {'top_k': tensor([5])}
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"num_logprobs": 5},
+            {"max_token_ids": 3},
+            {"top_k": torch.tensor([5])},
+            {"top_p": torch.tensor([0.9])},
+            {"logprobs_mode": "processed_logprobs"},
+        ],
+    )
+    def test_native_columns_raise(self, kwargs):
+        base = dict(
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+        base.update(kwargs)
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_sampling_request(**base)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:584: AttributeError
+__________ TestFailClosedSampling.test_native_columns_raise[kwargs3] ___________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e502d880>
+kwargs = {'top_p': tensor([0.9000])}
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"num_logprobs": 5},
+            {"max_token_ids": 3},
+            {"top_k": torch.tensor([5])},
+            {"top_p": torch.tensor([0.9])},
+            {"logprobs_mode": "processed_logprobs"},
+        ],
+    )
+    def test_native_columns_raise(self, kwargs):
+        base = dict(
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+        base.update(kwargs)
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_sampling_request(**base)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:584: AttributeError
+__________ TestFailClosedSampling.test_native_columns_raise[kwargs4] ___________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e502f260>
+kwargs = {'logprobs_mode': 'processed_logprobs'}
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"num_logprobs": 5},
+            {"max_token_ids": 3},
+            {"top_k": torch.tensor([5])},
+            {"top_p": torch.tensor([0.9])},
+            {"logprobs_mode": "processed_logprobs"},
+        ],
+    )
+    def test_native_columns_raise(self, kwargs):
+        base = dict(
+            num_logprobs=0, max_token_ids=0, top_k=None, top_p=None, logprobs_mode="raw_logprobs"
+        )
+        base.update(kwargs)
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_sampling_request(**base)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_sampling_request'
+
+.tmp_oldtree/test_new_on_old.py:584: AttributeError
+______________ TestFailClosedSampling.test_prompt_topk_raises[1] _______________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e502fd40>, k = 1
+
+    @pytest.mark.parametrize("k", [1, 5, -1])
+    def test_prompt_topk_raises(self, k):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_prompt_logprobs_request(k, "raw_logprobs")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_prompt_logprobs_request'
+
+.tmp_oldtree/test_new_on_old.py:589: AttributeError
+______________ TestFailClosedSampling.test_prompt_topk_raises[5] _______________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e5062420>, k = 5
+
+    @pytest.mark.parametrize("k", [1, 5, -1])
+    def test_prompt_topk_raises(self, k):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_prompt_logprobs_request(k, "raw_logprobs")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_prompt_logprobs_request'
+
+.tmp_oldtree/test_new_on_old.py:589: AttributeError
+______________ TestFailClosedSampling.test_prompt_topk_raises[-1] ______________
+
+self = <test_new_on_old.TestFailClosedSampling object at 0x7214e5062120>, k = -1
+
+    @pytest.mark.parametrize("k", [1, 5, -1])
+    def test_prompt_topk_raises(self, k):
+        with pytest.raises(RuntimeError, match="fail closed"):
+>           vs.check_prompt_logprobs_request(k, "raw_logprobs")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'check_prompt_logprobs_request'
+
+.tmp_oldtree/test_new_on_old.py:589: AttributeError
+______ TestLoRAHashRecomputed.test_worker_reports_recomputed_not_declared ______
+
+self = <test_new_on_old.TestLoRAHashRecomputed object at 0x7214e50627e0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7214e450aff0>
+
+    def test_worker_reports_recomputed_not_declared(self, monkeypatch):
+        from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
+    
+        state = self._bound_state(monkeypatch)
+        sd = _lora_sd()
+        digest = lora_sha256(sd)
+        reply = vs.worker_load_lora(None, sd, digest)
+>       assert reply["recomputed_sha256"] == digest == state.lora_sha256
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'recomputed_sha256'
+
+.tmp_oldtree/test_new_on_old.py:671: KeyError
+______________________ TestLoRAHashRecomputed.test_clear _______________________
+
+self = <test_new_on_old.TestLoRAHashRecomputed object at 0x7214e5062de0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7214e4509a90>
+
+    def test_clear(self, monkeypatch):
+        state = self._bound_state(monkeypatch)
+        reply = vs.worker_load_lora(None, {}, "")
+>       assert reply["recomputed_sha256"] is None and state.lora_sha256 is None
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'recomputed_sha256'
+
+.tmp_oldtree/test_new_on_old.py:691: KeyError
+_ TestLoRAHashRecomputed.test_engine_aggregation_raises_on_disagreement_or_echo _
+
+self = <test_new_on_old.TestLoRAHashRecomputed object at 0x7214e50630e0>
+
+    def test_engine_aggregation_raises_on_disagreement_or_echo(self):
+        from rl_engine.models.muse_glimmer.e2e.sync import WeightSyncError
+>       from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import (
+            aggregate_worker_lora_hashes,
+        )
+E       ImportError: cannot import name 'aggregate_worker_lora_hashes' from 'rl_engine.models.muse_glimmer.runtime.strict_rollout_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/.tmp_oldtree/rl_engine/models/muse_glimmer/runtime/strict_rollout_engine.py)
+
+.tmp_oldtree/test_new_on_old.py:697: ImportError
+_____________ TestNativeLoRARecomputed.test_hash_from_vllm_tensors _____________
+
+self = <test_new_on_old.TestNativeLoRARecomputed object at 0x7214e50633e0>
+
+    def test_hash_from_vllm_tensors(self):
+        pytest.importorskip("vllm")
+        from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256
+        from rl_engine.models.muse_glimmer.runtime import vllm_worker_tools as tools
+    
+        sd = _lora_sd()
+        model = self._lora_model(sd)
+        manager = _NS(_adapter_manager=_NS(get_adapter=lambda i: model if i == 3 else None))
+        worker = _NS(model_runner=_NS(lora_manager=manager))
+>       report = tools.worker_native_lora_report(worker, 3)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_worker_tools' has no attribute 'worker_native_lora_report'
+
+.tmp_oldtree/test_new_on_old.py:753: AttributeError
+___________ TestNativeLoRARecomputed.test_scaled_adapter_is_rejected ___________
+
+self = <test_new_on_old.TestNativeLoRARecomputed object at 0x7214e50636e0>
+
+    def test_scaled_adapter_is_rejected(self):
+        pytest.importorskip("vllm")
+        from rl_engine.models.muse_glimmer.runtime import vllm_worker_tools as tools
+    
+        with pytest.raises(RuntimeError, match="scaling"):
+>           tools.canonical_state_from_lora_model(self._lora_model(_lora_sd(), scaling=2.0))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_worker_tools' has no attribute 'canonical_state_from_lora_model'
+
+.tmp_oldtree/test_new_on_old.py:764: AttributeError
+___________________ TestWorkerPaths.test_check_worker_paths ____________________
+
+self = <test_new_on_old.TestWorkerPaths object at 0x7214e5063a40>
+
+    def test_check_worker_paths(self):
+>       from rl_engine.models.muse_glimmer.runtime.strict_rollout_engine import check_worker_paths
+E       ImportError: cannot import name 'check_worker_paths' from 'rl_engine.models.muse_glimmer.runtime.strict_rollout_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/.tmp_oldtree/rl_engine/models/muse_glimmer/runtime/strict_rollout_engine.py)
+
+.tmp_oldtree/test_new_on_old.py:771: ImportError
+________________________ TestCollectLabels.test_labels _________________________
+
+self = <test_new_on_old.TestCollectLabels object at 0x7214e50840e0>
+
+    def test_labels(self):
+        from rl_engine.models.muse_glimmer.runtime import vllm_collect_results as cr
+    
+        seq = [{"id": "s", "logprobs_hex": ["bf800000"]}]
+        a = {"mode": "strict", "tp": 1, "sequences": seq, "lora_sha256": "x" * 64}
+        b = {"mode": "strict", "tp": 1, "sequences": seq, "lora_sha256": None}
+>       out = cr.compare_xrt(a, b, a_label="strict lora tp1", b_label="strict tp1")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: compare_xrt() got an unexpected keyword argument 'a_label'
+
+.tmp_oldtree/test_new_on_old.py:834: TypeError
+=============================== warnings summary ===============================
+.tmp_oldtree/test_new_on_old.py: 14 warnings
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED .tmp_oldtree/test_new_on_old.py::TestLoRAHashRecomputed::test_tampered_tensor_fails_and_keeps_previous_adapter
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_rank_head_counts[1-expected0]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_rank_head_counts[2-expected1]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_rank_head_counts[4-expected2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_rank_head_counts[8-expected3]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_kv_ownership_matches_vllm_sharding[1]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_kv_ownership_matches_vllm_sharding[2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_kv_ownership_matches_vllm_sharding[4]
+FAILED .tmp_oldtree/test_new_on_old.py::TestPerRankHeads::test_kv_ownership_matches_vllm_sharding[8]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_clean_config_passes
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[cache_config.enable_prefix_caching-True]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[cache_config.kv_offloading_size-4.0]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[kv_transfer_config-value2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[speculative_config-value3]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[cache_config.kv_sharing_fast_prefill-True]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[parallel_config.decode_context_parallel_size-2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[parallel_config.prefill_context_parallel_size-2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_kv_page_features_raise[model_config.logprobs_mode-processed_logprobs]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedEngineFeatures::test_native_page_writers_raise
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_plain_request_passes
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_native_columns_raise[kwargs0]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_native_columns_raise[kwargs1]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_native_columns_raise[kwargs2]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_native_columns_raise[kwargs3]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_native_columns_raise[kwargs4]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_prompt_topk_raises[1]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_prompt_topk_raises[5]
+FAILED .tmp_oldtree/test_new_on_old.py::TestFailClosedSampling::test_prompt_topk_raises[-1]
+FAILED .tmp_oldtree/test_new_on_old.py::TestLoRAHashRecomputed::test_worker_reports_recomputed_not_declared
+FAILED .tmp_oldtree/test_new_on_old.py::TestLoRAHashRecomputed::test_clear - ...
+FAILED .tmp_oldtree/test_new_on_old.py::TestLoRAHashRecomputed::test_engine_aggregation_raises_on_disagreement_or_echo
+FAILED .tmp_oldtree/test_new_on_old.py::TestNativeLoRARecomputed::test_hash_from_vllm_tensors
+FAILED .tmp_oldtree/test_new_on_old.py::TestNativeLoRARecomputed::test_scaled_adapter_is_rejected
+FAILED .tmp_oldtree/test_new_on_old.py::TestWorkerPaths::test_check_worker_paths
+FAILED .tmp_oldtree/test_new_on_old.py::TestCollectLabels::test_labels - Type...
+34 failed, 1 passed, 32 deselected, 14 warnings in 13.39s

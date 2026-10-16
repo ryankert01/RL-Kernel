@@ -1,0 +1,35 @@
+[gpu-lease] using GPUs [1]
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.7.0 -- /home/ubuntu/envs/vllm/bin/python
+rootdir: /home/ubuntu/RL-Kernel/.claude/worktrees/agent-ad5c4d3b6ebfb920f
+configfile: pyproject.toml
+plugins: anyio-4.15.1, xdist-3.8.0
+collecting ... collected 20 items
+
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_swiglu_fp32_golden_formula PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_swiglu_backward_fp32_matches_autograd_of_golden PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g5_trace_is_emitted_and_stable PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_ffn_shape_validation PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g1_swiglu_forward_vs_golden[shape0] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g1_swiglu_forward_vs_golden[shape1] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g1_swiglu_forward_vs_golden[shape2] [G1 swiglu bf16 vs fp64, T=64 x F] max_abs=1.672e-01 mean_abs=2.691e-03 max_rel=3.890e-03
+PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g1_swiglu_saturation_corners PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g2_swiglu_batch_invariance_real_width PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g2_ffn_batch_invariance_real_shape PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_gemm_accuracy_invariance_and_strides PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_ffn_forward_small_vs_golden[shape0] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_ffn_forward_small_vs_golden[shape1] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_ffn_forward_small_vs_golden[shape2] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_ffn_forward_real_shape_vs_fp64 [FFN real shape T=64 bf16 vs fp64] max_abs=1.101e-02 mean_abs=1.653e-03 max_rel=5.705e+00
+PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_swiglu_backward_repeat_and_reference [G4 swiglu dgate bf16 vs fp32 autograd] max_abs=3.098e-02 mean_abs=4.852e-04 max_rel=3.890e-03
+PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_ffn_backward_small_repeat_and_reference[shape0] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_ffn_backward_small_repeat_and_reference[shape1] PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_ffn_forward_backward_real_shape_repeat_determinism PASSED
+tests/models/muse_glimmer/test_swiglu_ffn.py::test_real_layer0_mlp_weights_forward [real layer-0 MLP weights, T=8, bf16 vs fp64] max_abs=1.796e-02 mean_abs=3.449e-04 max_rel=1.261e+00
+[real layer-0 MLP weights, HF-style bf16 cuBLAS vs fp64 (reference)] max_abs=2.385e-02 mean_abs=4.859e-04 max_rel=1.759e+00
+PASSED
+
+============================= 20 passed in 16.25s ==============================

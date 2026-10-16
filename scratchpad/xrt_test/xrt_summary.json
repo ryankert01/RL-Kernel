@@ -1,0 +1,274 @@
+{
+ "schema": "muse_glimmer_xrt_summary_v1",
+ "n_scored_tokens": 933,
+ "files": {
+  "megatron strict tp2": {
+   "file": "xrt_megatron_strict_tp2.json",
+   "runtime": "megatron",
+   "mode": "strict",
+   "tp": 2,
+   "backend": null,
+   "n_tokens": 933,
+   "sha256": "2de8d32796e1da3742d49b8364887fd3aa08be0c2b2610812f25ace71eb1fa1f"
+  },
+  "reference train_forward": {
+   "file": "xrt_reference_triton.json",
+   "runtime": "reference",
+   "mode": "train_forward",
+   "tp": null,
+   "backend": null,
+   "n_tokens": 933,
+   "sha256": "2de8d32796e1da3742d49b8364887fd3aa08be0c2b2610812f25ace71eb1fa1f"
+  },
+  "vllm native tp1": {
+   "file": "xrt_vllm_native_tp1.json",
+   "runtime": "vllm",
+   "mode": "native",
+   "tp": 1,
+   "backend": null,
+   "n_tokens": 933,
+   "sha256": "4891de08490fc4852c781d15eb4c67e5267264a61d4720abe05a20a1ac465712"
+  },
+  "vllm strict tp1": {
+   "file": "xrt_vllm_strict_tp1.json",
+   "runtime": "vllm",
+   "mode": "strict",
+   "tp": 1,
+   "backend": null,
+   "n_tokens": 933,
+   "sha256": "2de8d32796e1da3742d49b8364887fd3aa08be0c2b2610812f25ace71eb1fa1f"
+  }
+ },
+ "strict_labels": [
+  "megatron strict tp2",
+  "reference train_forward",
+  "vllm strict tp1"
+ ],
+ "strict_all_equal": true,
+ "matrix": {
+  "megatron strict tp2": {
+   "megatron strict tp2": 0,
+   "reference train_forward": 0,
+   "vllm native tp1": 314,
+   "vllm strict tp1": 0
+  },
+  "reference train_forward": {
+   "megatron strict tp2": 0,
+   "reference train_forward": 0,
+   "vllm native tp1": 314,
+   "vllm strict tp1": 0
+  },
+  "vllm native tp1": {
+   "megatron strict tp2": 314,
+   "reference train_forward": 314,
+   "vllm native tp1": 0,
+   "vllm strict tp1": 314
+  },
+  "vllm strict tp1": {
+   "megatron strict tp2": 0,
+   "reference train_forward": 0,
+   "vllm native tp1": 314,
+   "vllm strict tp1": 0
+  }
+ },
+ "max_abs": {
+  "megatron strict tp2": {
+   "megatron strict tp2": 0.0,
+   "reference train_forward": 0.0,
+   "vllm native tp1": 0.0010001659393310547,
+   "vllm strict tp1": 0.0
+  },
+  "reference train_forward": {
+   "megatron strict tp2": 0.0,
+   "reference train_forward": 0.0,
+   "vllm native tp1": 0.0010001659393310547,
+   "vllm strict tp1": 0.0
+  },
+  "vllm native tp1": {
+   "megatron strict tp2": 0.0010001659393310547,
+   "reference train_forward": 0.0010001659393310547,
+   "vllm native tp1": 0.0,
+   "vllm strict tp1": 0.0010001659393310547
+  },
+  "vllm strict tp1": {
+   "megatron strict tp2": 0.0,
+   "reference train_forward": 0.0,
+   "vllm native tp1": 0.0010001659393310547,
+   "vllm strict tp1": 0.0
+  }
+ },
+ "per_sequence": {
+  "megatron strict tp2 | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 19,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 16,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 13,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 31,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 50,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 30,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 60,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "reference train_forward | vllm native tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 19,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 16,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 13,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 31,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 50,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 30,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 60,
+    "first": 0,
+    "of": 178
+   }
+  },
+  "vllm native tp1 | vllm strict tp1": {
+   "gsm8k_test_0": {
+    "mismatches": 19,
+    "first": 0,
+    "of": 55
+   },
+   "gsm8k_test_1": {
+    "mismatches": 16,
+    "first": 0,
+    "of": 47
+   },
+   "gsm8k_test_2": {
+    "mismatches": 43,
+    "first": 0,
+    "of": 129
+   },
+   "gsm8k_test_3": {
+    "mismatches": 13,
+    "first": 0,
+    "of": 39
+   },
+   "gsm8k_test_4": {
+    "mismatches": 31,
+    "first": 0,
+    "of": 92
+   },
+   "gsm8k_test_5": {
+    "mismatches": 50,
+    "first": 0,
+    "of": 149
+   },
+   "gsm8k_test_6": {
+    "mismatches": 30,
+    "first": 0,
+    "of": 88
+   },
+   "gsm8k_test_7": {
+    "mismatches": 52,
+    "first": 0,
+    "of": 156
+   },
+   "gsm8k_long_window": {
+    "mismatches": 60,
+    "first": 0,
+    "of": 178
+   }
+  }
+ },
+ "example_token": {
+  "sequence": "gsm8k_long_window",
+  "index": 0
+ },
+ "example": [
+  {
+   "label": "megatron strict tp2",
+   "hex": "0xbe5e38b5",
+   "value": -0.2170131951570511,
+   "strict": true
+  },
+  {
+   "label": "reference train_forward",
+   "hex": "0xbe5e38b5",
+   "value": -0.2170131951570511,
+   "strict": true
+  },
+  {
+   "label": "vllm strict tp1",
+   "hex": "0xbe5e38b5",
+   "value": -0.2170131951570511,
+   "strict": true
+  },
+  {
+   "label": "vllm native tp1",
+   "hex": "0xbe5d3290",
+   "value": -0.21601319313049316,
+   "strict": false
+  }
+ ],
+ "problems": []
+}

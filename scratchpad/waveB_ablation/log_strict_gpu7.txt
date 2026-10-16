@@ -1,0 +1,9 @@
+[gpu-lease] using GPUs [7]
+[23:10:38] loading 541 text tensors from model-00001-of-00002.safetensors
+[23:10:45] loading 86 text tensors from model-00002-of-00002.safetensors
+INFO 10-15 23:10:49 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[23:10:49] strict model (triton) loaded in 10.6s on NVIDIA A100-SXM4-80GB lease=7
+[23:10:52] strict baseline 3388 ms
+[23:10:52] strict setting repeat_immediate ...
+[23:10:55]   0/933 tokens differ, max|d| 0.000e+00, 2450 ms, peak 52.5 GiB
+[23:10:55] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_strict_gpu7.json

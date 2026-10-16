@@ -1,0 +1,43 @@
+........................................................................ [ 16%]
+.............................................s.......................... [ 32%]
+........................................................................ [ 48%]
+.........F..............................s............................... [ 64%]
+........................................................................ [ 81%]
+........................................................................ [ 97%]
+...........s                                                             [100%]
+=================================== FAILURES ===================================
+_______________ test_lm_head_tiles_tp2_equals_tp1_and_reference ________________
+
+    @requires_cuda
+    def test_lm_head_tiles_tp2_equals_tp1_and_reference():
+        vocab, padded, hidden, m = 2000, 2048, 256, 24
+        tile_rows = padded // 8
+        mult, cap = 0.19611613513818404, 20.0
+        h = torch.randn(m, hidden, device="cuda").to(torch.bfloat16)
+        w = (torch.randn(vocab, hidden, device="cuda") * 0.05).to(torch.bfloat16)
+        w_pad = torch.nn.functional.pad(w, (0, 0, 0, padded - vocab))
+        targets = torch.randint(0, vocab, (m,), device="cuda")
+    
+        def run(comm):
+            ids = sk.local_chunk_ids(comm.rank, comm.world)
+            tiles = w_pad[ids[0] * tile_rows : (ids[-1] + 1) * tile_rows].contiguous()
+            hg = h.clone().requires_grad_(True)
+            lp = StrictLMHeadLogprob.apply(hg, targets, tiles, tuple(ids), comm, vocab, tile_rows, mult, cap)
+            (dh,) = torch.autograd.grad(lp.sum(), (hg,))
+            return lp, dh
+    
+        lp1, dh1 = _simulate(1, run)[0]
+        for lp2, dh2 in _simulate(2, run):
+            assert torch.equal(lp2, lp1)
+>           assert torch.equal(dh2, dh1)
+E           AssertionError: assert False
+E            +  where False = <built-in method equal of type object at 0x7865d8b9ff20>(tensor([[-0.0070,  0.0222, -0.0126,  ..., -0.0018, -0.0090,  0.0038],\n        [ 0.0044, -0.0107,  0.0061,  ..., -0.004...],\n        [-0.0099, -0.0227, -0.0048,  ..., -0.0160, -0.0005,  0.0132]],\n       device='cuda:0', dtype=torch.bfloat16), tensor([[-0.0070,  0.0222, -0.0126,  ..., -0.0018, -0.0090,  0.0038],\n        [ 0.0044, -0.0107,  0.0060,  ..., -0.004...],\n        [-0.0099, -0.0227, -0.0048,  ..., -0.0159, -0.0005,  0.0132]],\n       device='cuda:0', dtype=torch.bfloat16))
+E            +    where <built-in method equal of type object at 0x7865d8b9ff20> = torch.equal
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py:256: AssertionError
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_megatron_strict_binding.py::test_lm_head_tiles_tp2_equals_tp1_and_reference
+SKIPPED [1] tests/models/muse_glimmer/test_full_model_chain.py:38: MUSEGLIMMER_CHECKPOINT not set
+SKIPPED [1] tests/models/muse_glimmer/test_museglimmer_fingerprint.py:262: set MUSEGLIMMER_CHECKPOINT
+SKIPPED [1] tests/models/muse_glimmer/test_vllm_strict_binding.py:418: set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease
+1 failed, 440 passed, 3 skipped in 149.88s (0:02:29)

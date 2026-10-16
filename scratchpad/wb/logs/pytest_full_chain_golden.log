@@ -1,0 +1,19 @@
+[gpu-lease] using GPUs [7]
+INFO 10-15 23:04:21 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+prompt 256 + completion 32 tokens, backend `golden`, all paths byte-equal to train: **True**
+
+| path | chunk sizes | equal to train | equal tokens | max abs diff | seconds | peak GiB |
+|---|---|---|---|---|---|---|
+| train | - | (reference) | 32/32 | 0 | 2.58 | 52.41 |
+| prefill | - | yes | 32/32 | 0.000e+00 | 1.92 | 52.42 |
+| chunked:prompt_boundary | [256, 31] | yes | 32/32 | 0.000e+00 | 2.20 | 52.39 |
+| chunked:halves | [143, 144] | yes | 32/32 | 0.000e+00 | 2.51 | 52.30 |
+| chunked:block64 | [64, 64, 64, 64, 31] | yes | 32/32 | 0.000e+00 | 2.85 | 52.29 |
+| chunked:ragged | [1, 63, 100, 7, 116] | yes | 32/32 | 0.000e+00 | 3.42 | 52.30 |
+| decode | - | yes | 32/32 | 0.000e+00 | 20.63 | 52.39 |
+.s
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/models/muse_glimmer/test_full_model_chain.py::test_full_model_chain_prompt256_completion32
+SKIPPED [1] tests/models/muse_glimmer/test_full_model_chain.py:83: batched-decode gate runs the triton op set
+1 passed, 1 skipped in 46.93s

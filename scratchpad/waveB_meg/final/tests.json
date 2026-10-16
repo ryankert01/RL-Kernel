@@ -1,0 +1,91 @@
+{
+ "code_commit": "926da6585ea54d91100427b031112eea0f8cd5bd",
+ "unit_tests": [
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 0-2 -- env PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -q -rs",
+   "outcome": "45 passed, 3 skipped, 1 warning in 13.62s",
+   "skipped": "NCCL TP2 / TP4 (need 2 / 4 GPUs: run separately), opt-in 30B protocol test"
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 0-2 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py tests/models/muse_glimmer/test_vllm_strict_binding.py::TestLoRA -q -rs",
+   "outcome": "47 passed, 3 skipped in 45.31s"
+  },
+  {
+   "command": "~/bin/gpu-lease -n 4 --pool 0-3 --contiguous -- env PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -k nccl -q -rs",
+   "outcome": "2 passed, 46 deselected, 1 warning in 18.52s"
+  }
+ ],
+ "protocol_tests_30b": [
+  {
+   "command": "~/bin/gpu-lease -n 2 --pool 0-2 --contiguous -- env RL_KERNEL_MUSEGLIMMER_E2E=1 MUSEGLIMMER_TRAIN_TP=2 MUSEGLIMMER_TRAIN_STRICT=1 PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -k protocol -s -q",
+   "log": [
+    "step {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 1, 'fwd_bwd_s': 3.2590015679961652, 'grad_norm': 423.0178527832031, 'lr': 0.0001, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.32773638400249183, 'num_lora_params_local': 74547200, 'loss': 117.54170227050781}",
+    "step2 {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 1, 'fwd_bwd_s': 4.196228173997952, 'grad_norm': 0.5478692650794983, 'lr': 0.0001, 'step': 2, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.1893100319939549, 'num_lora_params_local': 74547200, 'loss': -0.6862200498580933}",
+    "1 passed, 47 deselected, 34 warnings in 248.96s (0:04:08)"
+   ]
+  },
+  {
+   "command": "same with MUSEGLIMMER_TRAIN_STRICT=0 (native trainer)",
+   "log": [
+    "step {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 3.257278999000846, 'grad_norm': 335.1124267578125, 'lr': 0.0001, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.3250718620038242, 'num_lora_params_local': 74547200, 'loss': 116.96968078613281}",
+    "step2 {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 2.271214129999862, 'grad_norm': 0.5680627226829529, 'lr': 0.0001, 'step': 2, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.17403297500277404, 'num_lora_params_local': 74547200, 'loss': -0.6766951680183411}",
+    "1 passed, 47 deselected, 5650 warnings in 286.94s (0:04:46)"
+   ]
+  }
+ ],
+ "before_after_probe": {
+  "script": "scratchpad/waveB_meg/probe_before_after.py (conditions of the new regression tests)",
+  "wave_a_tree_f91e8b6": {
+   "tree": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_meg/old",
+   "R1_missing_norms": {
+    "raised": false,
+    "all_strict": false
+   },
+   "R1_attn_off": {
+    "raised": false,
+    "all_strict": false
+   },
+   "R3_strict_mismatch": {
+    "raised": false,
+    "mismatches": 1,
+    "grads_kept": true
+   },
+   "kernels_gemm_R1_mismatch_vs_dw_rule": {
+    "200": 10581,
+    "300": 0,
+    "513": 16803
+   },
+   "R2_packing_grad_mismatches_vs_one_pack": {
+    "[[0, 1], [2]]": 14860,
+    "[[0], [1], [2]]": 15034
+   },
+   "R2_elements": 20480
+  },
+  "this_tree": {
+   "tree": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-1",
+   "R1_missing_norms": {
+    "raised": true,
+    "error": "StrictOpsUnavailable"
+   },
+   "R1_attn_off": {
+    "raised": true,
+    "error": "ValueError"
+   },
+   "R3_strict_mismatch": {
+    "raised": true,
+    "error": "StrictRecomputeMismatch",
+    "grads_kept": false
+   },
+   "kernels_gemm_R1_mismatch_vs_dw_rule": {
+    "200": 0,
+    "300": 0,
+    "513": 0
+   },
+   "R2_packing_grad_mismatches_vs_one_pack": {
+    "[[0, 1], [2]]": 0,
+    "[[0], [1], [2]]": 0
+   },
+   "R2_elements": 20480
+  }
+ }
+}

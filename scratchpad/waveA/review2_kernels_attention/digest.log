@@ -1,0 +1,7 @@
+[gpu-lease] using GPUs [4]
+== new
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_kernels_attention/digest_new.json in 31.5s
+rc=0
+== old
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_kernels_attention/digest_old.json in 32.2s
+rc=0

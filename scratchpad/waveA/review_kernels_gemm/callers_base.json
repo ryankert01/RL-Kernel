@@ -1,0 +1,7 @@
+{
+ "module": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review_kernels_gemm/base_tree/rl_engine/models/muse_glimmer/ops/det_gemm.py",
+ "megatron_token_grad_Tpad512": "a3fd2ed5aa75c673",
+ "megatron_token_grad_Tpad1024": "3c1da4abf4193782",
+ "vllm_lora_b_r32_kchunks1": "5f6c4aef98ca6321",
+ "vllm_lora_b_r64_kchunks1": "45d764884ee83f59"
+}

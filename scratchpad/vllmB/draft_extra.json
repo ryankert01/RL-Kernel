@@ -1,0 +1,1026 @@
+{
+ "tp4_engine": {
+  "status": "completed",
+  "runs": [
+   {
+    "run": "runs/strict_tp4.json",
+    "status": "completed",
+    "commit": "38ed92713144b86a454cee286e1d49ef6d50a10c",
+    "command": "python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 4 --strict --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --temperatures 0,1 --max-tokens 64 --prefill-check --lora-random-check --xrt-score reports/muse_glimmer_poc/data/xrt_tokens.json --xrt-out reports/muse_glimmer_poc/data/xrt_vllm_strict_tp4.json --xrt-lora-out reports/muse_glimmer_poc/data/xrt_vllm_strict_lora_tp4.json --max-num-seqs 256 --decode-batches 256 --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/vllmB/runs/strict_tp4.json",
+    "error": null,
+    "decode_vs_prefill": [
+     {
+      "temperature": 0.0,
+      "mismatched": 0,
+      "tokens": 512
+     },
+     {
+      "temperature": 1.0,
+      "mismatched": 0,
+      "tokens": 512
+     }
+    ],
+    "contract_shapes": [
+     {
+      "label": "decode_batch_256_no_lora",
+      "mismatched": 0,
+      "tokens": 16384,
+      "max_decode_batch": 256
+     }
+    ],
+    "lora_hash_identity": true,
+    "lora_sha256_per_worker": [
+     "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+     "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+     "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+     "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5"
+    ]
+   },
+   {
+    "run": "runs/strict_tp4_chunked.json",
+    "status": "completed",
+    "commit": "38ed92713144b86a454cee286e1d49ef6d50a10c",
+    "command": "python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 4 --strict --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --no-generate --max-num-batched-tokens 512 --max-num-seqs 256 --long-window --decode-batches 64 --contract-lora --count-null-pages --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/vllmB/runs/strict_tp4_chunked.json",
+    "error": null,
+    "contract_shapes": [
+     {
+      "label": "long_window_no_lora",
+      "mismatched": 0,
+      "tokens": 1280,
+      "max_decode_batch": 5
+     },
+     {
+      "label": "decode_batch_64_no_lora",
+      "mismatched": 0,
+      "tokens": 4096,
+      "max_decode_batch": 64
+     },
+     {
+      "label": "long_window_random_lora",
+      "mismatched": 0,
+      "tokens": 1280,
+      "max_decode_batch": 5
+     },
+     {
+      "label": "decode_batch_64_random_lora",
+      "mismatched": 0,
+      "tokens": 4096,
+      "max_decode_batch": 64
+     }
+    ]
+   },
+   {
+    "run": "runs/bench_strict_tp4.json",
+    "status": "completed",
+    "commit": "988bacfcfd3e745fe8bd39a57d5b8035365c428a",
+    "command": "python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 4 --strict --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --no-generate --bench --profile --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/vllmB/runs/bench_strict_tp4.json",
+    "error": null
+   },
+   {
+    "run": "runs/bench_native_tp4.json",
+    "status": "completed",
+    "commit": "988bacfcfd3e745fe8bd39a57d5b8035365c428a",
+    "command": "python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 4 --native --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --no-generate --bench --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/vllmB/runs/bench_native_tp4.json",
+    "error": null
+   },
+   {
+    "run": "runs/bench_native_cg_tp4.json",
+    "status": "completed",
+    "commit": "988bacfcfd3e745fe8bd39a57d5b8035365c428a",
+    "command": "python -m rl_engine.models.muse_glimmer.runtime.run_vllm_strict --tp 4 --native --cuda-graphs --prompt-file reports/muse_glimmer_poc/data/xrt_tokens.json --no-generate --bench --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/vllmB/runs/bench_native_cg_tp4.json",
+    "error": null
+   }
+  ],
+  "pass_criterion": "xrt_vllm_strict_tp4.json 'sequences' == xrt_vllm_strict_tp1.json 'sequences' (and the _lora_ pair); decode_vs_prefill mismatched == 0; generated tokens == TP1 (token_selection_invariance.across_tp); see xrt.comparisons.strict_tp4_vs_strict_tp1",
+  "lease": "~/bin/gpu-lease -n 4 --pool 4-7 --contiguous --timeout 14400"
+ },
+ "status": "partial",
+ "status_line": "draft",
+ "commit": "test",
+ "tests": [
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider",
+   "outcome": "PENDING_FINAL_RERUN"
+  },
+  {
+   "command": "RL_KERNEL_MUSEGLIMMER_E2E=1 ~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider -k engine",
+   "outcome": "13 passed, 54 deselected in 281.88s at commit 122742e (the -k filter selects the 2 opt-in 30B engine tests plus 11 unit tests whose names contain 'engine'): test_strict_engine_protocol_with_real_lora (RolloutEngineLike signatures, transfer_lora via file, worker-recomputed lora_sha256 per worker, wrong-hash rejection, n=2 sampling, decode == prefill bit for bit under a rank-16 LoRA on 416 slots with logp <= 0, second sync replaces the adapter) and test_strict_engine_decode_equals_prefill (short prompt + the 2261-token long-window prompt, 24 decode tokens at T=0 and T=1, bits equal, logp <= 0)"
+  },
+  {
+   "command": "new test file on the pre-fix tree (git archive 021ea61^ rl_engine): PYTHONPATH=<old tree> ~/envs/vllm/bin/python -m pytest <new test file> -k 'TestFailClosedEngineFeatures or TestFailClosedSampling or TestLoRAHashRecomputed or TestNativeLoRARecomputed or TestWorkerPaths or TestCollectLabels or TestPerRankHeads'",
+   "outcome": "34 failed, 1 passed (the pre-existing tampered-hash rejection) - the new tests fail before the fixes"
+  },
+  {
+   "command": "same, GPU tests on the pre-fix tree: -k 'TestStrictSamplingLogits or TestLoRARuleCheckIsIndependent'",
+   "outcome": "3 failed (no strict_logits; the old LoRA-rule formula reuses _padded_partial, so a broken helper still reports binding_equals_formula=True) - fail before, pass after"
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.runtime.vllm_tp_sim",
+   "outcome": "all_equal: true at commit 122742e (TP2/4/8 x LoRA on/off x local/global layer: attention out, MLP out, hidden, logp, sampler-path logp, strict logits and argmax equal TP1 bit for bit on every rank)"
+  }
+ ],
+ "tp_simulation": {
+  "tokens": 37,
+  "seed": 0,
+  "lora_rank": 16,
+  "op_impls": {
+   "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+   "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+   "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+   "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+   "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+   "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+   "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+   "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+   "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+   "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+   "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+   "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+   "softcap_logits": "strict:rl_engine.models.muse_glimmer.triton.softcap_logprob.launch_softcap",
+   "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+   "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats"
+  },
+  "results": [
+   {
+    "tp": 2,
+    "lora": false,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.04239900399988983,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 4,
+    "lora": false,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.09428793299593963,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 8,
+    "lora": false,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.2941472720049205,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 2,
+    "lora": true,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.049523592002515215,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 4,
+    "lora": true,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.1493720279977424,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 8,
+    "lora": true,
+    "layer": "local (RoPE, window 2048)",
+    "seconds": 0.6309026749950135,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 2,
+    "lora": false,
+    "layer": "global (NoPE)",
+    "seconds": 0.026987706005456857,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 4,
+    "lora": false,
+    "layer": "global (NoPE)",
+    "seconds": 0.0640710619991296,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 8,
+    "lora": false,
+    "layer": "global (NoPE)",
+    "seconds": 0.233267290997901,
+    "all_gathers": 5,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 2,
+    "lora": true,
+    "layer": "global (NoPE)",
+    "seconds": 0.045229715993627906,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 4,
+    "lora": true,
+    "layer": "global (NoPE)",
+    "seconds": 0.13070769899786683,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   },
+   {
+    "tp": 8,
+    "lora": true,
+    "layer": "global (NoPE)",
+    "seconds": 0.5311578609980643,
+    "all_gathers": 7,
+    "errors": [],
+    "equal_to_tp1": {
+     "attn_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "mlp_out": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "hidden": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logp_sampler_path": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "argmax": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "logits": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ],
+     "sampler_logp_equals_prefill_logp": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+     ]
+    },
+    "all_equal": true,
+    "logp_max_abs_vs_tp1": 0.0
+   }
+  ],
+  "all_equal": true,
+  "command": "~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.runtime.vllm_tp_sim",
+  "commit": "122742e",
+  "what": "binding per-rank code (strict_attention_forward on stand-in modules with the rank's heads, strict_mlp_forward, strict_logits, strict_selected_logp) of one real-shape decoder layer (local and global) + padded lm_head at simulated TP 2/4/8 (threads + in-process rank-ordered all-gather on ONE GPU), with and without a rank-16 LoRA; torch.equal vs TP1"
+ },
+ "finding_verdicts": [
+  {
+   "id": "vllm_runtime:R1",
+   "verdict": "fixed",
+   "evidence": "REPORT_vllm_runtime_adapter.md is now rendered from vllm_runtime.json by runtime/vllm_report.py (same text stored in report_markdown); it has an Integration requests section and a status line computed from the data."
+  },
+  {
+   "id": "vllm_runtime:R2",
+   "verdict": "fixed",
+   "evidence": "vllm_strict.check_strict_engine_config rejects prefix caching, kv_transfer_config (connectors/offload), kv_offloading_size, speculative decoding, kv_sharing_fast_prefill, decode/prefill CP, PP and processed logprobs modes at model init; copy_kv_cache_blocks_inplace (V1+V2 runners), KVBlockZeroer.zero_block_ids and GPUModelRunner._init_kv_zero_meta raise; batch-sharded sampling rejected; the false 'same byte range' docstring is rewritten. Tests TestFailClosedEngineFeatures (11) fail on the pre-fix tree (AttributeError) and pass now; every engine run records the per-feature verdicts in worker_provenance[*].checks."
+  },
+  {
+   "id": "vllm_runtime:R3",
+   "verdict": "fixed",
+   "evidence": "compare_rows reports nonzero_tokens / tokens_lp_below_1e-3 / tokens_lp_below_0.1 / positive_tokens next to every mismatch count (REPORT headline shows them); contract_shapes holds the long-window (2261-token prompt + 256 decode tokens, positions 2261-2516, chunked prefill at max_num_batched_tokens=512), decode batch 64 and decode batch 256 runs at TP1/TP2 (strict and native) and TP4 strict; the opt-in E2E test test_strict_engine_decode_equals_prefill now decodes the 2261-token prompt too."
+  },
+  {
+   "id": "vllm_runtime:R4",
+   "verdict": "fixed",
+   "evidence": "run_bench repeats every bench 3x in the same warm engine (median, min-max, spread %, host loadavg per repeat); a native CUDA-graph baseline (--cuda-graphs, enforce_eager=False) is measured next to native eager; the '+-15 %' claim is gone. The host was heavily loaded by other agents during every bench (loadavg recorded per repeat), which the report states; an idle host was not available."
+  },
+  {
+   "id": "vllm_runtime:R5",
+   "verdict": "fixed",
+   "evidence": "MuseGlimmerForCausalLM.compute_logits now returns the strict fp32 zhat of all 202048 columns (8 canonical det-GEMM tiles + the O7 kernel's own soft cap launch_softcap, exact TP all-gather); the native cuBLAS lm_head is no longer run; the sampled-token logp reuses the same fp32 tiles. Unit test TestStrictSamplingLogits (logits[target] - logsumexp == strict logp; batch invariant; logp(argmax) <= 0) and the TP simulation (logits and argmax at TP2/4/8 == TP1) pass; engine evidence: token_selection_invariance (across TP and across 64- vs 256-wide batches) in vllm_runtime.json."
+  },
+  {
+   "id": "vllm_runtime:R6",
+   "verdict": "fixed",
+   "evidence": "check_sampling_request raises on top-k/top-p, logprobs>0, logprob_token_ids and processed logprobs modes; check_prompt_logprobs_request raises on prompt_logprobs != 0; PromptLogprobsWorker.compute_prompt_token_id_logprobs raises when token-id scoring is requested; FlashInfer/XPU fused samplers are disabled. Tests TestFailClosedSampling (9) fail on the pre-fix tree and pass now."
+  },
+  {
+   "id": "vllm_runtime:R7",
+   "verdict": "fixed",
+   "evidence": "compare_xrt labels come from the dump (xrt_label: mode, LoRA marker, TP, reference-chain mode) or the comparison key; decode_vs_prefill keeps prefill_logprobs as floats; LoRA generate records use the same schema (ids, prompt_lens, finish_reasons, logprobs_hex); kv_ownership.kv_heads_replicated = tp > 2 (TP4/8 only). Test TestCollectLabels fails on the pre-fix tree and passes now."
+  },
+  {
+   "id": "vllm_runtime:R8",
+   "verdict": "fixed",
+   "evidence": "worker_check_lora_rule's formula calls ops.det_gemm.fast_det_gemm directly on unpadded shapes (not the binding's op table or _padded_partial) with a Python rank loop, plus an fp32-golden (fallback_ops.det_gemm) tolerance view. Test TestLoRARuleCheckIsIndependent breaks _padded_partial by 1 ulp-scale and requires binding_equals_formula == False: it fails on the pre-fix tree (the old formula reused _padded_partial) and passes now."
+  },
+  {
+   "id": "vllm_runtime:R9",
+   "verdict": "fixed",
+   "evidence": "The protocol test asserts v <= 0.0 again (c88607f launches the softcap kernels with enable_fp_fusion=False). Every run now reports positive_tokens; see the decode_vs_prefill and xrt positive_logprobs counts in vllm_runtime.json."
+  },
+  {
+   "id": "vllm_runtime:R10",
+   "verdict": "fixed",
+   "evidence": "Native load_lora force-loads the adapter (LLMEngine.add_lora) and every TP worker rebuilds the canonical state dict from vLLM's LoRAModel tensors (vllm_worker_tools.canonical_state_from_lora_model: qkv_proj/gate_up_proj unpacked, output_gate_proj -> gate_proj, scaling must be 1) and recomputes lora_sha256; provenance reports that recomputed value plus slots_nonzero_b (416 expected). Tests TestNativeLoRARecomputed fail on the pre-fix tree and pass now."
+  },
+  {
+   "id": "vllm_runtime:R11",
+   "verdict": "fixed",
+   "evidence": "vllm_xrt_reference.py records commit, git_dirty and command; it was re-run at the final code and both outputs (train, prefill) are embedded in vllm_runtime.json (xrt.reference_chain_*.document) and compared with every vLLM strict dump. Every run file records git_dirty + git_status_porcelain; StrictRolloutEngine fails at construction unless every worker imports rl_engine from the driver's file (check_worker_paths, test TestWorkerPaths). The stale editable install itself is outside this row (integration request)."
+  },
+  {
+   "id": "vllm_runtime:R12",
+   "verdict": "fixed (reporting) / not_fixed_with_reason (kernel fusion)",
+   "evidence": "The bench is repeated with the rank-16 LoRA loaded (--bench-lora): tokens/s and peak memory per rank are in the throughput table. Fusing the rank loop was not done: the loop is strict_kernels.small_k_fp32, shared with the trainer (megatron row owns it) and its fixed order is the cross-runtime contract, so a fused kernel must be introduced there for both runtimes at once (integration request)."
+  },
+  {
+   "id": "vllm_runtime:R13",
+   "verdict": "fixed",
+   "evidence": "A real 4-GPU TP4 engine run (strict generate + prefill check + xrt + LoRA xrt + contract shapes) is in vllm_runtime.json (tp4_engine, xrt strict_tp4_vs_strict_tp1). The simulation now calls the binding's own strict_attention_forward / strict_mlp_forward / strict_logits on stand-in modules."
+  },
+  {
+   "id": "e2e_bridge:R4",
+   "verdict": "fixed",
+   "evidence": "worker_load_lora recomputes muse_glimmer_lora_sha256_v1 over the bf16 tensors the rank read and shards, refuses a mismatch with the declared hash (previous adapter kept) and stores the RECOMPUTED value; StrictRolloutEngine.provenance()['lora_sha256'] is the value all TP workers recomputed (aggregate_worker_lora_hashes raises WeightSyncError on disagreement among workers or with the driver's own hash), with lora_sha256_per_worker and lora_sha256_source; native mode does the same from vLLM's loaded LoRA tensors. Tests TestLoRAHashRecomputed fail on the pre-fix tree and pass now."
+  }
+ ],
+ "report_static": {
+  "throughput_notes": "Each row: one engine, warm (2-token warm-up), batch 32 x 256 generated tokens at T=1 with ignore_eos, repeated 3x; tokens/s = generated / wall, median of the repeats (min-max in brackets). TTFT = wall time of generate(max_tokens=1) for the whole batch (min of 3). Decode step = rank-0 step wall time with a CUDA synchronize per step (measurement mode). The host CPU was heavily loaded by other agents' jobs during these runs (1-minute load average per repeat in the last column; the node has 240 hardware threads); eager decode is CPU-launch bound, so the absolute numbers and the strict/native ratio carry an uncontrolled bias from that load, and the spread column only measures run-to-run noise inside one engine. Native eager and native CUDA-graph rows are both given; production vLLM runs CUDA graphs.",
+  "what_changed": "## What changed in wave B (issue list -> verdicts in `vllm_runtime.json` -> `finding_verdicts`)\n* **Per-rank attention heads.** TP>1 attention now runs on the rank's own heads: vLLM's native\n  `Attention` (32/t query heads, max(1, 2/t) KV heads: TP2 16/1, TP4 8/1 with the KV head\n  replicated on two ranks) and the strict op's new `num_q_heads`/`num_kv_heads`. The\n  KV-replicating `Attention` factory and the four q/k/v/gate all-gathers are deleted; KV memory\n  per rank and attention work drop by t. Bits are unchanged (heads never interact in O5): xrt\n  scores and generated tokens at TP2 and TP4 equal TP1 byte for byte (headline table).\n* **Strict token selection (R5).** `compute_logits` returns the strict fp32 `zhat` of the 202048\n  real columns (8 canonical det-GEMM tiles, the O7 kernel's own soft cap, exact TP all-gather);\n  vLLM V2's seeded Gumbel sampler / greedy argmax picks the token from it; the native cuBLAS\n  lm_head is no longer run; the sampled-token logprob reuses the same fp32 tiles.\n* **Fail closed (R2, R6).** Engine features that address KV pages in the native layout\n  (prefix caching, KV connectors / transfer / offloading, speculative decoding, KV sharing,\n  decode/prefill context parallelism, KV-block zeroing) are rejected at model init and the\n  native page writers raise; requests that would return native numbers (top-k/top-p,\n  `logprobs>0`, `prompt_logprobs>0`, token-id scoring, processed logprob modes) raise.\n* **LoRA identity (e2e_bridge:R4, R10).** `provenance()[\"lora_sha256\"]` is the hash every TP\n  worker recomputed on the tensors it actually loaded (strict: the full tensors it read and\n  sharded; native: the tensors vLLM's LoRA manager holds); disagreement raises.\n* **Evidence (R3, R4, R7, R8, R11, R13).** Contract shapes (2261-token prompt + 256 decode\n  tokens across the window with eviction and chunked prefill; decode batches 64 and 256),\n  informative-token counts next to every mismatch count, 3-repeat benches with a CUDA-graph\n  native baseline, independent LoRA-rule formula, dirty-tree flags, worker import-path check,\n  reference chain re-run and embedded, real TP4 engine.\n",
+  "design_notes": "## Design notes\nHooks: FLASH_ATTN enum override -> strict backend (owns the KV write; passes the rank's head\ncounts); `ParallelLMHead` padded to 202752 rows (rank r of t owns vocab tiles [8r/t, 8(r+1)/t));\n`MuseGlimmerForCausalLM.__init__` (keeps the `(*, vllm_config, prefix)` signature vLLM inspects)\nbinds and checks (native class, config pins, eager, bf16 KV, KV-page features, per-rank head\ngeometry, all 15 ops strict); `compute_logits` -> strict sampling logits; V2 `Sampler.__call__`\n(fail-closed request checks, strict selected-token logp from the stashed fp32 tiles) and\n`Sampler.__init__` (Gumbel path only); `compute_prompt_logprobs_with_chunking` (prompt-token\ncolumn = strict O7, ranks from the strict logits) and `PromptLogprobsWorker.\ncompute_prompt_token_id_logprobs` (raises); `embed_input_ids` (O1, exact TP gather); decoder layer\n(O2 incl. fused [F1]); attention (`strict_attention_forward`: four det GEMMs on the rank's\ncanonical slices of fused `qkv_proj` + `output_gate_proj`, O4 on the rank's heads, gate side\nchannel into O5, row-parallel `o_proj` tree); MLP (`strict_mlp_forward`); final norm; native KV\npage writers (raise). Row-parallel GEMMs: fp32 sub-tree partial per rank ->\n`all_gather_into_tensor` (data movement) -> canonical tree -> one cast.\n\nKV layout: vLLM 0.31 hands each layer a logical `(B, H, N, 2D)` view of an `LBNHC` buffer; the\nbackend re-views the dense per-layer region as `(2, B, N, H, D)` (K pages then V pages) and owns\nthe write. A strict page is NOT the native page with the same id, which is why every native\npage-addressed feature is rejected (above).\n\nSliding-window eviction in vLLM 0.31 (measured, not assumed): the scheduler frees a request's\npages whose keys are all at positions <= (first position computed this step) - 2048\n(`SlidingWindowManager.remove_skipped_blocks`) and may hand them to other requests, but the\nworker block table of a running request is append-only, so the freed pages keep their stale ids\nthere; null id 0 only marks never-allocated slots. The opt-in counter\n(`--count-null-pages`) saw 0 in-range null entries during the long-window runs\n(`contract_shapes[*].null_pages_read`). This is safe because the strict kernel never reads a\nblock-table entry or a K/V slot at a position <= p_min - 2048 (p_min = the smallest query\nposition of the tile; masked loads, `k_pos > win_lo`), which is exactly the set vLLM may have\nfreed; keys between p_min - 2048 and a later row's window start are still owned by the request\nand are masked per row. The tiny-KV-pool runs (1600 blocks: freed pages are reallocated to other\nrequests and requests are preempted and recomputed) check this end to end.\n",
+  "contract_deviations": "## Contract deviations\n* The sampler kernels are vLLM's (temperature division, Gumbel noise from the per-request seed and\n  position, per-row argmax over 1024-column blocks): row-local and batch invariant, but not a\n  contract op. `selected_token_ranks` is vLLM's comparison count over the strict logits.\n* `DeterministicCollective` needs the absent `_C` extension -> `torch.distributed.all_gather_into_tensor`\n  (bit-exact data movement) + local canonical tree.\n* `enforce_eager=True` is required (strict ops are plain Python/Triton calls).\n",
+  "rfc_feedback": "## RFC feedback\n1. **State the LoRA arithmetic exactly** (cross-runtime contract): `z = bf16(acc32(A x))`,\n   `y = bf16(acc32(W x) + sum_{k<r} B[:,k] z[k])` with a sequential fp32 rank loop; A replicated /\n   B row-sharded for column-parallel, A column-sharded (+ canonical K tree) / B replicated for\n   row-parallel. `bf16(bf16(Wx) + bf16(BAx))` is a different function.\n2. **The rollout binding must own the KV write and the physical KV layout**, and the RFC should\n   list the engine features that address KV pages by block id (prefix caching copy-on-write,\n   KV connectors / offloading, KV-block zeroing, speculative decoding, context parallelism) as\n   forbidden in strict mode unless the binding re-implements them on its own layout.\n3. **Token selection must read strict logits.** Without it the sampled token depends on cuBLAS\n   lm_head bits at near-ties (batch composition, TP). This POC samples from strict fp32 `zhat`;\n   the sampler's own kernels (temperature, Gumbel noise from (seed, position), argmax) should be\n   named in the contract as row-local and batch invariant, or replaced.\n4. **Fail closed on any non-strict number a caller can request** (top-k columns, token-id\n   scoring, processed logprobs), and on any non-strict op; list every op implementation in\n   provenance. vLLM builds the model under a non-default device and dtype; binding code that\n   creates tensors must pass both.\n5. **Weight-sync identity is a worker-side recomputation**: every TP rank hashes what it actually\n   loaded and the engine reports the agreed value; an engine echo of the declared hash is not\n   evidence. vLLM's RPC channel does not carry nested tensors (file + hash transport).\n6. **O5 head counts**: per-rank `H_Q`/`H_KV` (TP2 16/1, TP4 8/1, TP8 4/1 with the KV head\n   replicated) are sufficient and bit-identical to TP1; the KV-replication workaround is not needed.\n7. vLLM facts for the RFC text: Model Runner V2 is the CUDA default; `VLLM_ATTENTION_BACKEND` is gone\n   (`attention_config={\"backend\": ...}` + `register_backend`); null/evicted pages are id 0; the\n   loader inspects `__init__` signatures; vLLM fuses gate/up as well as q/k/v (the RFC says\n   \"Q/K/V only\"); requests reach the engine core asynchronously, so batch composition varies run\n   to run (harmless for strict ops, a source of native drift).\n",
+  "integration_requests": "## Integration requests\n* `~/envs/vllm`'s editable `rl_kernel` finder maps `rl_engine` to an old agent worktree\n  (`worktrees/agent-a7944ab684b3629cf`); runs only work because `PYTHONPATH` wins. Re-point it to\n  the POC worktree (or remove it) when installs are allowed; the engine now fails closed if a\n  worker imports `rl_engine` from a different tree than the driver.\n* Fusing the LoRA rank loop (`strict_kernels.small_k_fp32`, owned by the Megatron row and shared\n  with the trainer) into one Triton kernel with the same fixed order would remove most of the\n  strict-LoRA slowdown; it must change in both runtimes at once.\n* E2E: `StrictRolloutEngine.provenance()` now raises `WeightSyncError` when TP workers disagree\n  and reports `lora_sha256_source`; `e2e/sync.py` can accept only the top-level value.\n  `StrictRolloutEngine.__init__` gained optional `enforce_eager` (native only) and\n  `max_num_batched_tokens`; the `RolloutEngineLike` methods are unchanged.\n",
+  "open_issues": "## Open issues\n* Performance is untuned (eager, launch-bound decode); next steps: CUDA graphs over the strict\n  ops, one det GEMM for the four attention projections with per-slice canonical trees, a fused\n  LoRA rank loop.\n* TP8 engine not run (needs 8 GPUs); the simulation covers the binding arithmetic at TP8.\n* Preemption/recompute under memory pressure was not exercised.\n",
+  "tests_text": "## Tests (final code)\n```\n~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider\n  -> PENDING_FINAL_RERUN\nRL_KERNEL_MUSEGLIMMER_E2E=1 ~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider -k engine\n  -> 13 passed, 54 deselected in 281.88s at commit 122742e (the -k filter selects the 2 opt-in 30B engine tests plus 11 unit tests whose names contain 'engine'): test_strict_engine_protocol_with_real_lora (RolloutEngineLike signatures, transfer_lora via file, worker-recomputed lora_sha256 per worker, wrong-hash rejection, n=2 sampling, decode == prefill bit for bit under a rank-16 LoRA on 416 slots with logp <= 0, second sync replaces the adapter) and test_strict_engine_decode_equals_prefill (short prompt + the 2261-token long-window prompt, 24 decode tokens at T=0 and T=1, bits equal, logp <= 0)\nnew test file on the pre-fix tree (git archive 021ea61^ rl_engine): PYTHONPATH=<old tree> ~/envs/vllm/bin/python -m pytest <new test file> -k 'TestFailClosedEngineFeatures or TestFailClosedSampling or TestLoRAHashRecomputed or TestNativeLoRARecomputed or TestWorkerPaths or TestCollectLabels or TestPerRankHeads'\n  -> 34 failed, 1 passed (the pre-existing tampered-hash rejection) - the new tests fail before the fixes\nsame, GPU tests on the pre-fix tree: -k 'TestStrictSamplingLogits or TestLoRARuleCheckIsIndependent'\n  -> 3 failed (no strict_logits; the old LoRA-rule formula reuses _padded_partial, so a broken helper still reports binding_equals_formula=True) - fail before, pass after\n~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.runtime.vllm_tp_sim\n  -> all_equal: true at commit 122742e (TP2/4/8 x LoRA on/off x local/global layer: attention out, MLP out, hidden, logp, sampler-path logp, strict logits and argmax equal TP1 bit for bit on every rank)\n```\n",
+  "how_to_reproduce": "## How to reproduce\n```\nWT=<worktree>; D=reports/muse_glimmer_poc/data; M=rl_engine.models.muse_glimmer.runtime\nR=\"~/bin/gpu-lease -n <t> --pool 4-6 [--contiguous] -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m $M.run_vllm_strict\"\n# main (per mode, t = 1, 2, 4): generate T=0/1 + prefill check, LoRA checks, xrt, decode batch 256\n$R --tp t --strict --prompt-file $D/xrt_tokens.json --temperatures 0,1 --max-tokens 64 --prefill-check \\\n   --lora-zero-check --lora-random-check --xrt-score $D/xrt_tokens.json --xrt-out $D/xrt_vllm_strict_tp<t>.json \\\n   --xrt-lora-out $D/xrt_vllm_strict_lora_tp<t>.json --max-num-seqs 256 --decode-batches 256 --out strict_tp<t>.json\n$R --tp t --native ... --xrt-out $D/xrt_vllm_native_tp<t>.json --max-num-seqs 256 --decode-batches 256 --out native_tp<t>.json\n$R --tp 1 --native --native-lora ... --lora-random-check --xrt-lora-out $D/xrt_vllm_native_lora_tp1.json\n# contract shapes with chunked prefill: long window (2261 + 256 tokens) and decode batch 64\n$R --tp t --strict --prompt-file $D/xrt_tokens.json --no-generate --max-num-batched-tokens 512 --max-num-seqs 256 \\\n   --long-window --decode-batches 64 --contract-lora --out strict_tp<t>_chunked.json\n# isolated benches (3 repeats each), one engine at a time\n$R --tp t --strict --prompt-file $D/xrt_tokens.json --no-generate --bench --bench-lora --profile --out bench_strict_tp<t>.json\n$R --tp t --native [--cuda-graphs] --prompt-file $D/xrt_tokens.json --no-generate --bench [--profile] --out bench_native_tp<t>.json\n# reference chain (embedded in vllm_runtime.json), TP simulation, collect, render\npython -m $M.vllm_xrt_reference $D/xrt_tokens.json ref/xrt_reference.json train,prefill\npython -m $M.vllm_tp_sim > tp_sim.json\npython -m $M.vllm_collect_results --runs runs --data $D --reference ref/xrt_reference_train.json \\\n   --reference ref/xrt_reference_prefill.json --extra extra.json --out $D/vllm_runtime.json\npython -m $M.vllm_report $D/vllm_runtime.json rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md\n```\nThe exact command of every run is in `vllm_runtime.json` -> `runs[*].command` (with its commit and\n`git_dirty`).\n"
+ },
+ "plot_hints": [
+  "Bar: mismatched / compared tokens for native vs strict (decode vs prefill, TP2/TP4 vs TP1, contract shapes) -> generate[*].decode_vs_prefill, contract_shapes[*].decode_vs_prefill, xrt.comparisons.*",
+  "Per-token |delta logp| lines (native TP2 vs TP1; native decode vs prefill in the long window): xrt.comparisons.native_tp2_vs_native_tp1.per_sequence[*].abs_diff_per_token, contract_shapes[label=long_window_no_lora, mode=native].decode_vs_prefill.abs_diff_per_token",
+  "Grouped bars with error bars (min-max of 3 repeats): throughput[*].tokens_per_s_repeats by label (strict/native eager/native CUDA graphs/strict+LoRA, TP1/TP2/TP4)",
+  "Line: decode batch width per engine step: contract_shapes[*].engine_steps.series[*].reqs",
+  "Line: per-step decode ms: throughput[*].step_series_rank0[*].ms where tokens == reqs",
+  "Stacked bar: top CUDA kernels of one decode / prefill step: profile[*].decode.top_ops",
+  "Table: token_selection_invariance.across_tp / across_batch identical sequences, strict vs native"
+ ]
+}

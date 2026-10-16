@@ -1,0 +1,10 @@
+[gpu-lease] using GPUs [7]
+[16:58:20] HF text model loaded in 14.9s (51.9 GiB) on NVIDIA A100-SXM4-80GB lease=7
+[16:58:23] baseline: 2664 ms, peak 53.9 GiB
+[16:58:23] setting rollout_like_batched_decode (combination_rollout_like) ...
+[16:58:47]   922/933 tokens differ, max|d| 6.018e-01, mean|d| 1.878e-02, k3 1.398e-03, argmax flips 7, 24537 ms, peak 68.1 GiB
+[16:58:47] setting rollout_like_batched_decode_sdpa (combination_rollout_like) ...
+[16:59:09]   923/933 tokens differ, max|d| 6.327e-01, mean|d| 1.767e-02, k3 1.292e-03, argmax flips 5, 22142 ms, peak 56.4 GiB
+[16:59:09] repeat_after_all_factors (restore + repeat null control) ...
+[16:59:11]   0 tokens differ
+[16:59:11] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/ablation/parts/part_hf_rollout_like.json

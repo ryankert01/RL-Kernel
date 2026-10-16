@@ -1,0 +1,50 @@
+[gpu-lease] using GPUs [2, 3]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 15849931776
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 15849931776
+[load] {'init_seconds': 188.04533398400054, 'bridge_load_seconds': 139.1711597442627, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 39.551302909851074, 'allocated_gib': 34.81913757324219, 'peak_reserved_gib': 39.556640625}, {'rank': 1, 'peak_allocated_gib': 39.551302909851074, 'allocated_gib': 34.81913757324219, 'peak_reserved_gib': 39.556640625}]}
+[identity] 626/627 equal; mismatches=['model.language_model.norm.weight']
+[xrt] strict scored 933 tokens in 4.42s
+[repeat] mismatches 0/933
+[lora_noop] mismatches 0/933
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+[native] max|d| 0.2824 mean|d| 0.01535
+[grad_repeat] pass 0: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 23.892211942002177}
+[grad_repeat] pass 1: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 10.823564775000705}
+[grad_repeat] mismatching elements 0/104792064
+[step] {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 11.004880772001343, 'grad_norm': 7.020294189453125, 'lr': 1e-05, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.7990684450014669, 'num_lora_params_local': 74547200, 'loss': 0.3581387996673584} sha 04c604ff2f24 -> 64d300651150
+[bench] {'tokens': 512, 'strict_forward_ms': 525.2579679981864, 'strict_forward_peak_gib': 35.727635860443115, 'strict_train_logprobs_ms': 549.961811000685, 'strict_recompute_fwd_bwd_ms': 4445.630588001222, 'strict_optimizer_ms': 434.1603950015269, 'strict_step_total_ms': 5436.880133998784, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 36.57298803329468, 'native_forward_ms': 368.8739050012373, 'native_forward_peak_gib': 36.547959327697754, 'native_fwd_bwd_forward_ms': 361.28795400145464, 'native_fwd_bwd_backward_ms': 5826.146351999341, 'native_fwd_bwd_peak_gib': 37.468050956726074}
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+[bench] {'tokens': 1024, 'strict_forward_ms': 1166.1945409978216, 'strict_forward_peak_gib': 35.90221357345581, 'strict_train_logprobs_ms': 1068.8872990031086, 'strict_recompute_fwd_bwd_ms': 6759.297331002017, 'strict_optimizer_ms': 168.3852919995843, 'strict_step_total_ms': 8001.046266999765, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 37.33431434631348, 'native_forward_ms': 178.46241400184226, 'native_forward_peak_gib': 37.54485607147217, 'native_fwd_bwd_forward_ms': 212.23439799723565, 'native_fwd_bwd_backward_ms': 363.94044200278586, 'native_fwd_bwd_peak_gib': 39.38579082489014}
+[bench] {'tokens': 2048, 'strict_forward_ms': 1543.4202520009421, 'strict_forward_peak_gib': 36.188870906829834, 'strict_train_logprobs_ms': 1544.1289660011535, 'strict_recompute_fwd_bwd_ms': 8666.169244999764, 'strict_optimizer_ms': 169.02804200071841, 'strict_step_total_ms': 10385.13449400125, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 37.05217933654785, 'native_forward_ms': 377.03028100077063, 'native_forward_peak_gib': 34.40869665145874, 'native_fwd_bwd_forward_ms': 371.7574330003117, 'native_fwd_bwd_backward_ms': 803.3561349984666, 'native_fwd_bwd_peak_gib': 38.04089546203613}
+[bench] {'tokens': 4096, 'strict_forward_ms': 2954.37119500275, 'strict_forward_peak_gib': 33.18246841430664, 'strict_train_logprobs_ms': 2956.623115002003, 'strict_recompute_fwd_bwd_ms': 12798.593958999845, 'strict_optimizer_ms': 178.43710200031637, 'strict_step_total_ms': 15940.595977001067, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 38.803181171417236, 'native_forward_ms': 923.3789289974084, 'native_forward_peak_gib': 37.1120810508728, 'native_fwd_bwd_forward_ms': 919.2696729987802, 'native_fwd_bwd_backward_ms': 2031.2533040014387, 'native_fwd_bwd_peak_gib': 42.064613342285156}
+[run] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/meg/run_tp2.json
+/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

@@ -1,0 +1,67 @@
+{
+ "xrt_rescore": {
+  "equal_to_committed": 0,
+  "n": 0,
+  "seconds": 0.001009144001727691,
+  "checks_all_equal": null,
+  "modes": {}
+ },
+ "decode_b256": {
+  "b1_vs_b256": 10,
+  "reversed_b256_vs_b256": 256,
+  "sub_len2": 2,
+  "sub_len3": 3,
+  "sub_len17": 17,
+  "sub_len255": 255,
+  "b256_vs_train_forward": 3,
+  "targets_none": "ok: [nan, nan]",
+  "duplicate_seq": {
+   "raised": false,
+   "row0_equals_single": false,
+   "values": [
+    -13.978163719177246,
+    -13.695491790771484
+   ],
+   "single": [
+    -14.20985221862793
+   ]
+  },
+  "step2_b1_vs_b256": 10,
+  "step2_vs_train_seq7": true
+ },
+ "decode_b4_window": {
+  "evictions_after_prefill": 507,
+  "step0_b1_vs_b4": 4,
+  "step1_b1_vs_b4": 4,
+  "step2_b1_vs_b4": 4,
+  "evictions_after_decode": 507,
+  "b4_vs_train_forward_seqs": 0
+ },
+ "long_T8192": {
+  "train": {
+   "s": 4.04,
+   "peak_gib": 53.83,
+   "equal_to_train": 192,
+   "n": 192
+  },
+  "prefill": {
+   "s": 3.94,
+   "peak_gib": 54.24,
+   "equal_to_train": 192,
+   "n": 192
+  },
+  "chunked:4096/4095": {
+   "s": 3.95,
+   "peak_gib": 53.36,
+   "equal_to_train": 192,
+   "n": 192
+  },
+  "chunked:2047/2049/4095": {
+   "s": 4.08,
+   "peak_gib": 53.34,
+   "equal_to_train": 192,
+   "n": 192
+  },
+  "T2_modes_equal": true
+ }
+}

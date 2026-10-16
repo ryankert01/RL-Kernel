@@ -1,0 +1,17 @@
+{
+ "inv_freq_bits_differ": 4,
+ "tokens_differ_per_seq": [
+  51,
+  47,
+  128,
+  39,
+  92,
+  148,
+  88,
+  156,
+  175
+ ],
+ "tokens_differ": 924,
+ "max_abs_dlogp": 0.8201398849487305,
+ "mean_abs_dlogp": 0.01673128998057672
+}

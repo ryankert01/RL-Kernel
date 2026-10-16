@@ -1,0 +1,58 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 00:54:05] start pid=607249 world=1 launcher=process CUDA_VISIBLE_DEVICES='5,6' tcp_nodelay=True
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+[trainer_server rank0 00:54:52] client connected
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 15849931776
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 15849931776
+[trainer_server rank0 00:55:57] trainer StrictTrainer built in 112.1 s
+[trainer_server rank0 00:55:59] export_lora id=1 ok=True compute=954.1 ms
+[trainer_server rank0 00:56:00] provenance id=2 ok=True compute=0.2 ms
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+[trainer_server rank0 00:57:56] token_logprobs id=3 ok=True compute=10038.7 ms
+[trainer_server rank0 00:58:37] step id=4 ok=True compute=24807.7 ms
+[trainer_server rank0 00:58:39] export_lora id=5 ok=True compute=708.0 ms
+[trainer_server rank0 01:00:34] token_logprobs id=6 ok=True compute=7502.2 ms
+[trainer_server rank0 01:01:13] step id=7 ok=True compute=24373.2 ms
+[trainer_server rank0 01:01:14] export_lora id=8 ok=True compute=603.1 ms
+[trainer_server rank0 01:03:09] token_logprobs id=9 ok=True compute=7498.3 ms
+[trainer_server rank0 01:03:48] step id=10 ok=True compute=23627.5 ms
+[trainer_server rank0 01:03:49] export_lora id=11 ok=True compute=581.4 ms
+[trainer_server rank0 01:05:43] token_logprobs id=12 ok=True compute=7890.3 ms
+[trainer_server rank0 01:06:29] step id=13 ok=True compute=31276.9 ms
+[trainer_server rank0 01:06:30] export_lora id=14 ok=True compute=813.6 ms
+[trainer_server rank0 01:08:33] token_logprobs id=15 ok=True compute=8162.2 ms
+[trainer_server rank0 01:09:13] step id=16 ok=True compute=24847.3 ms
+[trainer_server rank0 01:09:14] export_lora id=17 ok=True compute=553.9 ms
+[trainer_server rank0 01:11:09] token_logprobs id=18 ok=True compute=7844.6 ms
+[trainer_server rank0 01:11:48] step id=19 ok=True compute=25390.5 ms
+[trainer_server rank0 01:11:49] export_lora id=20 ok=True compute=565.0 ms
+[trainer_server rank0 01:13:44] token_logprobs id=21 ok=True compute=7847.5 ms
+[trainer_server rank0 01:14:24] step id=22 ok=True compute=25707.0 ms
+[trainer_server rank0 01:14:26] export_lora id=23 ok=True compute=690.6 ms
+[trainer_server rank0 01:16:30] token_logprobs id=24 ok=True compute=8139.7 ms
+[trainer_server rank0 01:17:17] step id=25 ok=True compute=30930.1 ms
+[trainer_server rank0 01:17:18] export_lora id=26 ok=True compute=606.4 ms
+[trainer_server rank0 01:17:19] provenance id=27 ok=True compute=0.3 ms
+[trainer_server rank0 01:19:32] close id=28 ok=True compute=127600.7 ms
+[trainer_server rank0 01:19:32] bye
+/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

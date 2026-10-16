@@ -1,0 +1,17 @@
+poc(muse_glimmer): lm_head_softcap_logprob strict op (WS1 + vocab_parallel_softcap_logp core)
+
+Contract O7: LM head over the padded vocabulary (Vp = 202752 = 8 x 25344) in 8 canonical
+tiles with fp32 logits from a pluggable det_gemm (fast_det_gemm when importable, else an
+adapter around the repo _triton_gemm_fp32), fp32 soft cap T * tanh(z * m / T) with
+libdevice.tanh (bitwise == torch.tanh) and tl.div_rn, Triton per-(row, tile) statistics
+with padded columns excluded, fixed tree ((0+1)+(2+3))+((4+5)+(6+7)), selected-token
+log-probability, and a deterministic backward (dz -> bf16 once, dh through the same tree,
+dW per tile with zero padded rows).
+
+Also: fp32/fp64 fixed-order goldens, TP2/4/8 emulation, trace(), 15 tests (G1 1e-6 vs fp64
+at the real shape, G2/tile/TP parity torch.equal, G4 repeat-deterministic), benchmark at
+T=4096 (strict 668 ms vs native 69 ms with the legacy GEMM, 13x less memory) and the report
+with RFC feedback (config key is final_logit_softcapping; WS1/WS2 rows should be one row).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

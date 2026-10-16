@@ -1,0 +1,43 @@
+Loading weights:   0%|          | 0/1436 [00:00<?, ?it/s]Loading weights: 100%|██████████| 1436/1436 [00:00<00:00, 18924.96it/s]
+[22:24:08] HF bf16 (sdpa) loaded in 17.7s; 55.55 GiB allocated
+[22:24:08] [hf] forward T=512
+USDT:2026-10-15 22:24:10 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:11 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:14 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:14 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:16 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:17 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:24:19]   total 158.2 ms (clean 146.2) peak 56.52 GiB
+[22:24:20] [hf] forward T=2048
+USDT:2026-10-15 22:24:24 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:25 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:27 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:28 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:31 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:31 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:24:34]   total 599.4 ms (clean 590.5) peak 59.41 GiB
+[22:24:34] [hf] forward T=4096
+USDT:2026-10-15 22:24:43 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:44 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:46 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:48 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:24:50 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:24:52 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:24:54]   total 1230.1 ms (clean 1220.2) peak 63.26 GiB
+[22:24:56] [hf] decode batch 1 context 2048
+USDT:2026-10-15 22:25:00 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:00 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:25:02 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:03 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:25:05 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:06 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:25:08]   step 396.51 ms (clean 259.78) peak 55.71 GiB
+[22:25:17] [hf] decode batch 16 context 2048
+USDT:2026-10-15 22:25:19 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:19 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:25:21 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:22 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:25:25 464124:464124 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:25:25 464124:464124 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:25:28]   step 162.89 ms (clean 110.42) peak 57.69 GiB
+[22:25:29] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/runs/profile_hf.json

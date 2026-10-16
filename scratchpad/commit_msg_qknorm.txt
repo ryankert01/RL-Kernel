@@ -1,0 +1,20 @@
+poc(muse_glimmer): qknorm_scaled_rope strict op, golden, tests, benchmark, report
+
+Contract O4: fused weightless per-head Q/K RMSNorm (eps 1e-5, fp32), fp32 query
+scale 3.87 (K unscaled), rotate_half RoPE over all 128 channels on local layers
+(cos=None -> NoPE global path), one bf16 rounding at the end.
+
+- triton/qknorm_rope.py: one program per token ([32,128] Q tile + [2,128] K tile),
+  golden-identical (2i,2i+1) pairwise reduction tree, no FMA contraction, fixed
+  num_warps=4; deterministic row-local backward (inverse rotation + RMSNorm VJP).
+- ops/qknorm_rope.py: rope_table (fp32 table definition shared by both runtimes),
+  qknorm_scaled_rope (autograd.Function), fp32/fp64 goldens, hand-written fp32 VJP,
+  trace(), QKNormScaledRopeOp.
+- tests: G1-G5 at small and real (T=4096) shapes; kernel == golden->bf16 bitwise;
+  HF multi-rounding distance measured (max 0.25 on q_hat, 0.14% beyond ws1 bf16 tol).
+- bench: strict 0.076 ms vs torch-native 0.96 ms forward at T=4096 (A100).
+- REPORT_qknorm_rope.md with contract clarifications and RFC feedback (only Q is
+  scaled; config value is 3.87 not 43.78 = 3.87*sqrt(128); 128 rotated channels).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

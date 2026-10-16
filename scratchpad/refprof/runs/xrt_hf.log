@@ -1,0 +1,12 @@
+[gpu-lease] using GPUs [7]
+Loading weights:   0%|          | 0/1436 [00:00<?, ?it/s]Loading weights:  18%|█▊        | 257/1436 [00:00<00:00, 2481.07it/s]Loading weights:  58%|█████▊    | 834/1436 [00:00<00:00, 4386.64it/s]Loading weights: 100%|██████████| 1436/1436 [00:00<00:00, 5429.09it/s]
+[score:hf] gsm8k_test_0: 55 tokens, sum logp -98.3027
+[score:hf] gsm8k_test_1: 47 tokens, sum logp -87.8012
+[score:hf] gsm8k_test_2: 129 tokens, sum logp -128.7772
+[score:hf] gsm8k_test_3: 39 tokens, sum logp -89.1119
+[score:hf] gsm8k_test_4: 92 tokens, sum logp -122.9959
+[score:hf] gsm8k_test_5: 149 tokens, sum logp -175.7596
+[score:hf] gsm8k_test_6: 88 tokens, sum logp -102.1082
+[score:hf] gsm8k_test_7: 156 tokens, sum logp -169.9045
+[score:hf] gsm8k_long_window: 178 tokens, sum logp -133.2103
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/xrt_reference_hf_bf16.json

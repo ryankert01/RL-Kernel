@@ -1,0 +1,13 @@
+[gpu-lease] using GPUs [4]
+{
+ "startup_verify": "ok",
+ "verify_after_corruption": "PASSED silently (memoised digest)",
+ "reported_sha": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "actual_sha": "d85662d6c86d2332be7ed310bfbb2215b0bbec6cb1beba804ec8a6195c241f65",
+ "pinned": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "cos_version_counter": 1
+}
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [127,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+{"case": "neg", "positions": [-1, 3], "raised": true, "error": "AcceleratorError: CUDA error: device-side assert triggered\nSearch for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more inform"}
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [127,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+{"case": "big", "positions": [131072, 3], "raised": true, "error": "AcceleratorError: CUDA error: device-side assert triggered\nSearch for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more inform"}

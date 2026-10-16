@@ -1,0 +1,6 @@
+[gpu-lease] using GPUs [7]
+[22:10:25] HF text model loaded in 19.3s (51.9 GiB) on NVIDIA A100-SXM4-80GB lease=7; inv_freq CPU vs CUDA pow: 4/64 entries differ
+[22:10:29] baseline: 2601 ms, peak 53.9 GiB, 16 positions with a top-1 tie
+[22:10:29] setting repeat_immediate (repeat_null) ...
+[22:10:31]   0/933 tokens differ, max|d| 0.000e+00, mean|d| 0.000e+00, k3 0.000e+00, KL 0.000e+00, argmax flips 0 (unique 0, at ties 0), 1815 ms, peak 53.9 GiB
+[22:10:31] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf_baseline_gpu7.json

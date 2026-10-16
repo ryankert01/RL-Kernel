@@ -1,0 +1,55 @@
+[gpu-lease] using GPUs [0]
+# fast_det_gemm on NVIDIA A100-SXM4-80GB (sm80, torch 2.13.0+cu130, triton 3.7.1)
+
+Pinned tile constants: {'decode16': {'block_m': 16, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 4, 'group_m': 8}, 'decode64': {'block_m': 32, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 4, 'group_m': 8}, 'prefill': {'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 8, 'num_stages': 3, 'group_m': 8}}
+
+## G1 error vs fp64 reference (M=256, a~N(0,1), w~N(0,0.02^2))
+
+| shape | N | K | bf16 max_abs | bf16 max_abs / max abs ref | fp32 max_abs | fp32 max_rel |
+|---|---|---|---|---|---|---|
+| q_proj | 4096 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |
+| k_proj | 256 | 6656 | 1.559e-02 | 2.087e-03 | 7.629e-06 | 2.970e-04 |
+| v_proj | 256 | 6656 | 1.559e-02 | 2.087e-03 | 7.629e-06 | 2.970e-04 |
+| attn_gate | 4096 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |
+| o_proj | 6656 | 4096 | 1.562e-02 | 2.351e-03 | 4.292e-06 | 2.748e-04 |
+| mlp_gate | 19968 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |
+| up_proj | 19968 | 6656 | 2.930e-02 | 3.384e-03 | 1.049e-05 | 3.717e-04 |
+| down_proj | 6656 | 19968 | 3.127e-02 | 2.251e-03 | 4.768e-05 | 1.313e-03 |
+| lm_head | 202752 | 6656 | 3.052e-02 | 2.971e-03 | 1.001e-05 | 4.694e-04 |
+
+## Throughput at M=4096 (bf16 out)
+
+| shape | N | K | strict ms | strict TFLOP/s | cuBLAS ms | cuBLAS TFLOP/s | strict/cuBLAS | legacy TritonDetGemmOp ms | legacy/strict | class | regs/spills |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| q_proj | 4096 | 6656 | 2.073 | 107.7 | 0.819 | 272.7 | 2.53x | 40.083 | 19.3x | prefill | 255/52 |
+| k_proj | 256 | 6656 | 0.197 | 71.0 | 0.079 | 175.7 | 2.47x | 2.460 | 12.5x | prefill | 255/52 |
+| v_proj | 256 | 6656 | 0.194 | 71.8 | 0.079 | 176.1 | 2.45x | 2.459 | 12.6x | prefill | 255/52 |
+| attn_gate | 4096 | 6656 | 1.796 | 124.4 | 0.813 | 274.8 | 2.21x | 40.206 | 22.4x | prefill | 255/52 |
+| o_proj | 6656 | 4096 | 1.880 | 118.8 | 0.830 | 269.0 | 2.26x | 40.742 | 21.7x | prefill | 255/52 |
+| mlp_gate | 19968 | 6656 | 8.773 | 124.1 | 4.169 | 261.2 | 2.10x | 561.663 | 64.0x | prefill | 255/52 |
+| up_proj | 19968 | 6656 | 8.731 | 124.7 | 4.223 | 257.8 | 2.07x | 560.906 | 64.2x | prefill | 255/52 |
+| down_proj | 6656 | 19968 | 8.099 | 134.4 | 4.213 | 258.5 | 1.92x | 981.709 | 121.2x | prefill | 255/52 |
+| lm_head | 202752 | 6656 | 89.878 | 123.0 | 43.316 | 255.2 | 2.07x | skipped | n/a | prefill | 255/52 |
+
+## Throughput at M=16 (bf16 out)
+
+| shape | N | K | strict ms | strict TFLOP/s | cuBLAS ms | cuBLAS TFLOP/s | strict/cuBLAS | legacy TritonDetGemmOp ms | legacy/strict | class | regs/spills |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| q_proj | 4096 | 6656 | 0.118 | 7.4 | 0.044 | 19.7 | 2.68x | 0.429 | 3.6x | decode16 | 128/0 |
+| k_proj | 256 | 6656 | 0.115 | 0.5 | 0.023 | 2.4 | 5.00x | 0.275 | 2.4x | decode16 | 128/0 |
+| v_proj | 256 | 6656 | 0.115 | 0.5 | 0.021 | 2.6 | 5.39x | 0.278 | 2.4x | decode16 | 128/0 |
+| attn_gate | 4096 | 6656 | 0.123 | 7.1 | 0.044 | 19.8 | 2.79x | 0.425 | 3.5x | decode16 | 128/0 |
+| o_proj | 6656 | 4096 | 0.124 | 7.0 | 0.042 | 20.6 | 2.93x | 0.347 | 2.8x | decode16 | 128/0 |
+| mlp_gate | 19968 | 6656 | 0.183 | 23.2 | 0.189 | 22.5 | 0.97x | 3.413 | 18.6x | decode16 | 128/0 |
+| up_proj | 19968 | 6656 | 0.184 | 23.2 | 0.189 | 22.5 | 0.97x | 3.379 | 18.4x | decode16 | 128/0 |
+| down_proj | 6656 | 19968 | 0.193 | 22.1 | 0.182 | 23.4 | 1.06x | 4.312 | 22.4x | decode16 | 128/0 |
+| lm_head | 202752 | 6656 | 1.744 | 24.8 | 1.787 | 24.2 | 0.98x | 244.041 | 139.9x | decode16 | 128/0 |
+
+## Autograd forward+backward at M=4096 (dA + dW), strict vs torch bf16 autograd
+
+| shape | N | K | strict fwd+bwd ms | torch fwd+bwd ms | ratio | dA ms | dW ms |
+|---|---|---|---|---|---|---|---|
+| o_proj | 6656 | 4096 | 5.534 | 2.570 | 2.15x | 1.793 | 1.828 |
+| mlp_gate | 19968 | 6656 | 26.502 | 13.185 | 2.01x | 9.095 | 8.958 |
+| down_proj | 6656 | 19968 | 25.990 | 13.309 | 1.95x | 9.035 | 8.578 |
+

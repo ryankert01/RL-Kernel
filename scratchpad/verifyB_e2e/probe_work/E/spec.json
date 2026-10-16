@@ -1,0 +1,19 @@
+{
+  "protocol": "muse_glimmer_trainer_bridge_v1",
+  "factory": "rl_engine.models.muse_glimmer.e2e.mocks:FaultyMockTrainer",
+  "factory_kwargs": {
+    "fault": "raise",
+    "fault_op": "export_lora"
+  },
+  "model_path": "mock",
+  "tensor_parallel_size": 1,
+  "num_visible_gpus": 0,
+  "lora_rank": 4,
+  "lr": 0.001,
+  "strict": true,
+  "seed": 7,
+  "launcher": "process",
+  "dist_init": "after_build",
+  "handshake_path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_e2e/probe_work/E/handshake.json",
+  "tcp_nodelay": true
+}

@@ -1,0 +1,66 @@
+{
+ "env": {
+  "torch": "2.13.0+cu130",
+  "cuda_runtime": "13.0",
+  "triton": "3.7.1",
+  "python": "3.12.15",
+  "gpu_lease": "7",
+  "tf32_matmul_default": false,
+  "transformers": "5.17.0",
+  "vllm": "0.31.0",
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "gpu_uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+  "sm": "80",
+  "gpu_index_in_process": 0
+ },
+ "rope_gemm_tf32_on_vs_off_elems_differ": {
+  "alone_b1_L2439": 0,
+  "padded_left_b9_L2439": 0,
+  "padded_right_b9_L2439": 0,
+  "decode_b9_L1": 0,
+  "decode_b1_L1": 0
+ },
+ "baseline_vs_committed_tokens_differ": 0,
+ "padded_right_vs_committed_record": 0,
+ "padded_right_vs_baseline": 927,
+ "padded_right_tf32_on_vs_tf32_off": 0,
+ "prefill_L_minus_1_vs_committed_record": 0,
+ "chunked_64_vs_prefill_L_minus_1_per_seq": [
+  54,
+  46,
+  128,
+  38,
+  91,
+  148,
+  86,
+  156,
+  178
+ ],
+ "chunked_64_vs_committed_record": 0,
+ "chunked_256_vs_prefill_L_minus_1_per_seq": [
+  0,
+  0,
+  0,
+  0,
+  91,
+  148,
+  0,
+  155,
+  177
+ ],
+ "chunked_256_vs_committed_record": 0,
+ "chunked_1024_vs_prefill_L_minus_1_per_seq": [
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  176
+ ],
+ "chunked_1024_vs_committed_record": 0,
+ "batched_decode_tf32_on_vs_committed_tf32_off": 0,
+ "baseline_bf16_argmax_top2_ties": 16
+}

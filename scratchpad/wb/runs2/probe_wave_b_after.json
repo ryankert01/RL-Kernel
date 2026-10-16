@@ -1,0 +1,50 @@
+{
+ "python": "/home/ubuntu/envs/vllm/bin/python",
+ "torch": "2.13.0+cu130",
+ "gpu": "NVIDIA A100-SXM4-80GB",
+ "module": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-5/rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+ "r1_layer_kind": {
+  "env_unset": {
+   "raised": false,
+   "q_hat_elements_differing_from_rope_path": 15994827,
+   "elements": 16777216,
+   "warnings": []
+  },
+  "env_1": {
+   "raised": true,
+   "error": "ValueError: qknorm_scaled_rope: the layer kind must be explicit (local=True for a sliding-window RoPE layer, local=False for a global NoPE layer); local=None is rejected be",
+   "warnings": []
+  }
+ },
+ "r2_builders": {
+  "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+  "reference.golden_ops.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+  "rope_table_reads_the_canonical_cache": true
+ },
+ "r3_in_place": {
+  "in_place_change_detected": true,
+  "in_place_error": "RuntimeError: the canonical RoPE table on cuda:0 (theta=500000.0, dim=64) was modified in place after it was built (tensor version counter changed); its rows no longer follow",
+  "verify_after_data_write_raised": true,
+  "verify_error": "RuntimeError: canonical RoPE table sha256 e6d3f01684b882c195238895d87a72b4620803cedf32e29113cf09569986d492 != pinned 088",
+  "logged_digest_equals_pinned_after_write": false,
+  "actual_digest_equals_pinned_after_write": false,
+  "restored_digest_equals_pinned": true
+ },
+ "r4_capture": {
+  "first_build_in_capture_raised": true,
+  "error": "RuntimeError: the canonical RoPE table must be built before CUDA-graph capture: call canonical_rope_table(device, verify=True) once at init (before warm-up/capture)",
+  "cached_after": false
+ },
+ "inference_mode_build": {
+  "table_is_inference_tensor": false
+ },
+ "ref_decode_batch_duplicate_ids": {
+  "duplicate_ids_raised": true,
+  "error": "ValueError: KVPlan sequence ids must be unique; got [0, 0]"
+ },
+ "ref_xrt_checks": {
+  "minus_zero_vs_plus_zero_counted_equal": false,
+  "no_checks_reported_as_pass": false
+ },
+ "wall_s": 3.9
+}

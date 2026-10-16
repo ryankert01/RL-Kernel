@@ -1,0 +1,96 @@
+{
+  "rollout_start": {
+    "engine": "MockRolloutEngine",
+    "runtime": "cpu-mock (no vLLM)",
+    "strict": false,
+    "logprob_path": "rollout-native: bf16 after every linear, bf16 running-mean state, Welford decode",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [],
+    "max_model_len": 4096,
+    "seed": 1234,
+    "lora_sha256": "0d5768eead03424261f128989bcd273b0882bdb4851fea46f7d0e648c2cbc6b4",
+    "lora_loads": 1,
+    "generate_calls": 0,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "perturb": 0.0,
+    "logprob_temperature": 1.0
+  },
+  "trainer_start": {
+    "engine": "MockTrainer",
+    "runtime": "cpu-mock (no Megatron)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+    "tensor_parallel_size": 2,
+    "gpu_ids": [],
+    "device": "cpu",
+    "lora_rank": 16,
+    "lr": 1e-05,
+    "optimizer": "Adam",
+    "seed": 1234,
+    "optimizer_steps": 0,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "lora_storage": "fp32 master -> bf16 at use and at export",
+    "build_delay_s": 0.0
+  },
+  "rollout_end": {
+    "engine": "MockRolloutEngine",
+    "runtime": "cpu-mock (no vLLM)",
+    "strict": false,
+    "logprob_path": "rollout-native: bf16 after every linear, bf16 running-mean state, Welford decode",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [],
+    "max_model_len": 4096,
+    "seed": 1234,
+    "lora_sha256": "94241f387651e69c9d6c51ba742e5c1a5a4645ec479579530face26ed6b1ac9a",
+    "lora_loads": 9,
+    "generate_calls": 8,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "perturb": 0.0,
+    "logprob_temperature": 1.0
+  },
+  "trainer_end": {
+    "engine": "MockTrainer",
+    "runtime": "cpu-mock (no Megatron)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+    "tensor_parallel_size": 2,
+    "gpu_ids": [],
+    "device": "cpu",
+    "lora_rank": 16,
+    "lr": 1e-05,
+    "optimizer": "Adam",
+    "seed": 1234,
+    "optimizer_steps": 8,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "lora_storage": "fp32 master -> bf16 at use and at export",
+    "build_delay_s": 0.0
+  }
+}

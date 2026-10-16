@@ -1,0 +1,23 @@
+[gpu-lease] using GPUs [7]
+[22:59:56] tf32 probe: {'fp32_precision_tf32_off': 'ieee', 'fp32_precision_tf32_on': 'tf32', 'square_gemm_1024_elems_differ': 1048489, 'square_gemm_1024_max_abs': 0.0482940673828125, 'rope_gemm_k1_elems_differ_tf32_on_vs_off': 0, 'rope_gemm_k1_elems_differ_matmul_vs_elementwise': 0, 'rope_gemm_k1_shape': [1, 64, 1, 2439], 'inv_freq_entries_with_low13_mantissa_bits': 63}
+[23:00:19] gsm8k_test_0 repeat_immediate: first diff at None; final_norm frac 0.000 mean|d| 0.000e+00
+[23:00:36] gsm8k_test_0 padded_batch9_right: first diff at layer_0.self_attn.q_proj; final_norm frac 0.954 mean|d| 1.022e-01
+[23:00:54] gsm8k_test_0 padded_batch9_left: first diff at layer_0.self_attn.q_proj; final_norm frac 0.954 mean|d| 1.045e-01
+[23:01:07] gsm8k_test_0 kv_cache_decode: first diff at layer_0.self_attn.q_proj; final_norm frac 0.958 mean|d| 1.388e-01
+[23:01:14] gsm8k_test_0 prefill_L_minus_1: first diff at layer_0.self_attn.o_proj.input; final_norm frac 0.797 mean|d| 6.603e-02
+[23:01:21] gsm8k_test_0 chunked_prefill_256: first diff at layer_0.self_attn.o_proj.input; final_norm frac 0.797 mean|d| 6.603e-02
+[23:01:28] gsm8k_test_0 sdpa: first diff at layer_0.self_attn.o_proj.input; final_norm frac 0.942 mean|d| 7.740e-02
+[23:01:35] gsm8k_test_0 tf32_on: first diff at None; final_norm frac 0.000 mean|d| 0.000e+00
+[23:01:42] gsm8k_test_0 rope_inv_freq_cuda: first diff at rope_sin; final_norm frac 0.250 mean|d| 1.353e-02
+[23:01:49] gsm8k_test_0 bf16_reduced_reduction_off: first diff at layer_0.self_attn.q_proj; final_norm frac 0.964 mean|d| 1.864e-01
+[23:02:00] gsm8k_long_window repeat_immediate: first diff at None; final_norm frac 0.000 mean|d| 0.000e+00
+[23:02:17] gsm8k_long_window padded_batch9_right: first diff at layer_0.self_attn.k_proj; final_norm frac 0.938 mean|d| 8.411e-02
+[23:02:34] gsm8k_long_window padded_batch9_left: first diff at layer_0.self_attn.k_proj; final_norm frac 0.938 mean|d| 8.411e-02
+[23:03:00] gsm8k_long_window kv_cache_decode: first diff at layer_0.input_layernorm; final_norm frac 0.928 mean|d| 7.918e-02
+[23:03:09] gsm8k_long_window prefill_L_minus_1: first diff at layer_0.self_attn.o_proj.input; final_norm frac 0.934 mean|d| 8.246e-02
+[23:03:22] gsm8k_long_window chunked_prefill_256: first diff at layer_0.self_attn.q_proj; final_norm frac 0.937 mean|d| 7.933e-02
+[23:03:32] gsm8k_long_window sdpa: first diff at layer_0.self_attn.o_proj.input; final_norm frac 0.927 mean|d| 7.158e-02
+[23:03:41] gsm8k_long_window tf32_on: first diff at None; final_norm frac 0.000 mean|d| 0.000e+00
+[23:03:50] gsm8k_long_window rope_inv_freq_cuda: first diff at rope_cos; final_norm frac 0.882 mean|d| 7.468e-02
+[23:03:59] gsm8k_long_window bf16_reduced_reduction_off: first diff at layer_0.self_attn.k_proj; final_norm frac 0.938 mean|d| 8.411e-02
+[23:03:59] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf_layers.json

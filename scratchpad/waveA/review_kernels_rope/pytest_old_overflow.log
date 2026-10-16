@@ -1,0 +1,34 @@
+[gpu-lease] using GPUs [5]
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ TestF5LargeTokenCounts.test_rows_beyond_int32_offsets_match_small_calls ____
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF5LargeTokenCounts object at 0x74c14352af00>
+
+    def test_rows_beyond_int32_offsets_match_small_calls(self):
+        free, _total = torch.cuda.mem_get_info()
+        if free < 24 * 2**30:
+            pytest.skip(f"needs ~20 GiB free GPU memory, have {free / 2**30:.1f} GiB")
+        T = self.T_BIG
+        gen = torch.Generator(device=DEV).manual_seed(80)
+        q = torch.randn(T, HQ, D, device=DEV, generator=gen, dtype=torch.bfloat16)
+        k = torch.randn(T, HK, D, device=DEV, generator=gen, dtype=torch.bfloat16)
+        rows = torch.arange(T - 128, T, device=DEV)  # straddles row 524288
+        for local in (False, True):
+            if local:
+                cos, sin = rope_table(torch.arange(T, device=DEV) % ROPE_POSITIONS, device=DEV)
+                c_r, s_r = cos[rows], sin[rows]
+            else:
+                cos = sin = c_r = s_r = None
+            oq, ok = qknorm_scaled_rope(q, k, cos, sin)
+>           rq, rk = qknorm_scaled_rope(q[rows], k[rows], c_r, s_r)
+                                        ^^^^^^^
+E           torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E           Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E           CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E           For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+tests/models/muse_glimmer/test_qknorm_rope.py:789: AcceleratorError
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_rows_beyond_int32_offsets_match_small_calls
+1 failed in 3.99s

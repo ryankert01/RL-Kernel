@@ -1,0 +1,425 @@
+{
+ "forward": {
+  "global/varlen/T=1/auto": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "global/varlen/T=1/token": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "global/varlen/T=1/head": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "global/varlen/T=17/auto": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "global/varlen/T=17/token": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "global/varlen/T=17/head": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "global/varlen/T=64/auto": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "global/varlen/T=64/token": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "global/varlen/T=64/head": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "global/varlen/T=300/auto": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "global/varlen/T=300/token": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "global/varlen/T=300/head": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "global/varlen/T=2047/auto": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "global/varlen/T=2047/token": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "global/varlen/T=2047/head": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "global/varlen/T=2048/auto": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "global/varlen/T=2048/token": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "global/varlen/T=2048/head": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "global/varlen/T=2049/auto": [
+   "fc51f20937385317",
+   "140a656c29495532",
+   "922052e3d7af2b78"
+  ],
+  "global/varlen/T=2049/token": [
+   "fc51f20937385317",
+   "140a656c29495532",
+   "922052e3d7af2b78"
+  ],
+  "global/varlen/T=2049/head": [
+   "fc51f20937385317",
+   "140a656c29495532",
+   "922052e3d7af2b78"
+  ],
+  "global/varlen/T=2100/auto": [
+   "5dc8295a4ac2d3ff",
+   "41671495a2e1cfc1",
+   "9c4c6c471a84767e"
+  ],
+  "global/varlen/T=2100/token": [
+   "5dc8295a4ac2d3ff",
+   "41671495a2e1cfc1",
+   "9c4c6c471a84767e"
+  ],
+  "global/varlen/T=2100/head": [
+   "5dc8295a4ac2d3ff",
+   "41671495a2e1cfc1",
+   "9c4c6c471a84767e"
+  ],
+  "global/varlen/T=4096/auto": [
+   "a9127af87e26efb2",
+   "ddb59639fbac0df7",
+   "95deb5e8e8e85807"
+  ],
+  "global/varlen/T=8192/auto": [
+   "8c3b77427161880e",
+   "a5e081493cec6035",
+   "51f3f0660825fd29"
+  ],
+  "global/packed/[5, 130, 64, 2100, 1, 333]": [
+   "2b4cf2ff46bad1a8",
+   "6f09ed18539ec336",
+   "4dad4b9c54dfabcb"
+  ],
+  "global/chunked_varlen/T=4096/[2048,4088]": [
+   "d0757b8ad19bd022",
+   "e521d589d6aea7ce",
+   "a3bbaa491f5ec17e"
+  ],
+  "global/paged_decode/B=8/ctx=2049": [
+   "19db72e69e587d7f",
+   "2802ab9b91884ef7",
+   "c31c23e016de919c"
+  ],
+  "global/paged_decode/B=8/ctx=4096": [
+   "dfa2bfc9fb2be2b5",
+   "c3e97623b693409a",
+   "0cda16c921597987"
+  ],
+  "global/paged_decode/B=1/ctx=1": [
+   "9b8f533f29260066",
+   "ba5ce75f430fce5b",
+   "5e1ba4644ca7b83d"
+  ],
+  "global/paged_decode/B=4/ctx=300": [
+   "f3fd5ea0f04e3fe9",
+   "239bb43f283cc742",
+   "c2a728c3a33f87b0"
+  ],
+  "global/paged_prefill/T=300": [
+   "57ca36a3d7a3ca2b",
+   "85948e0a06f6edf0",
+   "589b5b8fdf624f15"
+  ],
+  "local/varlen/T=1/auto": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "local/varlen/T=1/token": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "local/varlen/T=1/head": [
+   "3bfb007ea44cfe65",
+   "87b21a5c95a57675",
+   "cc044105419aadb7"
+  ],
+  "local/varlen/T=17/auto": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "local/varlen/T=17/token": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "local/varlen/T=17/head": [
+   "009258d4486167d9",
+   "b6f8d12980c26cbf",
+   "1698d1d4bf1e79bb"
+  ],
+  "local/varlen/T=64/auto": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "local/varlen/T=64/token": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "local/varlen/T=64/head": [
+   "8512eaeca335888a",
+   "745e68b3f1edb2d1",
+   "7050b24b0908d687"
+  ],
+  "local/varlen/T=300/auto": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "local/varlen/T=300/token": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "local/varlen/T=300/head": [
+   "55bf0769526aea1e",
+   "191c9e2cb3a580ee",
+   "7875c79d671af24d"
+  ],
+  "local/varlen/T=2047/auto": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "local/varlen/T=2047/token": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "local/varlen/T=2047/head": [
+   "6e73b72252b17b63",
+   "36d5550e2755a45e",
+   "b0b22b0913fa34d5"
+  ],
+  "local/varlen/T=2048/auto": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "local/varlen/T=2048/token": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "local/varlen/T=2048/head": [
+   "8ab34e7a9296cb97",
+   "2178b40e7e3d11aa",
+   "14705af23e4d42d5"
+  ],
+  "local/varlen/T=2049/auto": [
+   "6b34072d3e6e5db9",
+   "890dee38ca0ece0d",
+   "d55fcd075f4093aa"
+  ],
+  "local/varlen/T=2049/token": [
+   "6b34072d3e6e5db9",
+   "890dee38ca0ece0d",
+   "d55fcd075f4093aa"
+  ],
+  "local/varlen/T=2049/head": [
+   "6b34072d3e6e5db9",
+   "890dee38ca0ece0d",
+   "d55fcd075f4093aa"
+  ],
+  "local/varlen/T=2100/auto": [
+   "3bff9f5f3012b069",
+   "ab619e290e26f01b",
+   "09ec0b0c379688d8"
+  ],
+  "local/varlen/T=2100/token": [
+   "3bff9f5f3012b069",
+   "ab619e290e26f01b",
+   "09ec0b0c379688d8"
+  ],
+  "local/varlen/T=2100/head": [
+   "3bff9f5f3012b069",
+   "ab619e290e26f01b",
+   "09ec0b0c379688d8"
+  ],
+  "local/varlen/T=4096/auto": [
+   "5f6371f2602adfc3",
+   "e289d33a5946ac08",
+   "517b30be60896e06"
+  ],
+  "local/varlen/T=8192/auto": [
+   "3ed521a41ed2c23e",
+   "32e00a9d8c3cb5b0",
+   "980bfa9cb8216fb0"
+  ],
+  "local/packed/[5, 130, 64, 2100, 1, 333]": [
+   "6e8e15199360adaa",
+   "201cb5fdee02e075",
+   "2b4b43dc6f5a0fbd"
+  ],
+  "local/chunked_varlen/T=4096/[2048,4088]": [
+   "99583f5db43713cd",
+   "d1c5ce5cffba062f",
+   "e85ac050b6efad32"
+  ],
+  "local/paged_decode/B=8/ctx=2049": [
+   "86997f539911ea6c",
+   "dc5478002d9346ef",
+   "f2b9a588bbf5624b"
+  ],
+  "local/paged_decode/B=8/ctx=4096": [
+   "aef0814c3a46afcf",
+   "0efe9caece8c299f",
+   "5244f5e67d5c2aba"
+  ],
+  "local/paged_decode/B=1/ctx=1": [
+   "9b8f533f29260066",
+   "ba5ce75f430fce5b",
+   "5e1ba4644ca7b83d"
+  ],
+  "local/paged_decode/B=4/ctx=300": [
+   "f3fd5ea0f04e3fe9",
+   "239bb43f283cc742",
+   "c2a728c3a33f87b0"
+  ],
+  "local/paged_prefill/T=300": [
+   "57ca36a3d7a3ca2b",
+   "85948e0a06f6edf0",
+   "589b5b8fdf624f15"
+  ]
+ },
+ "backward": {
+  "global/T=1": "ERROR CompilationError: , allow_tf32=False)\n\n    acc_dk = acc_dk * scale\n    group_base = g.to(tl.int64) * (Tk.to(tl.int64) * HKV * D)\n                                   ^\nAttributeError(\"'int' object has no attribute 'to'\")",
+  "global/T=2": [
+   "7a3692a1646ee5c4",
+   "2c568e723c5a6796",
+   "1b4af87a2884a9c4",
+   "19553815282e89b1"
+  ],
+  "global/T=64": [
+   "96cce6975327e4c5",
+   "6fdc868e879afbba",
+   "de82f1a42e084e5d",
+   "4eafdd29aad82f51"
+  ],
+  "global/T=300": [
+   "a0ef25db70aa4a83",
+   "b055f2d9ddf33fcd",
+   "0bc4b0cd7eed71c7",
+   "5897b9ba5f52eb28"
+  ],
+  "global/T=2048": [
+   "c013cebdb7fef020",
+   "a947d2c56586bdae",
+   "84551a3639bf0a1c",
+   "9021eec373f9d730"
+  ],
+  "global/T=2100": [
+   "c8010c86d9446abc",
+   "1834d12316d71f21",
+   "7904712edee9f4a2",
+   "45bd5314005c8659"
+  ],
+  "global/T=4096": [
+   "6de50664728a6679",
+   "bc2fa1b711383b94",
+   "9fd5cdb840390083",
+   "64474034013b601a"
+  ],
+  "local/T=1": "ERROR CompilationError: , allow_tf32=False)\n\n    acc_dk = acc_dk * scale\n    group_base = g.to(tl.int64) * (Tk.to(tl.int64) * HKV * D)\n                                   ^\nAttributeError(\"'int' object has no attribute 'to'\")",
+  "local/T=2": [
+   "7a3692a1646ee5c4",
+   "2c568e723c5a6796",
+   "1b4af87a2884a9c4",
+   "19553815282e89b1"
+  ],
+  "local/T=64": [
+   "96cce6975327e4c5",
+   "6fdc868e879afbba",
+   "de82f1a42e084e5d",
+   "4eafdd29aad82f51"
+  ],
+  "local/T=300": [
+   "a0ef25db70aa4a83",
+   "b055f2d9ddf33fcd",
+   "0bc4b0cd7eed71c7",
+   "5897b9ba5f52eb28"
+  ],
+  "local/T=2048": [
+   "c013cebdb7fef020",
+   "a947d2c56586bdae",
+   "84551a3639bf0a1c",
+   "9021eec373f9d730"
+  ],
+  "local/T=2100": [
+   "6a401eed80b9a4a8",
+   "28c15118f0ab9466",
+   "6682418fd766b44b",
+   "955a12afd2492b36"
+  ],
+  "local/T=4096": [
+   "09a523ae3768d579",
+   "df6c13e0913588a6",
+   "dbc447ef3bc71c1b",
+   "99025af493d00b11"
+  ]
+ },
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "triton": "3.7.1",
+  "cuda": "13.0",
+  "python": "3.12.15"
+ },
+ "argv": [
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-5/rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
+  "digest",
+  "--out",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/digest_before.json"
+ ],
+ "head_count_params": false,
+ "wall_s": 69.07606363296509
+}

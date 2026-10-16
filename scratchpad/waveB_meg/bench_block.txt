@@ -1,0 +1,82 @@
+        if "bench" in checks:
+            trainer.reset_lora_b(0.0, 0)
+            long_seq = max(seqs, key=len)
+            counts = [int(x) for x in args.bench_tokens.split(",") if x.strip()]
+            token_pool = long_seq * (1 + max(counts) // len(long_seq))
+            warm_n, reps = int(args.bench_warmup), int(args.bench_repeats)
+            rows = []
+
+            def peak() -> float:
+                return max(m["peak_allocated_gib"] for m in trainer.memory(reset=True))
+
+            def strict_forward(seq):
+                ta = _sync_time()
+                trainer.score([seq], [1])
+                return {"strict_forward_ms": (_sync_time() - ta) * 1e3}
+
+            def strict_step(seq):
+                ta = _sync_time()
+                lp = trainer.token_logprobs([seq], [1])
+                tb = _sync_time()
+                info = trainer.step(-lp[0].mean())
+                tc = _sync_time()
+                return {
+                    "strict_train_logprobs_ms": (tb - ta) * 1e3,
+                    "strict_recompute_fwd_bwd_ms": info["fwd_bwd_s"] * 1e3,
+                    "strict_optimizer_ms": info["optimizer_s"] * 1e3,
+                    "strict_step_total_ms": (tc - ta) * 1e3,
+                    "strict_recompute_mismatches": info["recompute_logp_mismatches"],
+                }
+
+            def native_forward(seq):
+                ta = _sync_time()
+                trainer.native_logprobs([seq], [1])
+                return {"native_forward_ms": (_sync_time() - ta) * 1e3}
+
+            def native_fwd_bwd(seq):
+                nb = trainer.native_fwd_bwd(seq)
+                return {"native_fwd_bwd_forward_ms": nb["forward_s"] * 1e3,
+                        "native_fwd_bwd_backward_ms": nb["backward_s"] * 1e3}
+
+            phases = [("strict_forward", strict_forward), ("strict_step", strict_step),
+                      ("native_forward", native_forward), ("native_fwd_bwd", native_fwd_bwd)]
+            for n in counts:
+                seq = token_pool[:n]
+                row: dict[str, Any] = {"tokens": n, "warmup": warm_n, "repeats": reps,
+                                       "samples": {}, "median": {}, "peak_gib": {}, "errors": {}}
+                for phase, fn in phases:
+                    trainer.memory(reset=True)
+                    try:
+                        for it in range(warm_n + reps):
+                            out = fn(seq)
+                            if it < warm_n:
+                                continue
+                            for key, value in out.items():
+                                row["samples"].setdefault(key, []).append(value)
+                        row["peak_gib"][phase] = peak()
+                    except torch.OutOfMemoryError as exc:
+                        if tp > 1:  # a worker may have died with it: do not continue blind
+                            raise
+                        row["errors"][phase] = repr(exc)[:300]
+                        row["peak_gib"][phase] = peak()
+                        trainer.zero_grad()
+                        torch.cuda.empty_cache()
+                    except Exception as exc:  # noqa: BLE001 - recorded; the row continues
+                        if tp > 1:
+                            raise
+                        row["errors"][phase] = repr(exc)[:500]
+                        trainer.zero_grad()
+                        torch.cuda.empty_cache()
+                for key, values in row["samples"].items():
+                    row["median"][key] = statistics.median(values)
+                rows.append(row)
+                print(f"[bench] {n} tokens: median {row['median']} errors {row['errors']}",
+                      flush=True)
+                C["bench"] = {"rows": rows, "commit": res.data["commit"], "note": (
+                    "every phase warmed up (bench_warmup runs) at each size, then bench_repeats "
+                    "timed runs: raw samples + median; strict_step_total = no-grad strict forward "
+                    "(token_logprobs) + recompute forward/backward with per-layer activation "
+                    "recompute + AdamW; native_fwd_bwd = Bridge forward + backward of activation "
+                    "grads through all layers with full per-layer recompute (frozen base weights, "
+                    "no LoRA); peak_gib = max over ranks of the phase's peak allocation")}
+                res.flush()

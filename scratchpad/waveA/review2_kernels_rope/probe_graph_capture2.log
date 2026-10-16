@@ -1,0 +1,9 @@
+[gpu-lease] using GPUs [4]
+{
+ "after_capture_table_sha_equals_pinned": false,
+ "eager_after_capture_raised": false,
+ "eager_after_capture_q_mismatch": 262144,
+ "eager_after_capture_q_finite": true,
+ "after_replay_table_sha_equals_pinned": true,
+ "graph_output_equals_ref_after_replay": true
+}

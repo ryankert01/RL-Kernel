@@ -1,0 +1,25 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 20:41:23] start pid=354573 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 20:41:23] client connected
+[trainer_server rank0 20:41:24] trainer MockTrainer built in 1.2 s
+[trainer_server rank0 20:41:24] export_lora id=1 ok=True compute=1.3 ms
+[trainer_server rank0 20:41:24] provenance id=2 ok=True compute=0.1 ms
+[trainer_server rank0 20:41:24] token_logprobs id=3 ok=True compute=47.3 ms
+[trainer_server rank0 20:41:24] step id=4 ok=True compute=81.5 ms
+[trainer_server rank0 20:41:24] export_lora id=5 ok=True compute=1.3 ms
+[trainer_server rank0 20:41:24] profile_arm id=6 ok=True compute=0.0 ms
+USDT:2026-10-15 20:41:32 354573:354573 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 20:41:32 354573:354573 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ERROR:2026-10-15 20:41:32 354573:354573 DeviceProperties.cpp:50] gpuGetDeviceCount failed with code 100
+[trainer_server rank0 20:41:32] token_logprobs id=7 ok=True compute=630.9 ms
+USDT:2026-10-15 20:41:32 354573:354573 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 20:41:33 354573:354573 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 20:41:35] step id=8 ok=True compute=2318.9 ms
+[trainer_server rank0 20:41:35] export_lora id=9 ok=True compute=1.0 ms
+[trainer_server rank0 20:41:35] token_logprobs id=10 ok=True compute=31.4 ms
+[trainer_server rank0 20:41:35] step id=11 ok=True compute=59.4 ms
+[trainer_server rank0 20:41:35] export_lora id=12 ok=True compute=1.0 ms
+[trainer_server rank0 20:41:35] provenance id=13 ok=True compute=0.1 ms
+[trainer_server rank0 20:41:35] close id=14 ok=True compute=0.0 ms
+[trainer_server rank0 20:41:35] bye

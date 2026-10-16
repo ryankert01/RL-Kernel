@@ -1,0 +1,19 @@
+---- sha256 of shards ----
+8eef61530e1283642c77ce2e6721feb5c6f348fa055c00e90f2844a136372694  model-00001-of-00002.safetensors
+b58cc2144ba1ba1af4420f67f4ca3ced7f09298510b80464cc75018a0be14381  model-00002-of-00002.safetensors
+total 58185432
+drwxrwxr-x 2 ubuntu ubuntu        4096 Oct 15 13:25 .
+drwxrwxr-x 3 ubuntu ubuntu        4096 Oct 15 13:10 ..
+-rw-rw-r-- 1 ubuntu ubuntu       11358 Oct 15 13:10 LICENSE
+-rw-rw-r-- 1 ubuntu ubuntu       16892 Oct 15 13:10 README.md
+-rw-rw-r-- 1 ubuntu ubuntu          41 Oct 15 13:25 REVISION
+-rw-rw-r-- 1 ubuntu ubuntu        5230 Oct 15 13:10 USAGE_POLICY.md
+-rw-rw-r-- 1 ubuntu ubuntu        9992 Oct 15 13:10 chat_template.jinja
+-rw-rw-r-- 1 ubuntu ubuntu        5109 Oct 15 13:10 config.json
+-rw-rw-r-- 1 ubuntu ubuntu         202 Oct 15 13:10 generation_config.json
+-rw-rw-r-- 1 ubuntu ubuntu 49950112952 Oct 15 13:23 model-00001-of-00002.safetensors
+-rw-rw-r-- 1 ubuntu ubuntu  9603322320 Oct 15 13:25 model-00002-of-00002.safetensors
+-rw-rw-r-- 1 ubuntu ubuntu      132674 Oct 15 13:10 model.safetensors.index.json
+-rw-rw-r-- 1 ubuntu ubuntu        1084 Oct 15 13:10 processor_config.json
+-rw-rw-r-- 1 ubuntu ubuntu    28129897 Oct 15 13:10 tokenizer.json
+-rw-rw-r-- 1 ubuntu ubuntu       79936 Oct 15 13:10 tokenizer_config.json

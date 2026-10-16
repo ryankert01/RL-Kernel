@@ -1,0 +1,79 @@
+{
+ "table_cpu_vs_cuda_first4096": {
+  "cos": 97294,
+  "sin": 99316,
+  "elements": 524288
+ },
+ "table_cpu_vs_cuda_all": {
+  "cos": 3916740,
+  "sin": 3958164,
+  "max_abs": 0.0039062476716935635
+ },
+ "sha256_head": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "sha256_pinned": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "op_flips_cpu_table_T4096": {
+  "q_hat": 19814,
+  "k_hat": 1274
+ },
+ "api": {
+  "rope_table_cpu": "RuntimeError",
+  "fp32": "TypeError",
+  "legacy_local_none_runs": true,
+  "T0_at": [
+   0,
+   32,
+   128
+  ],
+  "edge": "ValueError"
+ },
+ "ab_us": [
+  {
+   "T": 1,
+   "bits_equal": true,
+   "old_fwd": 24.4,
+   "new_fwd": 28.0,
+   "old_bwd": 42.0,
+   "new_bwd": 30.9
+  },
+  {
+   "T": 64,
+   "bits_equal": true,
+   "old_fwd": 10.5,
+   "new_fwd": 9.4,
+   "old_bwd": 11.2,
+   "new_bwd": 11.3
+  },
+  {
+   "T": 4096,
+   "bits_equal": true,
+   "old_fwd": 60.6,
+   "new_fwd": 60.4,
+   "old_bwd": 83.5,
+   "new_bwd": 83.2
+  },
+  {
+   "T": 8192,
+   "bits_equal": true,
+   "old_fwd": 106.3,
+   "new_fwd": 105.4,
+   "old_bwd": 148.6,
+   "new_bwd": 147.3
+  },
+  {
+   "T": 32768,
+   "bits_equal": true,
+   "old_fwd": 374.8,
+   "new_fwd": 375.6,
+   "old_bwd": 540.0,
+   "new_bwd": 536.8
+  },
+  {
+   "T": 131072,
+   "bits_equal": true,
+   "old_fwd": 1460.1,
+   "new_fwd": 1463.8,
+   "old_bwd": 2104.7,
+   "new_bwd": 2095.5
+  }
+ ]
+}

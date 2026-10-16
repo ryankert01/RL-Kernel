@@ -1,0 +1,6 @@
+# All run from the worktree root WT=/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-6 at commit 467d4f6; S=<session scratchpad>/waveB_ablation
+~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --out $S/parts/part_hf.json 
+~/bin/gpu-lease -n 1 --pool 3 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_baseline_gpu3.json 
+~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_baseline_gpu7.json 
+~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-layers --out $S/parts/part_hf_layers.json 
+~/bin/gpu-lease -n 1 --pool 3 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --out $S/parts/part_strict.json 

@@ -1,0 +1,196 @@
+........................................................................ [ 63%]
+.........................................                                [100%]
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[1-1.0]
+  /home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-5/tests/models/muse_glimmer/test_qknorm_rope.py:149: RuntimeWarning: qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a sliding layer given no table silently runs NoPE. Pass local=True/False (set MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 to make it mandatory). Warned once; counted in runtime_provenance().
+    q_hat, k_hat = qknorm_scaled_rope(q, k, cos, sin)
+
+tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_env_var_makes_the_layer_kind_mandatory
+  /home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-5/tests/models/muse_glimmer/test_qknorm_rope.py:968: RuntimeWarning: qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a sliding layer given no table silently runs NoPE. Pass local=True/False (set MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 to make it mandatory). Warned once; counted in runtime_provenance().
+    qknorm_scaled_rope(q, k, None, None)
+
+tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_first_build_inside_cuda_graph_capture_raises
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/graphs.py:169: UserWarning: The CUDA Graph is empty. This usually means that the graph was attempted to be captured on wrong device or stream. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/cuda/CUDAGraph.cpp:210.)
+    super().capture_end()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ TestRopeTable.test_matches_fp64_definition_within_fp32_angle_error ______
+----------------------------- Captured stdout call -----------------------------
+
+[rope_table] fp32 vs fp64 table max abs diff at T=4096: 2.815e-04
+________________ TestG1Forward.test_fp32_golden_vs_fp64_golden _________________
+----------------------------- Captured stdout call -----------------------------
+
+[G1] fp32 vs fp64 golden (fp64 table) max abs: q 3.671e-03 k 7.543e-04
+_ TestHFSemantics.test_hf_multi_rounding_vs_contract_single_rounding_real_shape _
+----------------------------- Captured stdout call -----------------------------
+
+[HF] q_hat: strict-vs-HF max_abs=0.2500 mean_abs=8.040e-03 frac_neq=0.4711 frac_beyond_ws1_bf16_tol=1.395e-03 worst_err/tol=4.77 | err vs fp64 truth: strict max=6.2351e-02 mean=4.360e-03 rms=6.431e-03; HF max=2.1964e-01 mean=9.104e-03 rms=1.364e-02
+[HF] k_hat: strict-vs-HF max_abs=0.0312 mean_abs=1.713e-03 frac_neq=0.4118 frac_beyond_ws1_bf16_tol=9.537e-07 worst_err/tol=1.01 | err vs fp64 truth: strict max=1.4874e-02 mean=1.128e-03 rms=1.665e-03; HF max=2.5945e-02 mean=2.038e-03 rms=3.047e-03
+_ test_golden_gemm_is_batch_invariant_and_row_parallel_tree_matches_reference __
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:39 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+________ test_train_prefill_chunked_decode_are_byte_equal[150-20-1024] _________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:40 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+________ test_train_prefill_chunked_decode_are_byte_equal[150-20-1000] _________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:48 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+__________ test_train_prefill_chunked_decode_are_byte_equal[3-5-1024] __________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:55 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+__________ test_train_prefill_chunked_decode_are_byte_equal[3-5-1000] __________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:56 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+_________________ test_window_eviction_happens_and_keeps_bits __________________
+---------------------------- Captured stdout setup -----------------------------
+INFO 10-15 22:26:57 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log setup ------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+____________ test_backward_is_deterministic_across_runs_and_finite _____________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:26:58 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+INFO 10-15 22:26:59 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+______________ test_matches_transformers_tiny_model_at_tolerance _______________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:27:01 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+__________ test_triton_backend_requires_sibling_ops_or_allow_partial ___________
+----------------------------- Captured stdout call -----------------------------
+INFO 10-15 22:27:05 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+------------------------------ Captured log call -------------------------------
+INFO     RL-Kernel:det_gemm.py:1078 TritonDetGemmOp ready (deterministic, autotune disabled).
+_____________ test_kernel_attribution_charges_gpu_time_to_regions ______________
+----------------------------- Captured stderr call -----------------------------
+USDT:2026-10-15 22:27:06 466751:466751 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:27:06 466751:466751 SyncActivityProfilerHandler.cpp:59] profiler_stop
+=========================== short test summary info ============================
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_shape_dtype_and_duplicated_halves
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_deterministic_and_int32_equals_int64
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_gather_consistency
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_matches_fp64_definition_within_fp32_angle_error
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_matches_hf_rotary_embedding_fp32
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestRopeTable::test_rejects_bad_positions
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[1-1.0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[5-0.05]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[64-1.0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[4096-2.0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_matches_fp32_golden_bitwise[7]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_matches_fp32_golden_bitwise[4096]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp64_golden_with_fp64_table_real_shape
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_fp32_golden_vs_fp64_golden
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_global_layer_is_norm_and_scale_only
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_only_q_is_scaled
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_op_object_and_defaults
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_rejects_malformed_inputs
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_t1_vs_real_shape_rows
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_same_row_at_every_batch_position[2]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_same_row_at_every_batch_position[4]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_same_row_at_every_batch_position[16]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_global_path_batch_invariance
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2BatchInvariance::test_backward_batch_invariance
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG3Positions::test_one_shot_vs_chunked_vs_per_token
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG3Positions::test_packed_sequences_keep_logical_positions
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG3Positions::test_result_depends_only_on_absolute_position
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG3Positions::test_global_layer_ignores_positions
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_repeat_determinism_real_shape[True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_repeat_determinism_real_shape[False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_vs_fp32_autograd_of_golden[3-True-0.1]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_vs_fp32_autograd_of_golden[64-False-1.0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_vs_fp32_autograd_of_golden[4096-True-2.0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_matches_handwritten_fp32_vjp_bitwise[True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_matches_handwritten_fp32_vjp_bitwise[False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_handwritten_vjp_vs_autograd_fp32
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG4Backward::test_partial_grads
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestHFSemantics::test_hf_multi_rounding_vs_contract_single_rounding_real_shape
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG5Trace::test_trace_emitted_and_stable
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_table_rejects_non_cuda_device
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_canonical_table_is_cached_identical_object
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_canonical_table_fingerprint_is_pinned
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_rows_gathers_the_canonical_table
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_rows_rejects_out_of_range_positions
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_trace_records_table_provenance
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt0]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt1]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_backward_launcher_rejects_non_bf16_grads
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_bf16_outputs_and_grads
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-1]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-7]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-256]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[True-4096]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-1]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-7]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-256]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_head_shards_equal_full_call_slices[False-4096]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_non_contiguous_shard_views
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_shard_tile_config_in_trace[1-32]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_shard_tile_config_in_trace[2-16]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_shard_tile_config_in_trace[4-8]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestG2TensorParallelShards::test_shard_tile_config_in_trace[8-4]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_layer_schedule_matches_manifest
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_explicit_local_flag_fails_closed
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_explicit_flag_gives_legacy_bits
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_positions_api_contract_signature
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_positions_api_backward_matches
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_trace_records_layer_selection
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_rows_beyond_int32_offsets_match_small_calls
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_trace_records_int64_offsets
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_token_counts_bitwise_vs_golden[True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_token_counts_bitwise_vs_golden[False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_decode_batches_1_to_256[True]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_decode_batches_1_to_256[False]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[1]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[17]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[2049]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestModelShapesStayBitwise::test_backward_bitwise_vs_handwritten_vjp[8192]
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_implicit_form_is_counted_and_warned_once
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_env_var_makes_the_layer_kind_mandatory
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_switch_without_env
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_verify_raises_on_a_digest_mismatch
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_in_place_change_is_detected_without_a_sync
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_verify_rehashes_instead_of_reading_the_memo
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_first_build_inside_cuda_graph_capture_raises
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_runtime_provenance_reports_the_built_digest
+PASSED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_canonical_table_built_under_inference_mode_is_a_normal_tensor
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_official_config_node_names_match_operator_trace
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_tiny_config_has_real_schedule_and_padding
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_tree_sum_is_row_independent_and_exact_on_integers
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_golden_gemm_is_batch_invariant_and_row_parallel_tree_matches_reference
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_attention_core_split_invariance_with_window_inside_blocks
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[150-20-1024]
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[150-20-1000]
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[3-5-1024]
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[3-5-1000]
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_window_eviction_happens_and_keeps_bits
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_first_drift_localizer_reports_no_drift_on_equal_paths
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_first_drift_localizer_catches_an_injected_difference
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_backward_is_deterministic_across_runs_and_finite
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_matches_transformers_tiny_model_at_tolerance
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_triton_backend_requires_sibling_ops_or_allow_partial
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_decode_batch_matches_single_sequence_decode_bitwise
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_region_timer_regions_nest_bound_overhead_and_keep_bits
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_kernel_attribution_charges_gpu_time_to_regions
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks
+PASSED tests/models/muse_glimmer/test_strict_model_tiny.py::test_decode_batch_and_kv_plans_reject_bad_sequence_ids
+113 passed, 3 warnings in 42.99s

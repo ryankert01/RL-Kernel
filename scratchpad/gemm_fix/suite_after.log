@@ -1,0 +1,26 @@
+[gpu-lease] using GPUs [4]
+........................................................................ [ 14%]
+.........s.............................................................. [ 29%]
+........................................s............................... [ 43%]
+........................................................................ [ 58%]
+............F..............................s............................ [ 72%]
+........................................................................ [ 87%]
+.............................................................s           [100%]
+=================================== FAILURES ===================================
+E   AssertionError: assert False
+     +  where False = <built-in method equal of type object at 0x7adfde59ff20>(tensor([[-0.0070,  0.0222, -0.0126,  ..., -0.0018, -0.0090,  0.0038],\n        [ 0.0044, -0.0107,  0.0061,  ..., -0.004...],\n        [-0.0099, -0.0227, -0.0048,  ..., -0.0160, -0.0005,  0.0132]],\n       device='cuda:0', dtype=torch.bfloat16), tensor([[-0.0070,  0.0222, -0.0126,  ..., -0.0018, -0.0090,  0.0038],\n        [ 0.0044, -0.0107,  0.0060,  ..., -0.004...],\n        [-0.0099, -0.0227, -0.0048,  ..., -0.0159, -0.0005,  0.0132]],\n       device='cuda:0', dtype=torch.bfloat16))
+     +    where <built-in method equal of type object at 0x7adfde59ff20> = torch.equal
+/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-4/tests/models/muse_glimmer/test_megatron_strict_binding.py:256: AssertionError: assert False
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_host_syncs_and_device_side_target_rule
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/__init__.py:1333: UserWarning: Synchronization debug mode is a prototype feature and does not yet detect all synchronizing operations (Triggered internally at /__w/pytorch/pytorch/torch/csrc/cuda/Module.cpp:1028.)
+    torch._C._cuda_set_sync_debug_mode(debug_mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_megatron_strict_binding.py::test_lm_head_tiles_tp2_equals_tp1_and_reference
+SKIPPED [1] tests/models/muse_glimmer/test_det_gemm.py:306: needs two visible GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_full_model_chain.py:38: MUSEGLIMMER_CHECKPOINT not set
+SKIPPED [1] tests/models/muse_glimmer/test_museglimmer_fingerprint.py:262: set MUSEGLIMMER_CHECKPOINT
+SKIPPED [1] tests/models/muse_glimmer/test_vllm_strict_binding.py:418: set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease
+1 failed, 489 passed, 4 skipped, 1 warning in 181.54s (0:03:01)

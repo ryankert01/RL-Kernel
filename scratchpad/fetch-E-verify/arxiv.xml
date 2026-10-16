@@ -1,0 +1,131 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/iLjG/SQJbRtMFuCKNDi12CpJQbw</id>
+  <title>arXiv Query: search_query=&amp;id_list=2511.17826,2602.06036,2504.13181&amp;start=0&amp;max_results=10</title>
+  <updated>2026-10-15T13:03:47Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=&amp;start=0&amp;max_results=10&amp;id_list=2511.17826,2602.06036,2504.13181" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>10</opensearch:itemsPerPage>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2504.13181v2</id>
+    <title>Perception Encoder: The best visual embeddings are not at the output of the network</title>
+    <updated>2025-04-28T18:01:39Z</updated>
+    <link href="https://arxiv.org/abs/2504.13181v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2504.13181v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We introduce Perception Encoder (PE), a state-of-the-art vision encoder for image and video understanding trained via simple vision-language learning. Traditionally, vision encoders have relied on a variety of pretraining objectives, each tailored to specific downstream tasks such as classification, captioning, or localization. Surprisingly, after scaling our carefully tuned image pretraining recipe and refining with our robust video data engine, we find that contrastive vision-language training alone can produce strong, general embeddings for all of these downstream tasks. There is only one caveat: these embeddings are hidden within the intermediate layers of the network. To draw them out, we introduce two alignment methods: language alignment for multimodal language modeling, and spatial alignment for dense prediction. Together, our PE family of models achieves best-in-class results on a wide variety of tasks, including (1) zero-shot image and video classification and retrieval, simultaneously obtaining 86.6 average zero-shot ImageNet robustness and 76.9 zero-shot Kinetics-400 video classification; (2) document, image, and video Q&amp;A, enabling 94.6 DocVQA, 80.9 InfographicVQA, and 82.7 PerceptionTest with an 8B LLM; and (3) spatial tasks such as detection, tracking, and depth estimation, setting a new COCO state-of-the-art of 66.0 box mAP. To foster further research, we release our models, code, and novel dataset of synthetically and human-annotated videos: https://github.com/facebookresearch/perception_models</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-04-17T17:59:57Z</published>
+    <arxiv:comment>Updated refs, fixed typos, and added new COCO SotA: 66.0 val mAP! Code, models, and data at https://github.com/facebookresearch/perception_models</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Daniel Bolya</name>
+    </author>
+    <author>
+      <name>Po-Yao Huang</name>
+    </author>
+    <author>
+      <name>Peize Sun</name>
+    </author>
+    <author>
+      <name>Jang Hyun Cho</name>
+    </author>
+    <author>
+      <name>Andrea Madotto</name>
+    </author>
+    <author>
+      <name>Chen Wei</name>
+    </author>
+    <author>
+      <name>Tengyu Ma</name>
+    </author>
+    <author>
+      <name>Jiale Zhi</name>
+    </author>
+    <author>
+      <name>Jathushan Rajasegaran</name>
+    </author>
+    <author>
+      <name>Hanoona Rasheed</name>
+    </author>
+    <author>
+      <name>Junke Wang</name>
+    </author>
+    <author>
+      <name>Marco Monteiro</name>
+    </author>
+    <author>
+      <name>Hu Xu</name>
+    </author>
+    <author>
+      <name>Shiyu Dong</name>
+    </author>
+    <author>
+      <name>Nikhila Ravi</name>
+    </author>
+    <author>
+      <name>Daniel Li</name>
+    </author>
+    <author>
+      <name>Piotr Dollár</name>
+    </author>
+    <author>
+      <name>Christoph Feichtenhofer</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2602.06036v2</id>
+    <title>DFlash: Block Diffusion for Flash Speculative Decoding</title>
+    <updated>2026-05-28T09:13:25Z</updated>
+    <link href="https://arxiv.org/abs/2602.06036v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2602.06036v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Autoregressive large language models (LLMs) deliver strong performance but require inherently sequential decoding, leading to high inference latency and poor GPU utilization. Speculative decoding mitigates this bottleneck by using a fast draft model whose outputs are verified in parallel by the target LLM; however, existing methods still rely on autoregressive drafting, which remains sequential and limits practical speedups. Diffusion LLMs offer a promising alternative by enabling parallel generation, but current diffusion models typically underperform compared with autoregressive models. In this paper, we introduce DFlash, a speculative decoding framework that employs a lightweight block diffusion model for parallel drafting. By generating draft tokens in a single forward pass and conditioning the draft model on context features extracted from the target model, DFlash enables efficient drafting with high-quality outputs and higher acceptance rates. Experiments show that DFlash achieves over 6x lossless acceleration across a range of models and tasks, delivering up to 2.5x higher speedup than the state-of-the-art speculative decoding method EAGLE-3.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-02-05T18:59:30Z</published>
+    <arxiv:comment>Accepted at ICML 2026. Camera-ready version. Code: https://github.com/z-lab/dflash</arxiv:comment>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>Jian Chen</name>
+    </author>
+    <author>
+      <name>Yesheng Liang</name>
+    </author>
+    <author>
+      <name>Zhijian Liu</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2511.17826v2</id>
+    <title>Deterministic Inference across Tensor Parallel Sizes That Eliminates Training-Inference Mismatch</title>
+    <updated>2026-05-29T02:47:21Z</updated>
+    <link href="https://arxiv.org/abs/2511.17826v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2511.17826v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Deterministic inference is increasingly critical for large language model (LLM) applications such as LLM-as-a-judge evaluation, multi-agent systems, and Reinforcement Learning (RL). However, existing LLM serving frameworks exhibit non-deterministic behavior: identical inputs can yield different outputs when system configurations (e.g., tensor parallel (TP) size, batch size) vary, even under greedy decoding. This arises from the non-associativity of floating-point arithmetic and inconsistent reduction orders across GPUs. While prior work has addressed batch-size-related nondeterminism through batch-invariant kernels, determinism across different TP sizes remains an open problem, particularly in RL settings, where the training engine typically uses Fully Sharded Data Parallel (i.e., TP = 1) while the rollout engine relies on multi-GPU TP to maximize the inference throughput, creating a natural mismatch between the two. This precision mismatch problem may lead to suboptimal performance or even collapse for RL training. We identify and analyze the root causes of TP-induced inconsistency and propose Tree-Based Invariant Kernels (TBIK), a set of TP-invariant matrix multiplication and reduction primitives that guarantee bit-wise identical results regardless of TP size. Our key insight is to align intra- and inter-GPU reduction orders through a unified hierarchical binary tree structure. We implement these kernels in Triton and integrate them into vLLM and FSDP. Experiments confirm zero probability divergence and bit-wise reproducibility for deterministic inference across different TP sizes. Also, we achieve bit-wise identical results between vLLM and FSDP in RL training pipelines with different parallel strategy. Code is available at https://github.com/nanomaoli/llm_reproducibility.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="stat.ML" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-11-21T22:40:00Z</published>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>Ziyang Zhang</name>
+    </author>
+    <author>
+      <name>Xinheng Ding</name>
+    </author>
+    <author>
+      <name>Jiayi Yuan</name>
+    </author>
+    <author>
+      <name>Rixin Liu</name>
+    </author>
+    <author>
+      <name>Huizi Mao</name>
+    </author>
+    <author>
+      <name>Jiarong Xing</name>
+    </author>
+    <author>
+      <name>Zirui Liu</name>
+    </author>
+  </entry>
+</feed>

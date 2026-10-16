@@ -1,0 +1,12 @@
+[trainer_server rank0 20:41:56] start pid=356040 world=1 launcher=process CUDA_VISIBLE_DEVICES='6'
+[trainer_server rank0 20:41:56] client connected
+[trainer_server rank0 20:41:57] trainer MockTrainer built in 1.5 s
+[trainer_server rank0 20:41:58] token_logprobs id=1 ok=True compute=213.9 ms
+[trainer_server rank0 20:41:58] step id=2 ok=True compute=407.5 ms
+[trainer_server rank0 20:41:58] export_lora id=3 ok=True compute=2.2 ms
+[trainer_server rank0 20:41:58] token_logprobs id=4 ok=True compute=48.2 ms
+[trainer_server rank0 20:41:58] step id=5 ok=True compute=252.5 ms
+[trainer_server rank0 20:41:58] export_lora id=6 ok=True compute=2.0 ms
+[trainer_server rank0 20:41:58] provenance id=7 ok=True compute=0.1 ms
+[trainer_server rank0 20:41:58] close id=8 ok=True compute=0.0 ms
+[trainer_server rank0 20:41:58] bye

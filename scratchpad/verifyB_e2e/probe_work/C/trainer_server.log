@@ -1,0 +1,17 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank1 22:32:41] start pid=472015 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank0 22:32:41] start pid=472014 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank1 22:32:43] trainer MockTrainer built in 1.2 s
+[trainer_server rank0 22:32:45] client connected
+[trainer_server rank0 22:32:45] trainer MockTrainer built in 1.2 s
+[trainer_server rank0 22:32:46] token_logprobs id=1 ok=True compute=40.3 ms
+[trainer_server rank0 22:32:46] step id=2 ok=True compute=43.9 ms
+[trainer_server rank0 22:32:46] export_lora id=3 ok=True compute=1.2 ms
+[trainer_server rank0 22:32:46] close id=4 ok=True compute=0.0 ms
+[trainer_server rank0 22:32:46] bye
+[trainer_server rank1 22:32:46] bye

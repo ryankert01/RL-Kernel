@@ -1,0 +1,5 @@
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/gsm8k_bytes_ss  mode: strict/strict  task: gsm8k  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/494 max 0.000e+00 first - | sync 0d5768eead03 ok=True | 5.0s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/497 max 0.000e+00 first - | sync 0d5768eead03 ok=True | 2.7s
+done: 2 steps, bitwise mismatches 0/991, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 3/3 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/gsm8k_bytes_ss/summary.json

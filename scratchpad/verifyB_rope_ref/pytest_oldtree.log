@@ -1,0 +1,281 @@
+[gpu-lease] using GPUs [7]
+............................................FF.......................... [ 63%]
+...........FFF.FFFFF..................FFF                                [100%]
+=================================== FAILURES ===================================
+_ TestF1RopeTableIdentity.test_other_repo_table_builders_are_bitwise_identical_on_cuda _
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x76ab1a5b3fb0>
+
+    def test_other_repo_table_builders_are_bitwise_identical_on_cuda(self):
+        """Every table builder in the repo (reference golden, runtime fallback) must produce the
+        canonical bits on CUDA, so whichever runtime builds the table, it is the same."""
+        from rl_engine.models.muse_glimmer.reference import golden_ops
+        from rl_engine.models.muse_glimmer.runtime import fallback_ops, strict_kernels
+    
+        pos = torch.arange(ROPE_POSITIONS, device=DEV)
+        cc, sc = op.canonical_rope_table(DEV)
+        # golden_ops (reference), fallback_ops (vLLM binding fallback), strict_kernels (Megatron
+        # binding fallback): all 4 builders of the repo
+        for fn in (golden_ops.rope_table, fallback_ops.rope_table, strict_kernels._fb_rope_table):
+            c, s = fn(pos, theta=ROPE_THETA, dim=D, device=DEV)
+            assert torch.equal(c, cc) and torch.equal(s, sc), fn.__module__
+        # the reference golden builder delegates to the canonical table and fails closed on CPU
+>       with pytest.raises(RuntimeError, match="torch-CUDA"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RuntimeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:606: Failed
+_________ TestF1RopeTableIdentity.test_trace_records_table_provenance __________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x76ab1a5cc2f0>
+
+    def test_trace_records_table_provenance(self):
+        tab = trace()["rope_table"]
+        assert tab["device_type"] == "cuda"
+        assert tab["positions"] == ROPE_POSITIONS
+>       assert tab["sha256_pinned"] == CANONICAL_SHA256
+               ^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'sha256_pinned'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:613: KeyError
+_______ TestWaveBLayerKind.test_implicit_form_is_counted_and_warned_once _______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBLayerKind object at 0x76ab1a5ccb00>
+_layer_kind_state = None
+
+    def test_implicit_form_is_counted_and_warned_once(self, _layer_kind_state):
+        q, k = _make_qk(8, seed=200)
+        cos, sin = _tables(torch.arange(8, device=DEV))
+>       with pytest.warns(RuntimeWarning, match="local=None"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT WARN. No warnings of type (<class 'RuntimeWarning'>,) were emitted.
+E        Emitted warnings: [].
+
+tests/models/muse_glimmer/test_qknorm_rope.py:938: Failed
+________ TestWaveBLayerKind.test_env_var_makes_the_layer_kind_mandatory ________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBLayerKind object at 0x76ab1a5ceba0>
+_layer_kind_state = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76aa7c2fa660>
+
+    def test_env_var_makes_the_layer_kind_mandatory(self, _layer_kind_state, monkeypatch):
+        q, k = _make_qk(8, seed=201)
+        cos, sin = _tables(torch.arange(8, device=DEV))
+        monkeypatch.setenv(_LAYER_KIND_ENV, "1")
+        for c, s_ in ((cos, sin), (None, None)):
+>           with pytest.raises(ValueError, match="explicit"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:955: Failed
+__________________ TestWaveBLayerKind.test_switch_without_env __________________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBLayerKind object at 0x76ab1a5ceed0>
+_layer_kind_state = None
+
+    def test_switch_without_env(self, _layer_kind_state):
+        q, k = _make_qk(4, seed=202)
+>       op.require_explicit_layer_kind(True)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'require_explicit_layer_kind'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:977: AttributeError
+___ TestWaveBTableIntegrity.test_in_place_change_is_detected_without_a_sync ____
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBTableIntegrity object at 0x76ab1a5cf530>
+_private_tables = None
+
+    def test_in_place_change_is_detected_without_a_sync(self, _private_tables):
+        c, s_ = op.canonical_rope_table(DEV, dim=64)  # a private key: never the model's table
+        op.rope_rows(torch.arange(4, device=DEV), dim=64)
+        c.mul_(1 + 2**-20)  # bumps the version counter
+>       with pytest.raises(RuntimeError, match="modified in place"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RuntimeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:1000: Failed
+___ TestWaveBTableIntegrity.test_verify_rehashes_instead_of_reading_the_memo ___
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBTableIntegrity object at 0x76ab1a5cf860>
+_private_tables = None
+
+    def test_verify_rehashes_instead_of_reading_the_memo(self, _private_tables):
+        """A write that bypasses the version counter (.data) is still caught by verify=True,
+        and the logged digest follows the table's actual bits."""
+        key = (torch.cuda.current_device(), ROPE_THETA, D)
+        for cache in (op._CANONICAL_TABLES, op._CANONICAL_VERSIONS, op._CANONICAL_SHA):
+            cache.pop(key, None)  # a private rebuild of the model's table (never the shared one)
+        c, _ = op.canonical_rope_table(DEV, verify=True)
+        assert op.rope_table_sha256(DEV) == CANONICAL_SHA256  # memoised
+        old = c.data[7, 3].clone()
+        try:
+            c.data[7, 3] = old + 1.0  # no version bump: the cheap check cannot see it
+            op.canonical_rope_table(DEV)  # passes (documented limit of the cheap check)
+>           with pytest.raises(RuntimeError, match="sha256"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RuntimeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:1021: Failed
+__ TestWaveBTableIntegrity.test_first_build_inside_cuda_graph_capture_raises ___
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBTableIntegrity object at 0x76ab1a5cfbc0>
+_private_tables = None
+
+    def test_first_build_inside_cuda_graph_capture_raises(self, _private_tables):
+        key_dim = 32  # not built yet in this test's private cache view
+        key = (torch.cuda.current_device(), ROPE_THETA, key_dim)
+        op._CANONICAL_TABLES.pop(key, None)
+        op._CANONICAL_VERSIONS.pop(key, None)
+        pos = torch.arange(8, device=DEV)
+        torch.cuda.synchronize()
+        g = torch.cuda.CUDAGraph()
+        stream = torch.cuda.Stream()
+        stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(stream):
+>           with pytest.raises(RuntimeError, match="before CUDA-graph capture"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RuntimeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:1040: Failed
+___ TestWaveBTableIntegrity.test_runtime_provenance_reports_the_built_digest ___
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBTableIntegrity object at 0x76ab1a5cfef0>
+
+    def test_runtime_provenance_reports_the_built_digest(self):
+        op.canonical_rope_table(DEV)
+>       prov = op.runtime_provenance()
+               ^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'runtime_provenance'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:1059: AttributeError
+_ TestWaveBTableIntegrity.test_canonical_table_built_under_inference_mode_is_a_normal_tensor _
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestWaveBTableIntegrity object at 0x76ab1a5f0260>
+_private_tables = None
+
+    def test_canonical_table_built_under_inference_mode_is_a_normal_tensor(
+        self, _private_tables
+    ):
+        key = (torch.cuda.current_device(), 10000.0, D)
+        op._CANONICAL_TABLES.pop(key, None)
+        op._CANONICAL_VERSIONS.pop(key, None)
+        with torch.inference_mode():
+            c, _ = op.canonical_rope_table(DEV, theta=10000.0)
+>       assert not c.is_inference()
+E       AssertionError: assert not True
+E        +  where True = <built-in method is_inference of Tensor object at 0x76aa7c3e1f90>()
+E        +    where <built-in method is_inference of Tensor object at 0x76aa7c3e1f90> = tensor([[ 1.0000,  1.0000,  1.0000,  ...,  1.0000,  1.0000,  1.0000],\n        [ 0.5403,  0.6479,  0.7318,  ...,  1.000...2343,  0.1984, -0.8407],\n        [-0.8180, -0.9777,  0.0557,  ...,  0.2342,  0.1985, -0.8408]],\n       device='cuda:0').is_inference
+
+tests/models/muse_glimmer/test_qknorm_rope.py:1079: AssertionError
+______ test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree _______
+
+tiny_model = <rl_engine.models.muse_glimmer.reference.strict_model.MuseGlimmerStrictModel object at 0x76aab88d1220>
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-94/test_xrt_scoring_writes_hex_of0')
+
+    def test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree(tiny_model, tmp_path):
+        import json
+    
+        from rl_engine.models.muse_glimmer.reference.xrt_scoring import (
+            compare_xrt,
+            hex_to_fp32,
+            score_token_file,
+        )
+    
+        vocab = tiny_model.cfg.vocab_size
+        seqs = []
+        for i, (n, cs) in enumerate([(40, 25), (140, 110)]):
+            seqs.append({"id": f"s{i}", "token_ids": _tokens(n, vocab, seed=90 + i).tolist(),
+                         "completion_start": cs})
+        path = tmp_path / "tokens.json"
+        path.write_text(json.dumps({"schema": "muse_glimmer_xrt_v1", "sequences": seqs}))
+        modes = ("prefill", "decode", "per_token", "chunked:prompt_boundary", "chunked:20/19",
+                 "chunked:window_boundary_100")
+        out = score_token_file(tiny_model, path, check_modes=modes)
+        assert out["schema"] == "muse_glimmer_xrt_logprobs_v1" and out["tp"] == 1
+        for s, rec in zip(seqs, out["sequences"]):
+            ids = torch.tensor(s["token_ids"])
+            cs = s["completion_start"]
+            ref = tiny_model.logprobs(ids[:cs], ids[cs:], mode="train").float().cpu()
+            assert len(rec["logprobs_hex"]) == len(s["token_ids"]) - cs
+            assert all(len(h) == 8 for h in rec["logprobs_hex"])
+            assert torch.equal(hex_to_fp32(rec["logprobs_hex"]), ref)
+        first, second = (r["modes"] for r in out["checks"]["sequences"])
+        assert "skipped" in first["chunked:window_boundary_100"]  # 39 scored tokens < 101
+        assert "skipped" in second["chunked:20/19"]
+        assert second["chunked:window_boundary_100"]["byte_equal"]
+        assert out["checks"]["all_byte_equal_to_train"], out["checks"]
+>       assert out["checks"]["n_checks"] == 5 + 5 and out["checks"]["n_skipped"] == 2
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'n_checks'
+
+tests/models/muse_glimmer/test_strict_model_tiny.py:421: KeyError
+______ test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks _______
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-94/test_xrt_scoring_compares_bit_0')
+
+    def test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks(tmp_path):
+        """-0.0 vs +0.0 is a mismatch (bit patterns, not float ==); no check run is not a pass."""
+        import json
+        from types import SimpleNamespace
+    
+        from rl_engine.models.muse_glimmer.reference.xrt_scoring import score_token_file
+    
+        class _Stub:
+            device = DEVICE
+            ops = SimpleNamespace(backend="stub", provenance={})
+    
+            def logprobs(self, prompt, completion, *, mode, chunk_sizes=None, timings=None):
+                out = torch.zeros(int(completion.numel()))  # +0.0
+                if mode == "prefill":
+                    out[0] = -0.0  # same float value, different bits
+                if timings is not None:
+                    timings.update(prompt_prefill_seconds=0.0, prompt_len=int(prompt.numel()),
+                                   decode_step_seconds=[0.0] * (int(completion.numel()) - 1),
+                                   decode_context_start=int(prompt.numel()))
+                return out
+    
+        path = tmp_path / "tokens.json"
+        path.write_text(json.dumps({"schema": "muse_glimmer_xrt_v1", "sequences": [
+            {"id": "a", "token_ids": list(range(12)), "completion_start": 8}]}))
+        out = score_token_file(_Stub(), path, check_modes=("prefill", "decode"))
+        modes = out["checks"]["sequences"][0]["modes"]
+>       assert modes["prefill"]["byte_equal"] is False and modes["prefill"]["first_mismatch"] == 0
+E       assert (True is False)
+
+tests/models/muse_glimmer/test_strict_model_tiny.py:467: AssertionError
+____________ test_decode_batch_and_kv_plans_reject_bad_sequence_ids ____________
+
+tiny_model = <rl_engine.models.muse_glimmer.reference.strict_model.MuseGlimmerStrictModel object at 0x76aab88d1220>
+
+    def test_decode_batch_and_kv_plans_reject_bad_sequence_ids(tiny_model):
+        """Duplicate ids used to give a silently wrong logp (two rows wrote the same cache slot);
+        a negative id aliased the last row and then tripped a device-side assert. Fail closed
+        BEFORE any K/V is written."""
+        from rl_engine.models.muse_glimmer.reference.strict_model import KVPlan
+    
+        vocab = tiny_model.cfg.vocab_size
+        prompts = [_tokens(20, vocab, seed=150), _tokens(9, vocab, seed=151)]
+        completions = [_tokens(3, vocab, seed=152), _tokens(3, vocab, seed=153)]
+        cache, _ = _fill_batch_cache(tiny_model, prompts, completions)
+        before = [t.clone() for t in (cache.k, cache.v, cache.block_table, cache.seq_lens)]
+        for seqs in ([1, 1], [0, 1, 0], [-1], [2], [0, -2]):
+>           with pytest.raises(ValueError, match="sequence ids"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE ValueError
+
+tests/models/muse_glimmer/test_strict_model_tiny.py:490: Failed
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_trace_records_table_provenance
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_implicit_form_is_counted_and_warned_once
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_env_var_makes_the_layer_kind_mandatory
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_switch_without_env
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_in_place_change_is_detected_without_a_sync
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_verify_rehashes_instead_of_reading_the_memo
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_first_build_inside_cuda_graph_capture_raises
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_runtime_provenance_reports_the_built_digest
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_canonical_table_built_under_inference_mode_is_a_normal_tensor
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_decode_batch_and_kv_plans_reject_bad_sequence_ids
+13 failed, 100 passed in 42.97s

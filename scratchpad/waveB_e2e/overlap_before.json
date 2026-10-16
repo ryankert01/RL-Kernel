@@ -1,0 +1,122 @@
+{
+ "row": "final_e2e_lora (cross-environment trainer bridge + timeline instrumentation)",
+ "commit": "unknown",
+ "env": {
+  "client_cpu_run": {
+   "python": "3.12.15",
+   "executable": "/home/ubuntu/envs/vllm/bin/python",
+   "torch": "2.13.0+cu130",
+   "torch_cuda": "13.0",
+   "cuda_visible_devices": null,
+   "gpu_lease": null,
+   "cpu_count": 240,
+   "triton": "3.7.1",
+   "vllm": "0.31.0",
+   "transformers": "5.17.0"
+  }
+ },
+ "commands": [
+  "[pre-fix tree = git archive 87a4cd2 (old bridge/trainer_server, mocks with build_delay_s) + bench_bridge.py of 33a86ad; CPU, no lease] ~/envs/vllm/bin/python <scratch>/run_overlap_before.py"
+ ],
+ "startup_overlap": {
+  "before_fix": {
+   "note": "process launcher, megatron env, CPU MockTrainer(build_delay_s) = a trainer whose build takes build_delay_s (the 30B StrictTrainer build took 100-164 s in the real smokes). Serial behaviour: launch_to_ready ~ caller_work + interpreter start + build; overlapped: ~ max(caller_work, interpreter start + build).",
+   "build_delay_s": 6.0,
+   "rows": [
+    {
+     "caller_work_s": 0.0,
+     "build_delay_s": 6.0,
+     "server_build_s": 7.522268984997936,
+     "wait_ready_blocked_s": 10.141033066000091,
+     "launch_to_ready_s": 10.142979903001105,
+     "startup": null
+    },
+    {
+     "caller_work_s": 3.0,
+     "build_delay_s": 6.0,
+     "server_build_s": 7.6434461579992785,
+     "wait_ready_blocked_s": 8.028354188994854,
+     "launch_to_ready_s": 11.03068217299733,
+     "startup": null
+    },
+    {
+     "caller_work_s": 6.0,
+     "build_delay_s": 6.0,
+     "server_build_s": 7.358526481999434,
+     "wait_ready_blocked_s": 7.648257388995262,
+     "launch_to_ready_s": 13.651932626002235,
+     "startup": null
+    },
+    {
+     "caller_work_s": 9.0,
+     "build_delay_s": 6.0,
+     "server_build_s": 8.45950202899985,
+     "wait_ready_blocked_s": 9.297899950994179,
+     "launch_to_ready_s": 18.30861834499956,
+     "startup": null
+    },
+    {
+     "caller_work_s": 12.0,
+     "build_delay_s": 6.0,
+     "server_build_s": 7.867240496001614,
+     "wait_ready_blocked_s": 9.208917950003524,
+     "launch_to_ready_s": 21.217224967003858,
+     "startup": null
+    }
+   ],
+   "commit": "unknown"
+  }
+ },
+ "integration_findings": [
+  {
+   "id": "F1",
+   "what": "runtime/megatron_lora.lora_sha256 (key\\n + shape\\n + bytes) was not muse_glimmer_lora_sha256_v1; StrictTrainer.export_lora reported the former and the bridge failed closed at the initial LoRA sync (reviewer's TP1 smoke: WeightSyncError).",
+   "status": "fixed in the merged code: megatron_lora.lora_sha256 delegates to e2e.sync.lora_sha256",
+   "evidence": "hash_schema_check all_equal (this JSON); real_e2e_smoke: trainer_start, rollout_start and every sync report the same canonical hash in both modes",
+   "follow_up": "e2e_bridge:R11 - runtime imports e2e (dependency inversion): move the hash into a shared module (request to the integrator)"
+  },
+  {
+   "id": "F2",
+   "what": "StrictTrainer(strict=False) had no LoRA (step/export_lora raised).",
+   "status": "fixed in the merged code (native trainer LoRA hooks)",
+   "evidence": "real_e2e_smoke native/native: step ok, export_lora ok, weight sync 2/2"
+  },
+  {
+   "id": "F3",
+   "what": "StrictRolloutEngine(strict=False).load_lora raised.",
+   "status": "fixed in the merged code (vLLM LoRARequest from a PEFT folder)",
+   "evidence": "real_e2e_smoke native/native rollout lora_mode 'vLLM native punica LoRA (PEFT folder)', weight sync 2/2"
+  },
+  {
+   "id": "F4",
+   "what": "StrictRolloutEngine.provenance() had no top-level lora_sha256 and the workers stored the declared hash.",
+   "status": "fixed in the merged code (top-level lora_sha256; None when worker hashes differ); e2e/sync no longer accepts per-worker values at all",
+   "evidence": "real_e2e_smoke: rollout_sha256_source 'provenance.lora_sha256'; test_rollout_hash_only_from_the_engine_level_provenance_key"
+  },
+  {
+   "id": "F5",
+   "what": "StrictTrainer TP worker NCCL group used the default 10 min timeout.",
+   "status": "fixed in the merged code (30 min, strict_trainer._init_distributed)",
+   "evidence": "code reading"
+  },
+  {
+   "id": "F6",
+   "what": "StrictTrainer spawns its own TP workers, so it runs under --trainer-launcher process; under torchrun it fails closed on len(gpu_ids) == tp.",
+   "status": "open (by design for the POC)",
+   "evidence": "real_e2e_smoke uses the process launcher with train TP2"
+  },
+  {
+   "id": "F7",
+   "what": "StrictTrainer.close() took ~127 s at TP2 in both real smokes (trainer-server log 'close ... compute=127295 ms' / '127799 ms'): the TP worker join (timeout 120 s) expires and the worker is terminated.",
+   "status": "open (runtime/strict_trainer.py, not this row)",
+   "evidence": "real_e2e_smoke[*].trainer_server_log.close"
+  },
+  {
+   "id": "F8",
+   "what": "Before e2e_bridge:R3 the trainer server accepted the client before building, so the 30B trainer build ran after vLLM start-up instead of during it.",
+   "status": "fixed in this row (build before accept); NOT re-measured on the 30B",
+   "evidence": "real_e2e_smoke strict: server start 20:48:49, client connected 20:49:33, trainer built 20:52:17 (start-up 209.6 s for a 163.7 s build); startup_overlap rows"
+  }
+ ],
+ "status": "bridge + instrumentation complete; review wave B fixes in (rank agreement, start-up overlap, stateful-failure retire, top-level rollout hash only, lease-relative placement). Real 30B: two one-step E2E smokes through the bridge by the integrator (real_e2e_smoke); the four-mode 8-step runs are NOT RUN (integrator)."
+}

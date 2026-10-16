@@ -1,0 +1,109 @@
+{
+  "row": "review_fwd_norms",
+  "status": "complete",
+  "commit": "6a61f6e791b7b42a4b5746b2b974f2431f524994",
+  "commit_note": "reviewed files are byte-identical at 00b789077b8649b98f8c3a3a235fabdeb348e77f",
+  "env": {
+    "gpu": "NVIDIA A100-SXM4-80GB (pool 4-5 via gpu-lease)",
+    "torch": "2.13.0+cu130",
+    "triton": "3.7.1",
+    "vllm": "0.31.0 (env only; no engine run)",
+    "megatron": "not used",
+    "compute_sanitizer": "2025.1.0.0"
+  },
+  "commands": [
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_gated_attention_fwd.py tests/models/muse_glimmer/test_norms.py -q -p no:cacheprovider",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_attn_fwd.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_attn_asm.py $S/asm",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_attn_extra.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_runtime_attention_binding.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_attn_oob_canary.py",
+    "PYTORCH_NO_CUDA_MEMORY_CACHING=1 PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- compute-sanitizer --tool memcheck --print-limit 100000 --kernel-name kns=_gated_attention_fwd_kernel ~/envs/vllm/bin/python $S/probe_attn_oob.py q",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- compute-sanitizer --tool memcheck --print-limit 4 --kernel-name kns=_gated_attention_fwd_kernel ~/envs/vllm/bin/python $S/probe_attn_oob.py k",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_norms.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_embed_bwd_int32.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python $S/probe_fix_simulation.py $S/fixsim",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python benchmarks/models/muse_glimmer/bench_gated_attention.py",
+    "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 -- ~/envs/vllm/bin/python benchmarks/models/muse_glimmer/bench_norms.py"
+  ],
+  "experiments": {
+    "test_suites": {"passed": 106, "failed": 0, "seconds": 37.59, "attention_fwd_tests": 63, "norms_tests": 43},
+    "runtime_attention_binding_n1100": {
+      "vllm_resolved_label": "fallback:torch_online_softmax_64key_blocks (demoted by probe_ops: q_pos int64)",
+      "megatron_resolved_label": "binding_torch_fp32_cublas_per_head",
+      "mismatch_fraction_y": {
+        "vllm_resolved_vs_strict_kernel": 0.0009552557021379471,
+        "megatron_resolved_vs_strict_kernel": 0.12179332226514816,
+        "vllm_resolved_vs_megatron_resolved": 0.12156382948160172
+      },
+      "max_abs_y": 0.015625
+    },
+    "megatron_resolved_vs_strict_n2300": {
+      "global": {"elements": 9420800, "mismatched": 1349865, "max_abs": 0.015625},
+      "local": {"elements": 9420800, "mismatched": 1350305, "max_abs": 0.015625}
+    },
+    "autograd_forward_fallback_n300": {"forward_is_fallback": true, "y_mismatch_vs_strict": 528},
+    "fix_simulation_import_from_ops_gated_attention": {
+      "forward_is_fallback": false,
+      "y_equal_strict_kernel": {"global": true, "local": true},
+      "grads_repeat_equal": {"global": true, "local": true}
+    },
+    "fail_open_inputs": {
+      "max_seqlen_q_undersized_varlen": {"rows": 200, "max_seqlen_q": 64, "rows_wrong": 136, "raised": false},
+      "max_seqlen_q_undersized_paged": {"rows": 41, "max_seqlen_q": 1, "rows_wrong": 39, "raised": false},
+      "block_table_minus1_inside_window": {"y_elements_wrong": 2992, "lse_abs_diff": 0.6158838272094727, "nan": false, "raised": false},
+      "seq_lens_past_block_table": {"y_elements_changed_by_other_seq_kv": 3811, "lse_change": 3.683095932006836, "raised": false},
+      "cu_seqlens_q_gt_Tq_canary": {"canary_elements": 262144, "canary_elements_overwritten": 196864, "raised": false},
+      "cu_seqlens_q_gt_Tq_memcheck_nocache": {"invalid_global_reads_4B": 2288, "error_summary": 2290},
+      "cu_seqlens_k_gt_Tk_memcheck": {"invalid_global_reads_16B": "reported (print-limit 4)"},
+      "q_pos_ge_len_k": {"rows_finite_silently": true},
+      "negative_q_pos": {"y_nan": true, "lse": "-inf"},
+      "paged_seq_len_lt_len_q": {"nan_rows": 10}
+    },
+    "compiled_attention_token_tile_local_ptx_counts": {
+      "ex2.approx.f32": 104, "div.rn.ftz.f32": 128, "fma.rn.f32": 8, "fma.rn.ftz.f32": 96,
+      "mul.f32": 280, "add.f32": 124, "pv_dot_accumulator": "tt.dot(p_bf16, V, acc*alpha)"
+    },
+    "compiled_norm_fwd_ptx_counts": {"add.rn.f32": 72, "mul.rn.f32": 96, "div.rn.f32": 2, "sqrt.rn.f32": 1, "fma": 0},
+    "head_tile_warps_vs_token_tile_4_warps_n300": {
+      "1": {"y_mismatch": 7, "lse_mismatch": 557},
+      "2": {"y_mismatch": 7, "lse_mismatch": 411},
+      "4": {"y_mismatch": 0, "lse_mismatch": 0},
+      "8": {"y_mismatch": 3, "lse_mismatch": 314}
+    },
+    "window_off_by_one_vs_G1_n2300": {
+      "atol": 0.05, "rtol": 0.02,
+      "window_2047": {"max_abs_y": 1.1266016960144043, "max_abs_lse": 0.5258083343505859, "G1_passes": false},
+      "window_2049": {"max_abs_y": 1.9202711582183838, "max_abs_lse": 0.8967399597167969, "G1_passes": false},
+      "window_2048": {"max_abs_y": 0.02079939842224121, "max_abs_lse": 7.62939453125e-06}
+    },
+    "coverage_gap_probes_bitwise": {
+      "varlen_batch_of_chunked_prefill_pieces_mismatches": 0,
+      "paged_mixed_prefill_decode_mismatches": {"auto": 0, "token": 0, "head": 0},
+      "attention_misaligned_inputs_2B_mismatches": {"global": 0, "local": 0},
+      "norm_misaligned_inputs_mismatches": {"x_2B": 0, "x_4B": 0, "x_8B": 0, "w_2B": 0, "fused_2B": 0, "embedding_table_2B": 0, "backward_dx_2B": 0},
+      "norm_fwd_compiled_variants_after_alignment_probe": 5
+    },
+    "norms_golden_ms_division_1e6_samples": {"ms_mismatch_vs_ieee_div": 459852, "ms_mismatch_vs_reciprocal_multiply": 0, "inv_mismatch": 187399},
+    "norms_out_of_range_ids": {"V": 1000, "ids_tested": [1000, -1, 5000], "device_assert_fired": true},
+    "norms_negative_eps_zero_row": {"raised": false, "y_nan": true},
+    "embedding_bwd_int32_overflow": {"rows": 330000, "int32_limit_rows": 322638, "result": "CUDA illegal memory access"},
+    "bench_rerun_ms": {
+      "attention": {
+        "prefill4096_global": {"strict": 2.060, "sdpa": 1.508},
+        "decode_b64_ctx4096_global": {"strict_paged": 0.318, "strict_varlen": 0.216, "sdpa": 0.211},
+        "prefill4096_local": {"strict": 1.527, "sdpa_dense_mask": 30.147},
+        "decode_b64_ctx4096_local": {"strict_paged": 0.331, "strict_varlen": 0.108, "sdpa_dense_mask": 18.068}
+      },
+      "norms_T4096": {
+        "centered_fwd": {"strict": 0.138, "native": 0.804},
+        "weighted_fwd": {"strict": 0.138, "native": 0.799},
+        "normalized_embedding_fwd": {"strict": 0.213, "native": 0.686},
+        "fused_fwd": {"strict": 0.212, "native": 1.590},
+        "centered_fwd_bwd": {"strict": 0.751, "native": 2.625},
+        "fused_fwd_bwd": {"strict": 0.940, "native": 5.492},
+        "normalized_embedding_fwd_bwd": {"strict": 5.142, "native": 7.191}
+      }
+    }
+  }
+}

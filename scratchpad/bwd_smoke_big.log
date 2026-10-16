@@ -1,0 +1,57 @@
+[gpu-lease] using GPUs [0]
+lens=[64] window=None golden fwd 0.19s  y vs fp64 max abs 1.320e-02
+  repeat equal: True True True True
+  dq: max|ref|=3.413e+00 max abs err=9.930e-03 rel(max err/max ref)=2.909e-03 allclose=True nan=False
+  dk: max|ref|=1.951e+01 max abs err=9.326e-02 rel(max err/max ref)=4.780e-03 allclose=False nan=False
+  dv: max|ref|=1.093e+01 max abs err=5.072e-02 rel(max err/max ref)=4.638e-03 allclose=True nan=False
+  dgate: max|ref|=2.633e+00 max abs err=8.089e-03 rel(max err/max ref)=3.072e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.48s
+lens=[64] window=2048 golden fwd 0.01s  y vs fp64 max abs 1.320e-02
+  repeat equal: True True True True
+  dq: max|ref|=3.413e+00 max abs err=9.930e-03 rel(max err/max ref)=2.909e-03 allclose=True nan=False
+  dk: max|ref|=1.951e+01 max abs err=9.326e-02 rel(max err/max ref)=4.780e-03 allclose=False nan=False
+  dv: max|ref|=1.093e+01 max abs err=5.072e-02 rel(max err/max ref)=4.638e-03 allclose=True nan=False
+  dgate: max|ref|=2.633e+00 max abs err=8.089e-03 rel(max err/max ref)=3.072e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.01s
+lens=[200, 130] window=None golden fwd 0.03s  y vs fp64 max abs 1.351e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.231e+00 max abs err=1.073e-02 rel(max err/max ref)=4.807e-03 allclose=True nan=False
+  dk: max|ref|=1.639e+01 max abs err=8.053e-02 rel(max err/max ref)=4.913e-03 allclose=False nan=False
+  dv: max|ref|=1.398e+01 max abs err=3.851e-02 rel(max err/max ref)=2.755e-03 allclose=True nan=False
+  dgate: max|ref|=2.167e+00 max abs err=9.897e-03 rel(max err/max ref)=4.568e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.01s
+lens=[200, 130] window=2048 golden fwd 0.04s  y vs fp64 max abs 1.351e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.231e+00 max abs err=1.073e-02 rel(max err/max ref)=4.807e-03 allclose=True nan=False
+  dk: max|ref|=1.639e+01 max abs err=8.053e-02 rel(max err/max ref)=4.913e-03 allclose=False nan=False
+  dv: max|ref|=1.398e+01 max abs err=3.851e-02 rel(max err/max ref)=2.755e-03 allclose=True nan=False
+  dgate: max|ref|=2.167e+00 max abs err=9.897e-03 rel(max err/max ref)=4.568e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.01s
+lens=[2049] window=None golden fwd 0.71s  y vs fp64 max abs 1.592e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.280e+00 max abs err=9.908e-03 rel(max err/max ref)=4.345e-03 allclose=True nan=False
+  dk: max|ref|=2.561e+01 max abs err=1.053e-01 rel(max err/max ref)=4.114e-03 allclose=False nan=False
+  dv: max|ref|=1.340e+01 max abs err=4.296e-02 rel(max err/max ref)=3.206e-03 allclose=True nan=False
+  dgate: max|ref|=2.518e+00 max abs err=1.222e-02 rel(max err/max ref)=4.852e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.02s
+lens=[2049] window=2048 golden fwd 0.70s  y vs fp64 max abs 1.592e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.280e+00 max abs err=9.908e-03 rel(max err/max ref)=4.345e-03 allclose=True nan=False
+  dk: max|ref|=2.561e+01 max abs err=1.053e-01 rel(max err/max ref)=4.114e-03 allclose=False nan=False
+  dv: max|ref|=1.340e+01 max abs err=4.296e-02 rel(max err/max ref)=3.206e-03 allclose=True nan=False
+  dgate: max|ref|=2.518e+00 max abs err=1.222e-02 rel(max err/max ref)=4.852e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.02s
+lens=[4096] window=None golden fwd 2.61s  y vs fp64 max abs 1.870e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.466e+00 max abs err=1.353e-02 rel(max err/max ref)=5.487e-03 allclose=True nan=False
+  dk: max|ref|=2.867e+01 max abs err=1.131e-01 rel(max err/max ref)=3.946e-03 allclose=False nan=False
+  dv: max|ref|=1.443e+01 max abs err=5.191e-02 rel(max err/max ref)=3.596e-03 allclose=True nan=False
+  dgate: max|ref|=2.469e+00 max abs err=1.204e-02 rel(max err/max ref)=4.876e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.05s
+lens=[4096] window=2048 golden fwd 2.61s  y vs fp64 max abs 1.870e-02
+  repeat equal: True True True True
+  dq: max|ref|=2.466e+00 max abs err=9.815e-03 rel(max err/max ref)=3.980e-03 allclose=True nan=False
+  dk: max|ref|=2.619e+01 max abs err=1.010e-01 rel(max err/max ref)=3.856e-03 allclose=False nan=False
+  dv: max|ref|=1.564e+01 max abs err=4.702e-02 rel(max err/max ref)=3.006e-03 allclose=True nan=False
+  dgate: max|ref|=2.605e+00 max abs err=1.204e-02 rel(max err/max ref)=4.622e-03 allclose=True nan=False
+  bwd time (first call incl. compile) 0.05s

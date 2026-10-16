@@ -1,0 +1,76 @@
+[gpu-lease] using GPUs [4]
+{
+ "global/T=2048/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "global/T=2048/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "global/T=2100/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "global/T=4096/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "global/T=4096/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "global/T=8192/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=2048/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=2048/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=2100/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=4096/cp4": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=4096/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ },
+ "local/T=8192/cp8": {
+  "dq": 0,
+  "dk": 0,
+  "dv": 0,
+  "dgate": 0
+ }
+}
+rc=0

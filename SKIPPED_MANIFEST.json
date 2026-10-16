@@ -1,0 +1,127 @@
+{
+ "note": "Files left out of this archive. Large tensors are reproducible with the commands in the run JSON/REPORTs; code snapshots are commits of the repo; venvs/browsers/wheels/screenshots and third-party downloads are omitted.",
+ "skipped_top_level_dirs": [
+  "blogtest",
+  "fetch-D",
+  "fetch-E",
+  "hf",
+  "lintenv",
+  "pw",
+  "shotenv",
+  "shots",
+  "venv",
+  "wheels"
+ ],
+ "skipped_code_snapshot_dirs": [
+  "vllmB/oldtree",
+  "attn/old_tree",
+  "wb/old_f91e8b6",
+  "wb/arch_615ee61",
+  "wb/old_6a61f6e_kernel",
+  "waveB_e2e/tree_87a4cd2",
+  "verifyB_vllm/oldtree",
+  "attn_norms_B/base_tree",
+  "verifyB_attn_norms/base_tree",
+  "waveB_meg/old",
+  "verifyB_megatron/waveA_tree",
+  "gemm_fix/before_tree",
+  "waveA/review_kernels_gemm/base_tree",
+  "waveA/review2_kernels_gemm/before_tree",
+  "waveA/review2_kernels_attention/merged",
+  "waveA/review2_kernels_attention/old_tree",
+  "waveA/review_kernels_rope/old",
+  "verifyB_rope_ref/oldtree"
+ ],
+ "skipped_large_files": [
+  {
+   "path": "scratchpad/refprof/runs/hf512_triton/hf_bf16.pt",
+   "bytes": 823487358,
+   "sha256": "0569c921e8d4e5d82b84d88dd142f2a25a58c21e55728913f76c44e036be8d13"
+  },
+  {
+   "path": "scratchpad/refprof/runs/hf512_triton/strict_ref.pt",
+   "bytes": 830732597,
+   "sha256": "98c712bce93ac3daf84d2750c87c1b95c006ddb620f1126f82cf1d31a4074cdc"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/hf_fp32_512_32.pt",
+   "bytes": 1207299945,
+   "sha256": "ee27363b71b06219bfb85d60664e2e4bc840a62a8a77e285368a4c1b0a4a6757"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/main_512_32/hf_bf16.pt",
+   "bytes": 823487358,
+   "sha256": "0569c921e8d4e5d82b84d88dd142f2a25a58c21e55728913f76c44e036be8d13"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/main_512_32/strict_ref.pt",
+   "bytes": 830732597,
+   "sha256": "00194a960fca76ac8e4a82c58ececeeb982a3e21edb1f11bf845589d604d8d35"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/triton_512_32/hf_bf16.pt",
+   "bytes": 823487358,
+   "sha256": "0569c921e8d4e5d82b84d88dd142f2a25a58c21e55728913f76c44e036be8d13"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/triton_512_32/strict_ref.pt",
+   "bytes": 830732597,
+   "sha256": "f126485b0df83f252ad9eac6aac65ed7ecdabb79962578fd57b78d931b57aeea"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/triton_full_512_32/hf_bf16.pt",
+   "bytes": 823487358,
+   "sha256": "0569c921e8d4e5d82b84d88dd142f2a25a58c21e55728913f76c44e036be8d13"
+  },
+  {
+   "path": "scratchpad/chain_agent/runs/triton_full_512_32/strict_ref.pt",
+   "bytes": 830732597,
+   "sha256": "98c712bce93ac3daf84d2750c87c1b95c006ddb620f1126f82cf1d31a4074cdc"
+  },
+  {
+   "path": "scratchpad/meg/grads_tp2.pt",
+   "bytes": 419430859,
+   "sha256": "dfcae24133f044c1dc5ed9a45b477a11ad02735deaacfd7fb97a5ecefdfed8cc"
+  },
+  {
+   "path": "scratchpad/meg/grads_tp1.pt",
+   "bytes": 419430859,
+   "sha256": "013e122787fd0099ad6f21eb2da4e63a0b80575908d8c0fb93e35330cfed051f"
+  },
+  {
+   "path": "scratchpad/waveB_meg/smoke/grads_tp1.pt",
+   "bytes": 419430859,
+   "sha256": "5dbdce2851dc03f733477dc01e40dd014d2182f9a65790459ab55d27329f3e6a"
+  },
+  {
+   "path": "scratchpad/waveB_meg/final/grads_tp4.pt",
+   "bytes": 419430859,
+   "sha256": "040453c9491496809b2e03e966e0a93357bba0221bdaee74c22e496df5a0b2fd"
+  },
+  {
+   "path": "scratchpad/waveB_meg/final/grads_tp2.pt",
+   "bytes": 419430859,
+   "sha256": "dcb772184aa8eb071d64d28c4b190c03c1a6e327c34c1f2a685b24d058e54eb5"
+  },
+  {
+   "path": "scratchpad/waveB_meg/final/grads_tp1.pt",
+   "bytes": 419430859,
+   "sha256": "5dbdce2851dc03f733477dc01e40dd014d2182f9a65790459ab55d27329f3e6a"
+  },
+  {
+   "path": "scratchpad/waveA/review2_megatron_runtime/grads_tp2_mb4096.pt",
+   "bytes": 419436852,
+   "sha256": "277422aa11949f84cdaf52bc0dd7bc1ab190847c0a11cc9ebe10dc6cf6bceeb4"
+  },
+  {
+   "path": "scratchpad/waveA/review2_megatron_runtime/grads_tp1_mb4096.pt",
+   "bytes": 419436852,
+   "sha256": "88c633c34d72f3e147db89cf42043b88ce3d114096d50dcd3802303ab1434b06"
+  },
+  {
+   "path": "scratchpad/verifyB_rope_ref/old.tar",
+   "bytes": 40396800,
+   "sha256": "2c986ecd38cedb0d9039e5dc7e6b4926d611d2fec79b1dffb7ce3940d9f83d61"
+  }
+ ]
+}

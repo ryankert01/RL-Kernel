@@ -1,0 +1,17 @@
+reports/muse_glimmer_poc/data/kernels_attention.json
+rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_bwd.md
+rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md
+rl_engine/models/muse_glimmer/ops/attention_golden_bwd.py
+rl_engine/models/muse_glimmer/ops/gated_attention.py
+rl_engine/models/muse_glimmer/ops/gated_attention_autograd.py
+rl_engine/models/muse_glimmer/ops/gated_attention_bench.py
+rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md
+rl_engine/models/muse_glimmer/runtime/check_cp_parity.py
+rl_engine/models/muse_glimmer/runtime/cp_attention.py
+rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py
+rl_engine/models/muse_glimmer/triton/gated_attention_fwd.py
+tests/models/muse_glimmer/distributed/_cp_harness.py
+tests/models/muse_glimmer/distributed/test_cp_global_attention.py
+tests/models/muse_glimmer/distributed/test_cp_local_attention.py
+tests/models/muse_glimmer/test_gated_attention_bwd.py
+tests/models/muse_glimmer/test_gated_attention_fwd.py

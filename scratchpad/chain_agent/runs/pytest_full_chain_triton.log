@@ -1,0 +1,15 @@
+[gpu-lease] using GPUs [0]
+INFO 10-15 15:45:53 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+prompt 256 + completion 32 tokens, backend `triton`, all paths byte-equal to train: **True**
+
+| path | chunk sizes | equal to train | equal tokens | max abs diff | seconds | peak GiB |
+|---|---|---|---|---|---|---|
+| train | - | (reference) | 32/32 | 0 | 0.92 | 52.05 |
+| prefill | - | yes | 32/32 | 0.000e+00 | 0.31 | 52.06 |
+| chunked:prompt_boundary | [256, 31] | yes | 32/32 | 0.000e+00 | 0.34 | 52.05 |
+| chunked:halves | [143, 144] | yes | 32/32 | 0.000e+00 | 0.33 | 52.03 |
+| chunked:block64 | [64, 64, 64, 64, 31] | yes | 32/32 | 0.000e+00 | 0.61 | 52.01 |
+| chunked:ragged | [1, 63, 100, 7, 116] | yes | 32/32 | 0.000e+00 | 0.70 | 52.02 |
+| decode | - | yes | 32/32 | 0.000e+00 | 3.80 | 52.05 |
+.
+1 passed in 21.76s

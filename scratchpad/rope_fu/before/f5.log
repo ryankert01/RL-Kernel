@@ -1,0 +1,19 @@
+{
+ "probe": "f5",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "T": 524352,
+ "numel_q": 2147745792,
+ "int32_max": 2147483647,
+ "global": {
+  "raised": true,
+  "error": "AcceleratorError: CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\n"
+ },
+ "peak_mem_gib": 16.00390625,
+ "wall_s": 2.03
+}

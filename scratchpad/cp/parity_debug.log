@@ -1,0 +1,55 @@
+[gpu-lease] using GPUs [1, 2]
+
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+Traceback (most recent call last):
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/agent-a215e705260dd6ffe/rl_engine/models/muse_glimmer/runtime/check_cp_parity.py", line 33, in <module>
+    from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ImportError: cannot import name 'cp_attention' from 'rl_engine.models.muse_glimmer.runtime' (/home/ubuntu/RL-Kernel/.claude/worktrees/agent-a7944ab684b3629cf/rl_engine/models/muse_glimmer/runtime/__init__.py)
+Traceback (most recent call last):
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/agent-a215e705260dd6ffe/rl_engine/models/muse_glimmer/runtime/check_cp_parity.py", line 33, in <module>
+    from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ImportError: cannot import name 'cp_attention' from 'rl_engine.models.muse_glimmer.runtime' (/home/ubuntu/RL-Kernel/.claude/worktrees/agent-a7944ab684b3629cf/rl_engine/models/muse_glimmer/runtime/__init__.py)
+E1015 15:44:08.456000 155061 torch/distributed/elastic/multiprocessing/api.py:1002] failed (exitcode: 1) local_rank: 0 (pid: 155201) of binary: /home/ubuntu/envs/vllm/bin/python
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/run.py", line 1032, in <module>
+    main()
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 367, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/run.py", line 1028, in main
+    run(args)
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/run.py", line 1019, in run
+    elastic_launch(
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 194, in __call__
+    return launch_agent(
+           ^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 383, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+rl_engine/models/muse_glimmer/runtime/check_cp_parity.py FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-10-15_15:44:08
+  host      : 170-9-247-33
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 155202) 
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-10-15_15:44:08
+  host      : 170-9-247-33
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 155201) 
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

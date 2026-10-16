@@ -1,0 +1,2 @@
+- [Muse Glimmer POC state](museglimmer-poc-state.md) — branch, envs, unmerged agent branches, resume plan for RFC #501
+- [Report format: HTML blog with graphs](report-format-html-blog.md) — final reports as illustrated HTML blog posts, figures over prose

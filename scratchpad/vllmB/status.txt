@@ -1,0 +1,2 @@
+complete
+complete — every requested run done on the final binding code (TP1, TP2 and a real 4-GPU TP4 engine; strict and native); TP8 engine NOT RUN (needs 8 GPUs; the single-GPU simulation covers TP8)

@@ -1,0 +1,12 @@
+poc(muse_glimmer): WS2 wrap-up — strict attention forward is pinned to 32/2 heads; keep KV proof on fallback
+
+Merge the advanced POC branch (strict gated-attention forward). The landed
+ops.gated_attention.strict_gated_attention_fwd_varlen requires the full geometry (32 Q / 2 KV
+heads, int32 offsets) and rejects a TP shard, so kv_replication keeps its pure-torch fixed-order
+fallback by default and only adopts the strict kernel for full-geometry calls when
+MUSEGLIMMER_STRICT_ATTN_FWD=1 (int32 casts, clear NotImplementedError for shards).
+REPORT_ws2_tp.md gets a STATUS: partial header with what passed, what did not run and the
+resume commands.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

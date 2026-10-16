@@ -1,0 +1,8 @@
+[gpu-lease] using GPUs [5]
+{
+ "table_is_inference": true,
+ "train_after_inference_build": "ok",
+ "fwd_equal": true,
+ "verify_after_inference_build": "ok",
+ "inplace_on_shared_table": "RuntimeError: Inplace update to inference tensor outside InferenceMode is not allowed.You can make a clone to get a normal tensor befo"
+}

@@ -1,0 +1,8 @@
+    import pynvml  # type: ignore[import]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 2 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 4 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:1007: set RL_KERNEL_MUSEGLIMMER_E2E=1
+45 passed, 3 skipped, 1 warning in 13.62s

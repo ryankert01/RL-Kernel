@@ -1,0 +1,529 @@
+[gpu-lease] using GPUs [3]
+FFFFFFFFFFF..............FFFFF                                           [100%]
+=================================== FAILURES ===================================
+_______________________ test_trace_matches_compiled_ptx ________________________
+
+    def test_trace_matches_compiled_ptx():
+        """trace()["compiled_arithmetic"] states what the PTX does (review gated_attention_fwd:R5):
+        exp2-form exp, FTZ round-to-nearest division, a contracted fma for l. Fails if a Triton
+        upgrade changes the lowering, so the record cannot silently drift."""
+        q, k, v, gate = _inputs(70, seed=4)
+        _one_shot(q, k, v, gate, W, tile_mode="head")
+        caches = kern._gated_attention_fwd_kernel.device_caches[torch.cuda.current_device()][0]
+>       rec = ga.trace()["compiled_arithmetic"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'compiled_arithmetic'
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:629: KeyError
+____________ test_host_validation_rejects_bad_offsets[q_end_short] _____________
+
+cu_q = [0, 48], cu_k = [0, 64]
+match = 'cu_seqlens_q\\[-1\\]=48 must equal the number of rows 64'
+
+    @pytest.mark.parametrize(
+        "cu_q, cu_k, match",
+        [
+            ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+            ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+            ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+            ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+            ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+        ],
+        ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+    )
+    def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+        q, k, v, gate, _cu, pos = _varlen_case()
+>       with pytest.raises(ValueError, match=match):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:686: Failed
+_____________ test_host_validation_rejects_bad_offsets[q_end_long] _____________
+
+cu_q = [0, 80], cu_k = [0, 64], match = 'cu_seqlens_q\\[-1\\]=80'
+
+    @pytest.mark.parametrize(
+        "cu_q, cu_k, match",
+        [
+            ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+            ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+            ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+            ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+            ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+        ],
+        ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+    )
+    def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+        q, k, v, gate, _cu, pos = _varlen_case()
+>       with pytest.raises(ValueError, match=match):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:686: Failed
+_____________ test_host_validation_rejects_bad_offsets[k_end_long] _____________
+
+cu_q = [0, 64], cu_k = [0, 128], match = 'cu_seqlens_k\\[-1\\]=128'
+
+    @pytest.mark.parametrize(
+        "cu_q, cu_k, match",
+        [
+            ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+            ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+            ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+            ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+            ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+        ],
+        ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+    )
+    def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+>       q, k, v, gate, _cu, pos = _varlen_case()
+                                  ^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:685: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:670: in _varlen_case
+    return q, k, v, gate, _i32([0, n]), torch.arange(n, dtype=torch.int32, device=DEV)
+                          ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+values = [0, 64]
+
+    def _i32(values) -> torch.Tensor:
+>       return torch.tensor(list(values), dtype=torch.int32, device=DEV)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:56: AcceleratorError
+______________ test_host_validation_rejects_bad_offsets[q_start] _______________
+
+cu_q = [4, 64], cu_k = [0, 64], match = 'cu_seqlens_q\\[0\\] must be 0'
+
+    @pytest.mark.parametrize(
+        "cu_q, cu_k, match",
+        [
+            ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+            ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+            ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+            ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+            ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+        ],
+        ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+    )
+    def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+>       q, k, v, gate, _cu, pos = _varlen_case()
+                                  ^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:685: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 1
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+____________ test_host_validation_rejects_bad_offsets[q_decreasing] ____________
+
+cu_q = [0, 40, 30, 64], cu_k = [0, 20, 40, 64], match = 'non-decreasing'
+
+    @pytest.mark.parametrize(
+        "cu_q, cu_k, match",
+        [
+            ([0, 48], [0, 64], r"cu_seqlens_q\[-1\]=48 must equal the number of rows 64"),
+            ([0, 80], [0, 64], r"cu_seqlens_q\[-1\]=80"),
+            ([0, 64], [0, 128], r"cu_seqlens_k\[-1\]=128"),
+            ([4, 64], [0, 64], r"cu_seqlens_q\[0\] must be 0"),
+            ([0, 40, 30, 64], [0, 20, 40, 64], "non-decreasing"),
+        ],
+        ids=["q_end_short", "q_end_long", "k_end_long", "q_start", "q_decreasing"],
+    )
+    def test_host_validation_rejects_bad_offsets(cu_q, cu_k, match):
+>       q, k, v, gate, _cu, pos = _varlen_case()
+                                  ^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:685: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 1
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+___________ test_host_validation_rejects_q_pos_outside_keys[global] ____________
+
+window = None
+
+    @LAYER_KINDS
+    def test_host_validation_rejects_q_pos_outside_keys(window):
+>       q, k, v, gate, cu, pos = _varlen_case()
+                                 ^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:694: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 1
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+____________ test_host_validation_rejects_q_pos_outside_keys[local] ____________
+
+window = 2048
+
+    @LAYER_KINDS
+    def test_host_validation_rejects_q_pos_outside_keys(window):
+>       q, k, v, gate, cu, pos = _varlen_case()
+                                 ^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:694: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 1
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+_____________________ test_host_validation_paged_seq_lens ______________________
+
+    def test_host_validation_paged_seq_lens():
+>       q, k, v, gate = _inputs(64, seed=2)
+                        ^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:709: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 2
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+________________ test_host_validation_under_cuda_default_device ________________
+
+    def test_host_validation_under_cuda_default_device():
+        """vLLM builds the model under torch.device('cuda') and bf16 default dtype: the host-side
+        validators must keep their CPU tensors on the CPU (regression found by
+        test_vllm_strict_binding's probe in wave B)."""
+        from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
+    
+>       q, k, v, gate, cu, pos = _varlen_case(n=64, seed=6)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:740: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 64, seed = 6
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+__________________ test_seq_meta_path_validates_without_sync ___________________
+
+    def test_seq_meta_path_validates_without_sync():
+        """A SequenceMeta is a host-validated packing: no sync, and max_seqlen_q may not undercut it."""
+        from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as bwd
+    
+>       q, k, v, gate, cu, pos = _varlen_case(n=300, seed=3)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:760: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:669: in _varlen_case
+    q, k, v, gate = _inputs(n, seed=seed)
+                    ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+n = 300, seed = 3
+
+    def _inputs(n: int, seed: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Realistic magnitudes: q is qk-normed and scaled by 3.87, k/v unit RMS, gate ~ N(0, 4)."""
+>       g = torch.Generator(device=DEV).manual_seed(seed)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:47: AcceleratorError
+__________ test_autograd_validates_in_forward_and_reuses_meta[global] __________
+
+mods = (<module 'rl_engine.models.muse_glimmer.ops.attention_golden_bwd' from '/tmp/claude-1000/-home-ubuntu-RL-Kernel--claud...93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py'>)
+window = None
+
+    @WINDOWS
+    def test_autograd_validates_in_forward_and_reuses_meta(mods, window):
+        """Without seq_meta the autograd forward builds the SequenceMeta (packing validated before
+        the kernel runs, review gated_attention_fwd:R1/R4) and the backward reuses it: no host
+        synchronisation in the backward. A packing the backward would reject fails in the forward.
+        """
+        _gold, ag, bwd = mods
+>       inp = make_inputs([300, 64, 2049], seed=14)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py:670: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+lens = [300, 64, 2049], seed = 14, pos0 = [0, 0, 0], k_lens = [300, 64, 2049]
+hq = 32, hkv = 2
+
+    def make_inputs(
+        lens: list[int], *, seed: int = 0, pos0: list[int] | None = None, k_lens=None,
+        hq: int = 32, hkv: int = 2,
+    ):
+        """Random bf16 inputs at the real per-token shapes; q rms-normalised and scaled by 3.87."""
+        g = torch.Generator(device="cpu").manual_seed(seed)
+        tq = sum(lens)
+        k_lens = list(lens) if k_lens is None else list(k_lens)
+        tk = sum(k_lens)
+        q = torch.randn(tq, hq, 128, generator=g)
+        q = q * torch.rsqrt(q.pow(2).mean(-1, keepdim=True) + 1e-5) * 3.87
+        k = torch.randn(tk, hkv, 128, generator=g)
+        k = k * torch.rsqrt(k.pow(2).mean(-1, keepdim=True) + 1e-5)
+        v = torch.randn(tk, hkv, 128, generator=g)
+        gate = torch.randn(tq, hq * 128, generator=g)
+        dy = torch.randn(tq, hq * 128, generator=g)
+        cu_q = torch.tensor([0] + torch.tensor(lens).cumsum(0).tolist(), dtype=torch.int32)
+        cu_k = torch.tensor([0] + torch.tensor(k_lens).cumsum(0).tolist(), dtype=torch.int32)
+        pos0 = [0] * len(lens) if pos0 is None else pos0
+        pos = torch.cat([torch.arange(p, p + n, dtype=torch.int32) for p, n in zip(pos0, lens)])
+        dev = torch.device("cuda")
+        return dict(
+>           q=q.to(dev, torch.bfloat16),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+            k=k.to(dev, torch.bfloat16),
+            v=v.to(dev, torch.bfloat16),
+            gate=gate.to(dev, torch.bfloat16),
+            dy=dy.to(dev, torch.bfloat16),
+            cu_q=cu_q.to(dev),
+            cu_k=cu_k.to(dev),
+            pos=pos.to(dev),
+        )
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py:71: AcceleratorError
+__________ test_autograd_validates_in_forward_and_reuses_meta[local] ___________
+
+mods = (<module 'rl_engine.models.muse_glimmer.ops.attention_golden_bwd' from '/tmp/claude-1000/-home-ubuntu-RL-Kernel--claud...93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py'>)
+window = 2048
+
+    @WINDOWS
+    def test_autograd_validates_in_forward_and_reuses_meta(mods, window):
+        """Without seq_meta the autograd forward builds the SequenceMeta (packing validated before
+        the kernel runs, review gated_attention_fwd:R1/R4) and the backward reuses it: no host
+        synchronisation in the backward. A packing the backward would reject fails in the forward.
+        """
+        _gold, ag, bwd = mods
+>       inp = make_inputs([300, 64, 2049], seed=14)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py:670: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+lens = [300, 64, 2049], seed = 14, pos0 = [0, 0, 0], k_lens = [300, 64, 2049]
+hq = 32, hkv = 2
+
+    def make_inputs(
+        lens: list[int], *, seed: int = 0, pos0: list[int] | None = None, k_lens=None,
+        hq: int = 32, hkv: int = 2,
+    ):
+        """Random bf16 inputs at the real per-token shapes; q rms-normalised and scaled by 3.87."""
+        g = torch.Generator(device="cpu").manual_seed(seed)
+        tq = sum(lens)
+        k_lens = list(lens) if k_lens is None else list(k_lens)
+        tk = sum(k_lens)
+        q = torch.randn(tq, hq, 128, generator=g)
+        q = q * torch.rsqrt(q.pow(2).mean(-1, keepdim=True) + 1e-5) * 3.87
+        k = torch.randn(tk, hkv, 128, generator=g)
+        k = k * torch.rsqrt(k.pow(2).mean(-1, keepdim=True) + 1e-5)
+        v = torch.randn(tk, hkv, 128, generator=g)
+        gate = torch.randn(tq, hq * 128, generator=g)
+        dy = torch.randn(tq, hq * 128, generator=g)
+        cu_q = torch.tensor([0] + torch.tensor(lens).cumsum(0).tolist(), dtype=torch.int32)
+        cu_k = torch.tensor([0] + torch.tensor(k_lens).cumsum(0).tolist(), dtype=torch.int32)
+        pos0 = [0] * len(lens) if pos0 is None else pos0
+        pos = torch.cat([torch.arange(p, p + n, dtype=torch.int32) for p, n in zip(pos0, lens)])
+        dev = torch.device("cuda")
+        return dict(
+>           q=q.to(dev, torch.bfloat16),
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+            k=k.to(dev, torch.bfloat16),
+            v=v.to(dev, torch.bfloat16),
+            gate=gate.to(dev, torch.bfloat16),
+            dy=dy.to(dev, torch.bfloat16),
+            cu_q=cu_q.to(dev),
+            cu_k=cu_k.to(dev),
+            pos=pos.to(dev),
+        )
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py:71: AcceleratorError
+________________ test_golden_mean_square_is_ieee_division[cpu] _________________
+
+device = 'cpu'
+
+    @pytest.mark.parametrize(
+        "device", ["cpu", pytest.param("cuda", marks=_cuda)]
+    )
+    def test_golden_mean_square_is_ieee_division(device):
+        """Review norms:R1: the golden's ms = ss / H must be the IEEE division the kernels' div_rn
+        performs, on CPU and CUDA alike (torch CUDA `t / float` is t * (1/float))."""
+        x = _bf16((4096, H), seed=3, scale=2.0, device=device).float()
+        ss = N._sum_squares_fp32(x)
+        want = _ieee_inv_reference(ss, H, EPS_RMS)
+        got = N.inv_rms_fp32(x, EPS_RMS)
+        bad = int((got != want).sum())
+        assert bad == 0, f"{bad}/{got.numel()} rows: golden inv is not 1/sqrt(div_rn(ss, H) + eps)"
+>       ms = N.div_ieee(ss, H)
+             ^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.norms' has no attribute 'div_ieee'
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py:119: AttributeError
+________________ test_golden_mean_square_is_ieee_division[cuda] ________________
+
+device = 'cuda'
+
+    @pytest.mark.parametrize(
+        "device", ["cpu", pytest.param("cuda", marks=_cuda)]
+    )
+    def test_golden_mean_square_is_ieee_division(device):
+        """Review norms:R1: the golden's ms = ss / H must be the IEEE division the kernels' div_rn
+        performs, on CPU and CUDA alike (torch CUDA `t / float` is t * (1/float))."""
+>       x = _bf16((4096, H), seed=3, scale=2.0, device=device).float()
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py:52: in _bf16
+    g = _gen(seed, device)
+        ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+seed = 3, device = 'cuda'
+
+    def _gen(seed: int, device: str = "cuda") -> torch.Generator:
+>       return torch.Generator(device=device).manual_seed(seed)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+E       Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+E       CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+E       For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py:48: AcceleratorError
+_______________________ test_fused_rejects_mixed_devices _______________________
+
+    def test_fused_rejects_mixed_devices():
+        """Review norms:R2: the fused wrapper checks that all four tensors share one device (before,
+        each tensor was only checked against its own weight)."""
+        b = torch.zeros(2, 64, dtype=torch.bfloat16, device="meta")
+        w = torch.zeros(64, dtype=torch.bfloat16, device="meta")
+        r = torch.zeros(2, 64, dtype=torch.bfloat16, device="cpu")
+        w_r = torch.zeros(64, dtype=torch.bfloat16, device="cpu")
+>       with pytest.raises(RuntimeError, match="share one device"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'share one device'
+E         Actual message: 'strict norm requires CUDA tensors on one device'
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py:160: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_auto]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_token]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_head]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_paged]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_end_beyond_rows]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[k_end_beyond_rows]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_pos_beyond_keys]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_pos_negative]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[page_minus1_visible]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[page_out_of_range]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[seq_lens_beyond_table]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[seq_lens_below_len_q]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_control[ok_varlen]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_control[ok_paged]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_trace_matches_compiled_ptx
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_bad_offsets[q_end_short]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_bad_offsets[q_end_long]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_bad_offsets[k_end_long]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_bad_offsets[q_start]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_bad_offsets[q_decreasing]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_q_pos_outside_keys[global]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_rejects_q_pos_outside_keys[local]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_paged_seq_lens
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_host_validation_under_cuda_default_device
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_seq_meta_path_validates_without_sync
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py::test_autograd_validates_in_forward_and_reuses_meta[global]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_bwd.py::test_autograd_validates_in_forward_and_reuses_meta[local]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py::test_golden_mean_square_is_ieee_division[cpu]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py::test_golden_mean_square_is_ieee_division[cuda]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_norms.py::test_fused_rejects_mixed_devices
+16 failed, 14 passed, 194 deselected in 49.61s

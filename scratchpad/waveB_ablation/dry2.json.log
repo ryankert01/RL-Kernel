@@ -1,0 +1,135 @@
+[23:04:57] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/dry2.json: 378 records, 42 settings, status complete
+| engine | factor | setting | n factors | tokens differ | max abs dlogp | mean abs dlogp | mean k3 | mean KL | argmax flips (unique / at ties) | wall ms |
+|---|---|---|---|---|---|---|---|---|---|---|
+| hf | 9 repeat_null | repeat_immediate | 0 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 1819 |
+| hf | 1 batch_composition | padded_batch9_right | 1 | 927/933 | 0.602 | 0.019 | 0.00143 | 0.000729 | 6 (0 / 6) | 8895 |
+| hf | 1 batch_composition | padded_batch9_left | 1 | 926/933 | 0.633 | 0.0204 | 0.00178 | 0.000649 | 4 (0 / 4) | 8547 |
+| hf | 2 prefill_vs_decode | kv_cache_decode | 1 | 923/933 | 0.447 | 0.0175 | 0.00116 | 0.000668 | 7 (1 / 6) | 87010 |
+| hf | 3 prefill_length | prefill_L_minus_1 | 1 | 918/933 | 1.12 | 0.0186 | 0.00157 | 0.000587 | 5 (2 / 3) | 1753 |
+| hf | 3 chunked_prefill | chunked_prefill_64 | 2 | 926/933 | 0.602 | 0.0187 | 0.00136 | 0.000668 | 8 (2 / 6) | 9682 |
+| hf | 3 chunked_prefill | chunked_prefill_256 | 2 | 924/933 | 0.602 | 0.0179 | 0.00145 | 0.0007 | 7 (2 / 5) | 2759 |
+| hf | 3 chunked_prefill | chunked_prefill_1024 | 2 | 922/933 | 1.12 | 0.0188 | 0.0016 | 0.000586 | 4 (2 / 2) | 1913 |
+| hf | 4 attention_impl | sdpa | 1 | 924/933 | 0.711 | 0.0173 | 0.0014 | 0.000586 | 7 (1 / 6) | 1936 |
+| hf | 5 tf32 | tf32_on | 1 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 2191 |
+| hf | 6 logits_dtype | softcap_fp32 | 1 | 922/933 | 0.148 | 0.0112 | 0.000274 | 0.000191 | 4 (0 / 4) | 2028 |
+| hf | 6 logits_dtype | logits_fp32 | 2 | 922/933 | 0.163 | 0.0118 | 0.000306 | 0.000207 | 8 (0 / 8) | 2322 |
+| hf | 7 rope_table | rope_elementwise | 1 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 1959 |
+| hf | 7 rope_table | rope_elementwise_tf32_on | 2 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 1982 |
+| hf | 7 rope_table | rope_inv_freq_cuda | 1 | 924/933 | 0.82 | 0.0167 | 0.00121 | 0.00056 | 6 (1 / 5) | 1935 |
+| hf | 10 gemm_reduction | bf16_reduced_reduction_off | 1 | 927/933 | 0.497 | 0.0193 | 0.00142 | 0.000713 | 6 (1 / 5) | 1971 |
+| hf | 11 combination_rollout_like | rollout_like_batched_decode | 2 | 922/933 | 0.602 | 0.0188 | 0.0014 | 0.000837 | 7 (1 / 6) | 25320 |
+| hf | 11 combination_rollout_like | rollout_like_batched_decode_sdpa | 3 | 923/933 | 0.633 | 0.0177 | 0.00129 | 0.000552 | 5 (0 / 5) | 22165 |
+| hf | 9 repeat_null | repeat_after_all_factors | 0 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 1837 |
+| hf | 9 repeat_null | new_process_same_gpu_7 | 0 | 0/933 | 0 | 0 | 0 | - | 0 (0 / 0) | 2611 |
+| hf | 9 repeat_null | repeat_immediate@new_process_same_gpu_7 | 0 | 0/933 | 0 | 0 | 0 | 0 | 0 (0 / 0) | 1818 |
+| hf | 3 chunked_prefill | chunked_prefill_64__vs__prefill_L_minus_1 | 1 | 925/933 | 0.517 | 0.0175 | 0.00123 | - | 5 (2 / 3) | - |
+| hf | 3 chunked_prefill | chunked_prefill_256__vs__prefill_L_minus_1 | 1 | 571/933 | 0.602 | 0.0118 | 0.000972 | - | 2 (0 / 2) | - |
+| hf | 3 chunked_prefill | chunked_prefill_1024__vs__prefill_L_minus_1 | 1 | 176/933 | 0.241 | 0.0031 | 0.00018 | - | 1 (0 / 1) | - |
+| hf | 6 lm_head_gemm_output_fp32 | logits_fp32__vs__softcap_fp32 | 1 | 909/933 | 0.0402 | 0.00313 | 2.21e-05 | - | 4 (0 / 4) | - |
+| hf | 7 tf32 | rope_elementwise_tf32_on__vs__rope_elementwise | 1 | 0/933 | 0 | 0 | 0 | - | 0 (0 / 0) | - |
+| hf | 11 attention_impl | rollout_like_batched_decode_sdpa__vs__rollout_like_batched_decode | 1 | 923/933 | 0.526 | 0.0177 | 0.00119 | - | 8 (0 / 8) | - |
+| strict | 9 repeat_null | repeat_immediate | 1 | 0/933 | 0 | 0 | 0 | - | - | 2438 |
+| strict | 1 batch_composition | packed_batch9 | 1 | 0/933 | 0 | 0 | 0 | - | - | 1838 |
+| strict | 1 batch_composition | packed_batch9_reversed | 1 | 0/933 | 0 | 0 | 0 | - | - | 1838 |
+| strict | 1 batch_composition | right_pad_batch9 | 1 | 0/933 | 0 | 0 | 0 | - | - | 9362 |
+| strict | 1 batch_composition | left_pad_batch9 | 1 | 0/933 | 0 | 0 | 0 | - | - | 9325 |
+| strict | 1 batch_composition | paged_prefill_batch9 | 1 | 0/933 | 0 | 0 | 0 | - | - | 1977 |
+| strict | 2 prefill_vs_decode | prefill_alone | 1 | 0/933 | 0 | 0 | 0 | - | - | 2707 |
+| strict | 2 prefill_vs_decode | decode_alone | 1 | 0/933 | 0 | 0 | 0 | - | - | 108848 |
+| strict | 2 prefill_vs_decode | batched_decode9 | 1 | 0/933 (all copies 0/933) | 0 | 0 | 0 | - | - | 28446 |
+| strict | 2 prefill_vs_decode | batched_decode72_staggered | 1 | 0/933 (all copies 0/7464) | 0 | 0 | 0 | - | - | 99405 |
+| strict | 1 batch_composition | mixed_step72_staggered | 1 | 0/933 (all copies 0/7464) | 0 | 0 | 0 | - | - | 91686 |
+| strict | 3 chunked_prefill | chunked_prefill_64 | 1 | 0/933 | 0 | 0 | 0 | - | - | 8677 |
+| strict | 3 chunked_prefill | chunked_prefill_256 | 1 | 0/933 | 0 | 0 | 0 | - | - | 3599 |
+| strict | 3 chunked_prefill | chunked_prefill_1024 | 1 | 0/933 | 0 | 0 | 0 | - | - | 2818 |
+| cross | 0 engine_context | strict_vs_hf_baseline | - | 933/933 | 0.679 | 0.0192 | 0.00111 | - | - | - |
+
+| engine/setting | t0 | t1 | t2 | t3 | t4 | t5 | t6 | t7 | long |
+|---|---|---|---|---|---|---|---|---|---|
+| hf/repeat_immediate | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/padded_batch9_right | 55/55 | 47/47 | 128/129 | 38/39 | 91/92 | 148/149 | 87/88 | 156/156 | 177/178 |
+| hf/padded_batch9_left | 54/55 | 46/47 | 128/129 | 39/39 | 91/92 | 149/149 | 87/88 | 155/156 | 177/178 |
+| hf/kv_cache_decode | 55/55 | 46/47 | 128/129 | 38/39 | 91/92 | 149/149 | 87/88 | 155/156 | 174/178 |
+| hf/prefill_L_minus_1 | 53/55 | 45/47 | 128/129 | 39/39 | 91/92 | 147/149 | 88/88 | 155/156 | 172/178 |
+| hf/chunked_prefill_64 | 55/55 | 46/47 | 127/129 | 39/39 | 91/92 | 147/149 | 88/88 | 156/156 | 177/178 |
+| hf/chunked_prefill_256 | 53/55 | 45/47 | 128/129 | 39/39 | 91/92 | 148/149 | 88/88 | 155/156 | 177/178 |
+| hf/chunked_prefill_1024 | 53/55 | 45/47 | 128/129 | 39/39 | 91/92 | 147/149 | 88/88 | 155/156 | 176/178 |
+| hf/sdpa | 54/55 | 47/47 | 127/129 | 38/39 | 91/92 | 149/149 | 87/88 | 156/156 | 175/178 |
+| hf/tf32_on | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/softcap_fp32 | 53/55 | 45/47 | 129/129 | 38/39 | 92/92 | 148/149 | 87/88 | 155/156 | 175/178 |
+| hf/logits_fp32 | 53/55 | 45/47 | 129/129 | 39/39 | 92/92 | 148/149 | 86/88 | 156/156 | 174/178 |
+| hf/rope_elementwise | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/rope_elementwise_tf32_on | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/rope_inv_freq_cuda | 51/55 | 47/47 | 128/129 | 39/39 | 92/92 | 148/149 | 88/88 | 156/156 | 175/178 |
+| hf/bf16_reduced_reduction_off | 55/55 | 45/47 | 129/129 | 39/39 | 91/92 | 148/149 | 87/88 | 156/156 | 177/178 |
+| hf/rollout_like_batched_decode | 54/55 | 46/47 | 128/129 | 39/39 | 91/92 | 148/149 | 87/88 | 155/156 | 174/178 |
+| hf/rollout_like_batched_decode_sdpa | 54/55 | 47/47 | 129/129 | 38/39 | 90/92 | 149/149 | 87/88 | 155/156 | 174/178 |
+| hf/repeat_after_all_factors | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/new_process_same_gpu_7 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/repeat_immediate@new_process_same_gpu_7 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/chunked_prefill_64__vs__prefill_L_minus_1 | 54/55 | 46/47 | 128/129 | 38/39 | 91/92 | 148/149 | 86/88 | 156/156 | 178/178 |
+| hf/chunked_prefill_256__vs__prefill_L_minus_1 | 0/55 | 0/47 | 0/129 | 0/39 | 91/92 | 148/149 | 0/88 | 155/156 | 177/178 |
+| hf/chunked_prefill_1024__vs__prefill_L_minus_1 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 176/178 |
+| hf/logits_fp32__vs__softcap_fp32 | 53/55 | 44/47 | 127/129 | 38/39 | 92/92 | 147/149 | 87/88 | 156/156 | 165/178 |
+| hf/rope_elementwise_tf32_on__vs__rope_elementwise | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| hf/rollout_like_batched_decode_sdpa__vs__rollout_like_batched_decode | 52/55 | 47/47 | 128/129 | 39/39 | 90/92 | 148/149 | 88/88 | 155/156 | 176/178 |
+| strict/repeat_immediate | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/packed_batch9 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/packed_batch9_reversed | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/right_pad_batch9 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/left_pad_batch9 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/paged_prefill_batch9 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/prefill_alone | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/decode_alone | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/batched_decode9 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/batched_decode72_staggered | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/mixed_step72_staggered | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/chunked_prefill_64 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/chunked_prefill_256 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| strict/chunked_prefill_1024 | 0/55 | 0/47 | 0/129 | 0/39 | 0/92 | 0/149 | 0/88 | 0/156 | 0/178 |
+| cross/strict_vs_hf_baseline | 55/55 | 47/47 | 129/129 | 39/39 | 92/92 | 149/149 | 88/88 | 156/156 | 178/178 |
+
+| engine/setting | t0 | t1 | t2 | t3 | t4 | t5 | t6 | t7 | long |
+|---|---|---|---|---|---|---|---|---|---|
+| hf/repeat_immediate | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/padded_batch9_right | 0.25 | 0.43 | 0.31 | 0.25 | 0.27 | 0.6 | 0.19 | 0.25 | 0.32 |
+| hf/padded_batch9_left | 0.29 | 0.25 | 0.25 | 0.5 | 0.23 | 0.63 | 0.44 | 0.21 | 0.32 |
+| hf/kv_cache_decode | 0.19 | 0.25 | 0.15 | 0.21 | 0.21 | 0.45 | 0.12 | 0.42 | 0.32 |
+| hf/prefill_L_minus_1 | 0.22 | 0.44 | 0.31 | 0.25 | 0.27 | 1.1 | 0.25 | 0.21 | 0.24 |
+| hf/chunked_prefill_64 | 0.23 | 0.5 | 0.19 | 0.25 | 0.22 | 0.6 | 0.25 | 0.42 | 0.25 |
+| hf/chunked_prefill_256 | 0.22 | 0.44 | 0.31 | 0.25 | 0.088 | 0.6 | 0.25 | 0.34 | 0.6 |
+| hf/chunked_prefill_1024 | 0.22 | 0.44 | 0.31 | 0.25 | 0.27 | 1.1 | 0.25 | 0.21 | 0.24 |
+| hf/sdpa | 0.24 | 0.31 | 0.18 | 0.25 | 0.26 | 0.71 | 0.19 | 0.53 | 0.23 |
+| hf/tf32_on | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/softcap_fp32 | 0.073 | 0.068 | 0.085 | 0.15 | 0.094 | 0.12 | 0.078 | 0.13 | 0.1 |
+| hf/logits_fp32 | 0.084 | 0.078 | 0.084 | 0.16 | 0.098 | 0.11 | 0.086 | 0.12 | 0.11 |
+| hf/rope_elementwise | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/rope_elementwise_tf32_on | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/rope_inv_freq_cuda | 0.12 | 0.37 | 0.22 | 0.14 | 0.25 | 0.82 | 0.18 | 0.16 | 0.26 |
+| hf/bf16_reduced_reduction_off | 0.17 | 0.5 | 0.2 | 0.31 | 0.22 | 0.48 | 0.25 | 0.21 | 0.32 |
+| hf/rollout_like_batched_decode | 0.19 | 0.15 | 0.18 | 0.25 | 0.26 | 0.6 | 0.31 | 0.28 | 0.6 |
+| hf/rollout_like_batched_decode_sdpa | 0.22 | 0.25 | 0.19 | 0.31 | 0.25 | 0.63 | 0.25 | 0.34 | 0.23 |
+| hf/repeat_after_all_factors | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/new_process_same_gpu_7 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/repeat_immediate@new_process_same_gpu_7 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/chunked_prefill_64__vs__prefill_L_minus_1 | 0.19 | 0.44 | 0.17 | 0.16 | 0.25 | 0.52 | 0.24 | 0.3 | 0.18 |
+| hf/chunked_prefill_256__vs__prefill_L_minus_1 | 0 | 0 | 0 | 0 | 0.25 | 0.52 | 0 | 0.25 | 0.6 |
+| hf/chunked_prefill_1024__vs__prefill_L_minus_1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.24 |
+| hf/logits_fp32__vs__softcap_fp32 | 0.04 | 0.03 | 0.024 | 0.028 | 0.03 | 0.029 | 0.028 | 0.03 | 0.023 |
+| hf/rope_elementwise_tf32_on__vs__rope_elementwise | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| hf/rollout_like_batched_decode_sdpa__vs__rollout_like_batched_decode | 0.19 | 0.13 | 0.21 | 0.3 | 0.25 | 0.24 | 0.19 | 0.25 | 0.53 |
+| strict/repeat_immediate | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/packed_batch9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/packed_batch9_reversed | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/right_pad_batch9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/left_pad_batch9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/paged_prefill_batch9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/prefill_alone | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/decode_alone | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/batched_decode9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/batched_decode72_staggered | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/mixed_step72_staggered | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/chunked_prefill_64 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/chunked_prefill_256 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict/chunked_prefill_1024 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| cross/strict_vs_hf_baseline | 0.18 | 0.14 | 0.16 | 0.26 | 0.24 | 0.68 | 0.27 | 0.25 | 0.23 |

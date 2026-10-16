@@ -1,0 +1,260 @@
+{
+ "host_sync_global": {
+  "with_meta": {
+   "cudaDeviceSynchronize": 1
+  },
+  "without_meta": {
+   "aten::item": 31,
+   "aten::_local_scalar_dense": 31,
+   "cudaMemcpyAsync": 5,
+   "cudaStreamSynchronize": 5,
+   "Memcpy DtoH (Device -> Pinned)": 1,
+   "Memcpy DtoH (Device -> Pageable)": 3,
+   "Memcpy HtoD (Pageable -> Device)": 1,
+   "cudaDeviceSynchronize": 1
+  }
+ },
+ "tp2_cp_global": {
+  "2048": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  },
+  "2100": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  },
+  "4096": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  }
+ },
+ "signed_zero_global": {
+  "leaf_dk_neg_zero": 0,
+  "leaf_dv_neg_zero": 0,
+  "leaf_numel": 33554432
+ },
+ "decode_b256_tp_global": {
+  "tp2": 0,
+  "tp4": 0,
+  "tp8": 0
+ },
+ "host_sync_local": {
+  "with_meta": {
+   "cudaDeviceSynchronize": 1
+  },
+  "without_meta": {
+   "aten::item": 31,
+   "aten::_local_scalar_dense": 31,
+   "cudaMemcpyAsync": 5,
+   "cudaStreamSynchronize": 5,
+   "Memcpy DtoH (Device -> Pinned)": 1,
+   "Memcpy DtoH (Device -> Pageable)": 3,
+   "Memcpy HtoD (Pageable -> Device)": 1,
+   "cudaDeviceSynchronize": 1
+  }
+ },
+ "tp2_cp_local": {
+  "2048": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  },
+  "2100": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  },
+  "4096": {
+   "tp_rank0_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank0_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp2": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp4": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   },
+   "tp_rank1_cp8": {
+    "dq": 0,
+    "dgate": 0,
+    "dk": 0,
+    "dv": 0
+   }
+  }
+ },
+ "signed_zero_local": {
+  "leaf_dk_neg_zero": 0,
+  "leaf_dv_neg_zero": 0,
+  "leaf_numel": 33554432
+ },
+ "decode_b256_tp_local": {
+  "tp2": 0,
+  "tp4": 0,
+  "tp8": 0
+ }
+}

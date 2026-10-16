@@ -1,0 +1,13 @@
+E           AssertionError: %t not extended
+tests/models/muse_glimmer/test_qknorm_rope.py:851: AssertionError
+E           AssertionError: %t not extended
+tests/models/muse_glimmer/test_qknorm_rope.py:851: AssertionError
+E           AssertionError: %t not extended
+tests/models/muse_glimmer/test_qknorm_rope.py:851: AssertionError
+E           AssertionError: %t not extended
+tests/models/muse_glimmer/test_qknorm_rope.py:851: AssertionError
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-False]
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[32-2-True]
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-False]
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_compiled_kernels_use_int64_row_offsets[4-1-True]
+4 failed in 3.28s

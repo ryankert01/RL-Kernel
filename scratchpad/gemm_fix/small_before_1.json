@@ -1,0 +1,12 @@
+{
+ "gemm_q_proj_M1": 0.1382399946451187,
+ "gemm_k_proj_M1": 0.13209599256515503,
+ "gemm_q_proj_M16": 0.1382399946451187,
+ "gemm_k_proj_M16": 0.13312000036239624,
+ "ffn_fwd_T1": 0.611840009689331,
+ "ffn_fwd_T16": 0.620032012462616,
+ "lm_head_fwd_T1": 2.9055999517440796,
+ "lm_head_fwd_T1_novalidate": null,
+ "lm_head_fwd_T16": 2.861056089401245,
+ "lm_head_fwd_T16_novalidate": null
+}

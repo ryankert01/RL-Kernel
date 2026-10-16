@@ -1,0 +1,10 @@
+{
+ "label": "base",
+ "module": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review_kernels_gemm/base_tree/rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+ "ffn_bwd_T64": "ValueError: reduction length 64 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM",
+ "ffn_bwd_T300": "ValueError: reduction length 300 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM",
+ "has_validate_targets": false,
+ "syncs_validated": 3,
+ "lm_T1_event_ms": 2.8895060221354165,
+ "lm_T1_wall_ms": 2.891179766629648
+}

@@ -1,0 +1,9 @@
+[gpu-lease] using GPUs [1, 2, 3, 4]
+.....................................s...........................ss..... [ 80%]
+................s                                                        [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_kv_replication.py:207: needs 8 CUDA devices (one rank per device)
+SKIPPED [2] tests/models/muse_glimmer/distributed/test_tp_canonical_tree.py:257: needs 8 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_vocab_parallel_softcap_logp.py:243: needs 8 CUDA devices (one rank per device)
+85 passed, 4 skipped in 200.55s (0:03:20)
+exit=0

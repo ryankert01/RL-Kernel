@@ -1,0 +1,12 @@
+[gpu-lease] using GPUs [5]
+device: NVIDIA A100-SXM4-80GB  torch 2.13.0+cu130
+
+| case | strict ms | native SDPA ms | strict/native | max abs diff y (strict vs SDPA) |
+|---|---|---|---|---|
+| prefill Tq=4096 B=1 (global) | 2.060 | 1.508 | 1.37x | 1.562e-02 |
+| decode B=64 ctx=4096 (global) | 0.318 (varlen K/V: 0.216) | 0.211 | 1.51x | 1.562e-02 |
+| prefill Tq=4096 B=1 (local) | 1.527 | 30.147 | 0.05x | 1.562e-02 |
+| decode B=64 ctx=4096 (local) | 0.331 (varlen K/V: 0.108) | 18.068 | 0.02x | 7.812e-03 |
+
+trace: {'BLOCK_N': 64, 'token_tile': {'BLOCK_M': 64, 'num_warps': 4}, 'head_tile': {'BLOCK_M': 16, 'num_warps': 4}, 'num_stages': 2, 'head_tile_max_q': 16, 'page_size': 16}
+total wall 4.6s

@@ -1,0 +1,57 @@
+[
+ {
+  "id": "qknorm_rope:1",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 96,
+  "claim": "Contract O4 requires the RoPE table to be 'built once by a fixed fp32 torch-CUDA function, cached, identical object on both runtimes'; `rope_table` provides neither the cache nor the CUDA restriction, and the kernel cannot tell which build produced a table, so train and rollout can silently use different cos/sin bits.",
+  "evidence": "ops/qknorm_rope.py:96-118 `rope_table(positions, *, theta, dim, device)` accepts any `device` (`_rope_table_in` line 85 `torch.device(device)`), computes a fresh tensor per call and has no module-level cache (docstring line 112-114 pushes caching to 'callers'); triton/qknorm_rope.py:303-312 `_check_inputs` only checks cos/sin shape (T,D), fp32 and same device as q. REPORT_qknorm_rope.md:93-95 self-reports 'built once and cached by the caller'. GPU probe (scratchpad review-probes/qknorm_rope/probe1.py, A100): `rope_table(pos.cpu(), device='cpu')` vs `rope_table(pos, device=cuda)` at T=4096: cos 97,294/524,288 elements differ, sin 99,316 (max |d|=1.221e-04); CPU vs CUDA `1/torch.pow(5e5, exp)` inv_freq differ in 4/64; feeding the CPU-built table (moved to CUDA) into `qknorm_scaled_rope` flips 19,585 of 16,777,216 q_hat bf16 outputs versus the CUDA-built table.",
+  "failure_scenario": "The Megatron Bridge binding builds (cos, sin) once on CPU at module init (HF-style `inv_freq` buffer) and moves it to the GPU; the vLLM 0.31 binding calls `rope_table(..., device=cuda)`. Both pass fp32 (T,128) tables that satisfy `_check_inputs`, the op raises nothing, and q_hat/k_hat differ in ~0.1% of bf16 elements on all 39 sliding-window layers, breaking train==rollout parity with no diagnostic.",
+  "suggested_fix": "In `rope_table`, raise unless `torch.device(device).type == 'cuda'` (the contract says torch-CUDA). Add a module-level `cached_rope_table(max_positions, *, device, theta=ROPE_THETA, dim=HEAD_DIM)` keyed by (device.index, theta, dim, max_positions) that returns the same (cos, sin) tensors on repeat calls, document that both runtimes must gather rows from it, and record `table_builder`/`table_device_type: cuda` in `trace()`. Add a test asserting `rope_table(..., device='cpu')` raises."
+ },
+ {
+  "id": "qknorm_rope:2",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/triton/qknorm_rope.py",
+  "line": 297,
+  "claim": "The strict op accepts fp16/fp32 q/k and emits outputs and gradients in that dtype, so the contract's declared '-> bf16 once at the end' cast (R5) silently disappears; sibling strict ops hard-fail on non-bf16 input.",
+  "evidence": "triton/qknorm_rope.py:297-298 `if q.dtype not in (torch.bfloat16, torch.float16, torch.float32): raise TypeError` (fp16/fp32 pass); lines 343-344 `oq = torch.empty_like(q)` and 133-135 `o1.to(Y.dtype.element_ty)` make the output dtype follow the input; same in backward lines 394-395. REPORT_qknorm_rope.md:96 self-reports 'The op also accepts fp16/fp32 q/k (output dtype = input dtype)'. Sibling ops/norms.py:194-197 raise `TypeError('strict norm input must be bf16')`. GPU probe (probe2.py): `qknorm_scaled_rope(q.float(), k.float(), cos, sin)` returns torch.float32 outputs, `.half()` returns torch.float16, no error.",
+  "failure_scenario": "A reference-model path or binding feeds q/k produced by an fp32 GEMM (e.g. the fp64/fp32 golden det_gemm during a parity run) into the strict op; it returns fp32 q_hat/k_hat with no bf16 rounding, downstream attention/KV-cache see different values than the vLLM bf16 run, and nothing in O4 flags it.",
+  "suggested_fix": "Require `q.dtype == k.dtype == torch.bfloat16` in `_check_inputs` for the strict path (raise TypeError like norms.py), or require an explicit `out_dtype=torch.bfloat16` kwarg and always cast the store to it; keep fp32 arithmetic only in the goldens. Add a negative test."
+ },
+ {
+  "id": "qknorm_rope:3",
+  "severity": "nit",
+  "category": "determinism",
+  "file": "tests/models/muse_glimmer/test_qknorm_rope.py",
+  "line": 251,
+  "claim": "No test covers the contract's TP parity (TP1 vs TP2/4/8): column-parallel Q shards launch the kernel with BLOCK_HQ in {16,8,4} instead of 32 and the suite never checks those bits against the full-head run.",
+  "evidence": "tests/test_qknorm_rope.py:251-297 (TestG2BatchInvariance) only varies T and batch position with HQ=32, HK=2; contract header lines 4-6 lists 'TP1 vs TP2/4/8' as a parity axis and `tile_config` (triton:316-327) changes BLOCK_HQ with HQ. GPU probe (probe1.py, T=4096): `qknorm_scaled_rope(q[:, sl].contiguous(), k, cos, sin)` for TP2/4/8 shards is bitwise equal to the HQ=32 run for forward and backward (dq, dk) and for the global path, so this is a coverage gap, not a defect.",
+  "failure_scenario": "A future layout change (e.g. different num_warps for small BLOCK_HQ, or a tl.sum replacing the explicit tree) could break TP-shard bit equality and the suite would still pass.",
+  "suggested_fix": "Add a G2 test that runs head slices `q[:, r*HQ/t:(r+1)*HQ/t].contiguous()` for t in {2,4,8} (fwd and bwd, local and global) and asserts `torch.equal` against the HQ=32 result."
+ },
+ {
+  "id": "qknorm_rope:4",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 308,
+  "claim": "Local vs global layer selection is implicit in `cos is None`; a caller that passes None on a sliding-window layer silently gets the NoPE path with no error, and the contract's assembly signature `qknorm_scaled_rope(q,k, pos, local?)` carries an explicit flag.",
+  "evidence": "ops/qknorm_rope.py:308-322 signature `(q, k, cos, sin, *, eps, qk_scale)`, docstring line 318 '`cos is None` selects the global (NoPE) layer path'; triton/qknorm_rope.py:347 `has_rope = cos is not None`; contract line 142 `q\u0302,k\u0302 = qknorm_scaled_rope(q,k, pos, local?)`. GPU probe (probe2.py): calling with (None, None) on data meant for a local layer runs and differs from the RoPE path in 38,068 elements, no exception.",
+  "failure_scenario": "A reference-model bug (e.g. table lookup returning None for a layer index, or wrong `layer_types` indexing) turns a sliding layer into NoPE; outputs stay finite and within plausible range, so only an end-to-end logit comparison reveals it.",
+  "suggested_fix": "Add an explicit `local: bool` (or `layer_type`) kwarg and raise if `local != (cos is not None)`; optionally expose a tiny helper `tables_for_layer(layer_idx, positions, cache)` returning (cos, sin) or (None, None) from the frozen schedule (`i % 4 == 3` is global)."
+ },
+ {
+  "id": "qknorm_rope:5",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/triton/qknorm_rope.py",
+  "line": 109,
+  "claim": "Element offsets are computed in int32 from `program_id * HQ`, so the launcher silently wraps around for T*HQ*D >= 2^31 (T >= 524,288 tokens at HQ=32, D=128) with no validation.",
+  "evidence": "triton/qknorm_rope.py:109 and 162 `offs = (row0 + rows)[:, None] * D + cols[None, :]` with `row0 = t * HQ` (lines 230, 272) where `t = tl.program_id(0)` (int32); `_check_inputs` (284-313) has no numel bound.",
+  "failure_scenario": "A large packed training micro-batch (>= 524,288 tokens) produces out-of-bounds/aliased reads and writes without an error (realistically unlikely at the contract shape T=4096, hence nit).",
+  "suggested_fix": "Either `raise ValueError` in `_check_inputs` when `q.numel() >= 2**31` or compute `row0 = t.to(tl.int64) * HQ` so offsets are int64."
+ }
+]

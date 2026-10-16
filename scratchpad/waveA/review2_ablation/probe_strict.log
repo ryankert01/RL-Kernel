@@ -1,0 +1,7 @@
+[gpu-lease] using GPUs [7]
+INFO 10-15 20:47:31 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[20:47:31] strict model loaded
+[20:47:34] strict baseline vs committed: 0
+[20:47:38] packed 0 paged 0
+[20:48:57] batched decode 65: 0/6218 differ, 177 steps, 78.9s peak 62.2 GiB
+[20:48:57] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_ablation/probe_strict_out.json

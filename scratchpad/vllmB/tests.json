@@ -1,0 +1,22 @@
+[
+ {
+  "command": "~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider",
+  "outcome": "65 passed, 2 skipped (the 2 opt-in 30B engine tests) in 30.23s at commit d62650b (final code)"
+ },
+ {
+  "command": "RL_KERNEL_MUSEGLIMMER_E2E=1 ~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_vllm_strict_binding.py -q -p no:cacheprovider -k engine",
+  "outcome": "13 passed, 54 deselected in 281.88s at commit 122742e (the -k filter selects the 2 opt-in 30B engine tests plus 11 unit tests whose names contain 'engine'): test_strict_engine_protocol_with_real_lora (RolloutEngineLike signatures, transfer_lora via file, worker-recomputed lora_sha256 per worker, wrong-hash rejection, n=2 sampling, decode == prefill bit for bit under a rank-16 LoRA on 416 slots with logp <= 0, second sync replaces the adapter) and test_strict_engine_decode_equals_prefill (short prompt + the 2261-token long-window prompt, 24 decode tokens at T=0 and T=1, bits equal, logp <= 0)"
+ },
+ {
+  "command": "new test file on the pre-fix tree (git archive 021ea61^ rl_engine): PYTHONPATH=<old tree> ~/envs/vllm/bin/python -m pytest <new test file> -k 'TestFailClosedEngineFeatures or TestFailClosedSampling or TestLoRAHashRecomputed or TestNativeLoRARecomputed or TestWorkerPaths or TestCollectLabels or TestPerRankHeads'",
+  "outcome": "34 failed, 1 passed (the pre-existing tampered-hash rejection) - the new tests fail before the fixes"
+ },
+ {
+  "command": "same, GPU tests on the pre-fix tree: -k 'TestStrictSamplingLogits or TestLoRARuleCheckIsIndependent'",
+  "outcome": "3 failed (no strict_logits; the old LoRA-rule formula reuses _padded_partial, so a broken helper still reports binding_equals_formula=True) - fail before, pass after"
+ },
+ {
+  "command": "~/bin/gpu-lease -n 1 --pool 4-6 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.runtime.vllm_tp_sim",
+  "outcome": "all_equal: true at commit 122742e (TP2/4/8 x LoRA on/off x local/global layer: attention out, MLP out, hidden, logp, sampler-path logp, strict logits and argmax equal TP1 bit for bit on every rank)"
+ }
+]

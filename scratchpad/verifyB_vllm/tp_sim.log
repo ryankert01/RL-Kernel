@@ -1,0 +1,810 @@
+[gpu-lease] using GPUs [4]
+{
+ "tokens": 37,
+ "seed": 0,
+ "lora_rank": 16,
+ "op_impls": {
+  "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+  "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+  "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+  "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+  "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+  "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+  "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+  "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+  "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+  "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+  "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+  "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+  "softcap_logits": "strict:rl_engine.models.muse_glimmer.triton.softcap_logprob.launch_softcap",
+  "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+  "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats"
+ },
+ "results": [
+  {
+   "tp": 2,
+   "lora": false,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.036435198002436664,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": false,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.08814611100387992,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": false,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.2778615200004424,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 2,
+   "lora": true,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.05252261900022859,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": true,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.1321580149960937,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": true,
+   "layer": "local (RoPE, window 2048)",
+   "seconds": 0.5097624820045894,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 2,
+   "lora": false,
+   "layer": "global (NoPE)",
+   "seconds": 0.025544121002894826,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": false,
+   "layer": "global (NoPE)",
+   "seconds": 0.07219901299686171,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": false,
+   "layer": "global (NoPE)",
+   "seconds": 0.24074160800228128,
+   "all_gathers": 5,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 2,
+   "lora": true,
+   "layer": "global (NoPE)",
+   "seconds": 0.03544885500014061,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": true,
+   "layer": "global (NoPE)",
+   "seconds": 0.1225785279966658,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": true,
+   "layer": "global (NoPE)",
+   "seconds": 0.48269907599751605,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp_sampler_path": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "argmax": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logits": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "sampler_logp_equals_prefill_logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  }
+ ],
+ "all_equal": true
+}

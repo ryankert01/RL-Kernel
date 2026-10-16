@@ -1,0 +1,4 @@
+[gpu-lease] using GPUs [7]
+[20:49:23] inv_freq: {'harness_cuda_vs_cpu_bits_differ': 0, 'true_cuda_pow_vs_cpu_bits_differ': 4, 'harness_inv_freq_device': 'cuda:0'}
+[20:49:40] ties 16; flips (total, at ties): {'repeat_immediate': [0, 0], 'padded_batch9_right': [6, 2], 'padded_batch9_left': [4, 0], 'kv_cache_decode': [7, 2], 'prefill_L_minus_1': [5, 2], 'chunked_prefill_64': [8, 2], 'chunked_prefill_256': [7, 3], 'chunked_prefill_1024': [4, 2], 'sdpa': [7, 4], 'tf32_on': [0, 0], 'softcap_fp32': [4, 4], 'logits_fp32': [8, 8], 'rope_elementwise': [0, 0], 'rope_elementwise_tf32_on': [0, 0], 'rope_inv_freq_cuda': [0, 0], 'bf16_reduced_reduction_off': [6, 2], 'repeat_after_all_factors': [0, 0], 'new_process_same_gpu_7': [0, 0], 'rollout_like_batched_decode': [7, 2], 'rollout_like_batched_decode_sdpa': [5, 3], 'second_gpu_6_vs_7': [0, 0], 'repeat_immediate_gpu_6': [0, 0]}
+[20:49:40] done

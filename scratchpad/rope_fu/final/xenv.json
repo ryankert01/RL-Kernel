@@ -1,0 +1,22 @@
+{
+ "probe": "xenv",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "table_sha256": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "inputs_sha256": "c183054537a436c7e939e11f7744be137d73e219d621c808c1d7aa7bdd5347db",
+ "local": {
+  "fwd_sha256": "359c217437549209cbc3e1ce1d0bed841aca448e3c327bc29a69a280d1c5bd2e",
+  "bwd_sha256": "820099d48ed7e17b5dd51fab45c8511f6be505bd2b9b7c19d07b79c6b3df23c8"
+ },
+ "global": {
+  "fwd_sha256": "2c0eec90c72ce9d351a815f667deb8f74561632515927751eeeed4ebd4c6d38b",
+  "bwd_sha256": "a4695f5359c458375a8d51256f32216577623c641fadf40d63b680a8d926e34d"
+ },
+ "local_pos_126976_131072_fwd_sha256": "8fe3829bbf527192888aea9137889993ecdfa153d1877d38597545e63813127c",
+ "wall_s": 2.5
+}

@@ -1,0 +1,22 @@
+[gpu-lease] using GPUs [7]
+[16:39:48] loading 541 text tensors from model-00001-of-00002.safetensors
+[16:39:53] loading 86 text tensors from model-00002-of-00002.safetensors
+INFO 10-15 16:39:56 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[16:39:56] strict weights 51.89 GiB loaded in 8.2s
+[16:39:56] [strict] train forward T=128
+USDT:2026-10-15 16:39:58 249875:249875 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:39:58 249875:249875 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:39:59]   total 150.0 ms (clean 115.9) peak 52.01 GiB
+[16:39:59] [strict] paged prefill T=128
+[16:39:59]   total 183.7 ms (clean 147.1)
+[16:40:00] [strict] filled 4 sequences x 200 tokens in 0.8s
+[16:40:01] [strict] decode batch invariance: batch1 == batch4: 4/4, permuted batch-4: 4/4
+[16:40:01] [strict] decode batch 1 context 200
+USDT:2026-10-15 16:40:02 249875:249875 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:40:02 249875:249875 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:40:03]   step 173.52 ms (clean 129.73) peak 52.02 GiB
+[16:40:03] [strict] decode batch 4 context 200
+USDT:2026-10-15 16:40:04 249875:249875 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:40:04 249875:249875 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:40:06]   step 196.11 ms (clean 163.36) peak 52.03 GiB
+[16:40:08] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/smoke_profile_strict.json

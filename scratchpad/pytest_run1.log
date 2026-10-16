@@ -1,0 +1,88 @@
+[gpu-lease] using GPUs [1]
+.....................................................................F
+=================================== FAILURES ===================================
+______________ test_g4_backward_repeatable_and_accurate[ragged16] ______________
+
+shape = (16, 96, 512)
+
+    @pytest.mark.parametrize(
+        "shape",
+        [(16, 96, 512), (100, 192, 1024), (256, 6656, 4096), (256, 256, 6656), (4096, 256, 6656)],
+        ids=["ragged16", "ragged100", "o_proj", "k_proj", "k_proj_m4096"],
+    )
+    def test_g4_backward_repeatable_and_accurate(shape):
+        m_size, n_size, k_size = shape
+        a, w = _operands(m_size, n_size, k_size, seed=14)
+        grad_y = _rand(m_size, n_size)
+        grads = []
+        for _ in range(2):
+            a_ = a.clone().requires_grad_(True)
+            w_ = w.clone().requires_grad_(True)
+>           dg.fast_det_gemm(a_, w_).backward(grad_y)
+
+tests/models/muse_glimmer/test_det_gemm.py:308: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../envs/vllm/lib/python3.12/site-packages/torch/_tensor.py:623: in backward
+    torch.autograd.backward(
+../../../../envs/vllm/lib/python3.12/site-packages/torch/autograd/__init__.py:395: in backward
+    _engine_run_backward(
+../../../../envs/vllm/lib/python3.12/site-packages/torch/autograd/graph.py:979: in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+../../../../envs/vllm/lib/python3.12/site-packages/torch/autograd/function.py:325: in apply
+    return user_fn(self, *args)
+           ^^^^^^^^^^^^^^^^^^^^
+rl_engine/models/muse_glimmer/ops/det_gemm.py:101: in backward
+    da = _kernels.tree_gemm(dy, b_kn.t(), out_dtype=a2d.dtype)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+rl_engine/models/muse_glimmer/triton/det_gemm_tree.py:336: in tree_gemm
+    plan = plan_chunks(k_size, num_chunks, allow_pad=allow_pad, block_k=cfg.block_k)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+k_size = 96, num_chunks = 8, allow_pad = False, block_k = 64
+
+    def plan_chunks(
+        k_size: int,
+        num_chunks: int = CANONICAL_K_CHUNKS,
+        *,
+        allow_pad: bool = False,
+        block_k: int = 64,
+    ) -> ChunkPlan:
+        """Split a reduction of length ``k_size`` into ``num_chunks`` canonical chunks."""
+    
+        if num_chunks not in _SUPPORTED_CHUNK_COUNTS:
+            raise ValueError(f"num_chunks must be one of {_SUPPORTED_CHUNK_COUNTS}, got {num_chunks}")
+        if k_size <= 0:
+            raise ValueError(f"reduction length must be positive, got {k_size}")
+        if block_k < MIN_BLOCK_K or block_k % MIN_BLOCK_K:
+            raise ValueError(f"block_k must be a positive multiple of {MIN_BLOCK_K}, got {block_k}")
+        unit = num_chunks * MIN_BLOCK_K
+        k_pad = -(-k_size // unit) * unit
+        if k_pad != k_size and not allow_pad:
+>           raise ValueError(
+                f"reduction length {k_size} is not a multiple of {unit} "
+                f"({num_chunks} chunks x {MIN_BLOCK_K}); out of contract for the forward GEMM"
+            )
+E           ValueError: reduction length 96 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM
+
+rl_engine/models/muse_glimmer/triton/det_gemm_tree.py:117: ValueError
+============================= slowest 15 durations =============================
+2.36s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_small[shape3]
+2.25s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_small[shape2]
+2.09s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_weight_layout_kn_is_bitwise
+2.05s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_small[shape0]
+1.99s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_batch_invariance_decode_vs_prefill[o_proj]
+1.38s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_muse_shape[q_proj]
+1.23s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_muse_shape[o_proj]
+1.23s call     tests/models/muse_glimmer/test_det_gemm.py::test_g1_forward_correctness_muse_shape[down_proj]
+1.14s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_chunked_prefill_and_padding[shape4]
+1.10s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_chunked_prefill_and_padding[shape1]
+1.10s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_chunked_prefill_and_padding[shape2]
+1.05s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[32x64x64w4]
+1.04s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_batch_invariance_decode_vs_prefill[q_proj]
+1.02s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x64x32w4]
+0.98s call     tests/models/muse_glimmer/test_det_gemm.py::test_g2_batch_invariance_decode_vs_prefill[down_proj]
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g4_backward_repeatable_and_accurate[ragged16]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 69 passed in 31.48s

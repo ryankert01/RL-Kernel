@@ -1,0 +1,193 @@
+{
+ "prefill_forward": [
+  {
+   "T": 512,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.11011412938435873,
+   "sdpa_ms": 0.13499733606974285,
+   "ratio": 0.8156763132531085
+  },
+  {
+   "T": 1024,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.2260309378306071,
+   "sdpa_ms": 0.2502997398376465,
+   "ratio": 0.9030410418213738
+  },
+  {
+   "T": 2048,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.6351872126261393,
+   "sdpa_ms": 0.6120789210001628,
+   "ratio": 1.0377537778759258
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.056772232055664,
+   "sdpa_ms": 1.572488530476888,
+   "ratio": 1.3079728037392473
+  },
+  {
+   "T": 8192,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 6.061909484863281,
+   "sdpa_ms": 3.9522987365722657,
+   "ratio": 1.5337680395385878
+  },
+  {
+   "T": 512,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.1060863971710205,
+   "sdpa_ms": 0.8383146921793619,
+   "ratio": 0.12654722404450325
+  },
+  {
+   "T": 1024,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.23224320411682128,
+   "sdpa_ms": 2.4911872863769533,
+   "ratio": 0.09322591094890466
+  },
+  {
+   "T": 2048,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.5951146443684896,
+   "sdpa_ms": 8.106905619303385,
+   "ratio": 0.07340835977557945
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 1.3254656473795572,
+   "sdpa_ms": 30.151236979166665,
+   "ratio": 0.04396057277170427
+  },
+  {
+   "T": 8192,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.9032447814941404,
+   "sdpa_ms": 121.93461100260417,
+   "ratio": 0.023809849866434852
+  }
+ ],
+ "decode_forward": [
+  {
+   "B": 1,
+   "ctx": 4096,
+   "window": null,
+   "strict_ms": 0.33396053314208984,
+   "sdpa_ms": 0.09980586369832357,
+   "ratio": 3.346101328790959
+  },
+  {
+   "B": 16,
+   "ctx": 4096,
+   "window": null,
+   "strict_ms": 0.45380268096923826,
+   "sdpa_ms": 0.10086399714152018,
+   "ratio": 4.499154245617662
+  },
+  {
+   "B": 64,
+   "ctx": 4096,
+   "window": null,
+   "strict_ms": 0.3316735903422038,
+   "sdpa_ms": 0.20312746365865073,
+   "ratio": 1.6328347943120618
+  },
+  {
+   "B": 256,
+   "ctx": 4096,
+   "window": null,
+   "strict_ms": 0.8358912150065104,
+   "sdpa_ms": 0.9272319793701171,
+   "ratio": 0.9014909252529708
+  },
+  {
+   "B": 1,
+   "ctx": 4096,
+   "window": 2048,
+   "strict_ms": 0.33723732630411785,
+   "sdpa_ms": 0.40922454198201497,
+   "ratio": 0.8240887134255479
+  },
+  {
+   "B": 16,
+   "ctx": 4096,
+   "window": 2048,
+   "strict_ms": 0.4400469462076823,
+   "sdpa_ms": 4.571340942382813,
+   "ratio": 0.09626211471733012
+  },
+  {
+   "B": 64,
+   "ctx": 4096,
+   "window": 2048,
+   "strict_ms": 0.3766954739888509,
+   "sdpa_ms": 18.05574747721354,
+   "ratio": 0.02086291218152241
+  },
+  {
+   "B": 256,
+   "ctx": 4096,
+   "window": 2048,
+   "strict_ms": 0.46605653762817384,
+   "sdpa_ms": 71.70399576822916,
+   "ratio": 0.006499728957011287
+  }
+ ],
+ "backward": [],
+ "tp_shard_forward": [],
+ "tp_shard_backward": [],
+ "sections": [
+  "prefill",
+  "decode"
+ ],
+ "iters": 30,
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "triton": "3.7.1",
+  "cuda": "13.0",
+  "python": "3.12.15"
+ },
+ "modules": {
+  "forward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_5e0d8071-7a1-10/rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "backward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_5e0d8071-7a1-10/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "backward_kernel_id": "muse_glimmer.triton.gated_attention_bwd.v2"
+ },
+ "argv": [
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_5e0d8071-7a1-10/rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
+  "bench",
+  "--iters",
+  "30",
+  "--sections",
+  "prefill",
+  "decode",
+  "--out",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_fwd_norms/bench_fwd.json"
+ ],
+ "head_count_params": true,
+ "wall_s": 25.72498869895935
+}

@@ -1,0 +1,127 @@
+{
+ "baseline": {
+  "raised": null,
+  "all_strict": true,
+  "binding": "StrictBindingError: model class builtins.object is not Bridge's native megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmer"
+ },
+ "attn_off": {
+  "raised": "ValueError",
+  "msg": "MUSE_STRICT_ATTN='off' is not one of ('auto', 'strict', 'fallback')",
+  "binding": "ValueError: MUSE_STRICT_ATTN='off' is not one of ('auto', 'strict', 'fallback')"
+ },
+ "attn_fallback": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "attn_sibling_old_value": {
+  "raised": "ValueError",
+  "msg": "MUSE_STRICT_ATTN='sibling' is not one of ('auto', 'strict', 'fallback')",
+  "binding": "ValueError: MUSE_STRICT_ATTN='sibling' is not one of ('auto', 'strict', 'fallback')"
+ },
+ "gemm_cublas": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:cublas_fp32_per_chunk_tree (not batch-invariant), gemm_token_grad -> fallback:torch_fp32_per_chunk_tree (256-token rule, cuBLAS)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:cublas_fp32_per_chunk_tree (no"
+ },
+ "gemm_triton_repo": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk_tree (batch-invariant, slow), gemm_token_grad -> fallback:torch_fp32_per_chunk_tree (256-token rule, cuBLAS)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk"
+ },
+ "gemm_bogus": {
+  "raised": "ValueError",
+  "msg": "MUSE_STRICT_GEMM='bogus' is not one of ('auto', 'strict', 'sibling', 'triton_repo', 'cublas')",
+  "binding": "ValueError: MUSE_STRICT_GEMM='bogus' is not one of ('auto', 'strict', 'sibling', 'triton_repo', 'cublas')"
+ },
+ "missing_ops.norms": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: normalized_embedding -> fallback:torch_fp32_rowwise, centered_rmsnorm -> fallback:torch_fp32_rowwise, weighted_rmsnorm -> fallback:torch_fp32_rowwise, fused_post_norm_residual_pre_norm -> fallback:torch_fp32_rowwise (import err",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: normalized_embedding -> fallback:torch_fp32_row"
+ },
+ "missing_silent_ops.norms": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: normalized_embedding -> fallback:torch_fp32_rowwise, centered_rmsnorm -> fallback:torch_fp32_rowwise, weighted_rmsnorm -> fallback:torch_fp32_rowwise, fused_post_norm_residual_pre_norm -> fallback:torch_fp32_rowwise",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: normalized_embedding -> fallback:torch_fp32_row"
+ },
+ "missing_ops.qknorm_rope": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: rope_rows -> fallback:torch_fp32_table, qknorm_scaled_rope -> fallback:torch_fp32_rowwise (import errors: rl_engine.models.muse_glimmer.ops.qknorm_rope: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: rope_rows -> fallback:torch_fp32_table, qknorm_"
+ },
+ "missing_silent_ops.qknorm_rope": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: rope_rows -> fallback:torch_fp32_table, qknorm_scaled_rope -> fallback:torch_fp32_rowwise",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: rope_rows -> fallback:torch_fp32_table, qknorm_"
+ },
+ "missing_ops.swiglu_ffn": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: silu_mul -> fallback:torch_fp32_elementwise (import errors: rl_engine.models.muse_glimmer.ops.swiglu_ffn: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: silu_mul -> fallback:torch_fp32_elementwise (im"
+ },
+ "missing_silent_ops.swiglu_ffn": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: silu_mul -> fallback:torch_fp32_elementwise",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: silu_mul -> fallback:torch_fp32_elementwise"
+ },
+ "missing_ops.det_gemm": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk_tree (batch-invariant, slow), gemm_token_grad -> fallback:torch_fp32_per_chunk_tree (256-token rule, cuBLAS) (import errors: rl_engine.models.muse_glimmer.ops.det_gemm: ImportErro",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk"
+ },
+ "missing_silent_ops.det_gemm": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk_tree (batch-invariant, slow), gemm_token_grad -> fallback:torch_fp32_per_chunk_tree (256-token rule, cuBLAS)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gemm -> fallback:repo_triton_det_gemm_per_chunk"
+ },
+ "missing_ops.canonical_tree": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['combine'] (import errors: rl_engine.models.muse_glimmer.ops.canonical_tree: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_silent_ops.canonical_tree": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['combine']",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_ops.gated_attention": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['fwd'] (import errors: rl_engine.models.muse_glimmer.ops.gated_attention: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_silent_ops.gated_attention": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['fwd']",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_triton.gated_attention_bwd": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['preprocess', 'partials', 'subtree'] (import errors: rl_engine.models.muse_glimmer.triton.gated_attention_bwd: ImportErr",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_silent_triton.gated_attention_bwd": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_cublas_per_head (TP<=2 only, not batch invariant); missing ['preprocess', 'partials', 'subtree']",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: gated_attention -> fallback:binding_torch_fp32_"
+ },
+ "missing_ops.lm_head_softcap_logprob": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_row_stats (import errors: rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_r"
+ },
+ "missing_silent_ops.lm_head_softcap_logprob": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_row_stats",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_r"
+ },
+ "missing_triton.softcap_logprob": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_row_stats (import errors: rl_engine.models.muse_glimmer.triton.softcap_logprob: ImportError: simulated)",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_r"
+ },
+ "missing_silent_triton.softcap_logprob": {
+  "raised": "StrictOpsUnavailable",
+  "msg": "strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_row_stats",
+  "binding": "StrictOpsUnavailable: strict mode requires every op to be a sibling strict kernel; non-strict: lm_head_tile_stats -> fallback:binding_triton_r"
+ }
+}

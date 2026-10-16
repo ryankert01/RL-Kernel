@@ -1,0 +1,16 @@
+{
+ "probe": "f4",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "none_on_local_layer_raised": false,
+ "q_hat_mismatch_vs_rope": 15994827,
+ "k_hat_mismatch_vs_rope": 999808,
+ "elements": 17825792,
+ "explicit_local_flag": "ValueError (fails closed): local=True (sliding-window RoPE layer) needs cos/sin rows; got None",
+ "wall_s": 1.48
+}

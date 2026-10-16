@@ -1,0 +1,44 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 22:07:43] start pid=440648 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank0 22:07:43] client connected
+[trainer_server rank1 22:07:43] start pid=440649 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank0 22:07:45] trainer FaultyMockTrainer built in 2.0 s
+[trainer_server rank1 22:07:45] trainer FaultyMockTrainer built in 1.9 s
+[trainer_server rank0 22:07:45] token_logprobs id=1 ok=False compute=24.8 ms
+W1015 22:07:45.996000 440625 torch/distributed/elastic/agent/server/api.py:753] Received 15 death signal, shutting down workers
+W1015 22:07:45.997000 440625 torch/distributed/elastic/multiprocessing/api.py:1028] Sending process 440648 closing signal SIGTERM
+W1015 22:07:45.998000 440625 torch/distributed/elastic/multiprocessing/api.py:1028] Sending process 440649 closing signal SIGTERM
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/run.py", line 1032, in <module>
+    main()
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 367, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/run.py", line 1028, in main
+    run(args)
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/run.py", line 1019, in run
+    elastic_launch(
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 194, in __call__
+    return launch_agent(
+           ^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 374, in launch_agent
+    result = agent.run()
+             ^^^^^^^^^^^
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/elastic/metrics/api.py", line 134, in wrapper
+    result = f(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 745, in run
+    result = self._invoke_run(role)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 923, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 86, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 440625 got signal: 15

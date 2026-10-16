@@ -1,0 +1,19 @@
+poc(muse_glimmer): WS2 TP rows on the landed sibling ops (fast_det_gemm_partial, softcap tiles)
+
+Merge feat/museglimmer-arch-fingerprint (ops/det_gemm, ops/canonical_tree,
+ops/lm_head_softcap_logprob, ops/gated_attention_autograd) and align the WS2 adapters:
+
+- tp_canonical_tree: hand contiguous rank-local slices to fast_det_gemm_partial (fp32 sub-tree
+  partial from the Triton tree kernel) and fold ranks with ops.canonical_tree.combine_tree.
+- vocab_parallel_softcap_logp: tile logits via fast_det_gemm(out_dtype=float32), per-tile
+  statistics via the sibling Triton softcap_tile_stats, merge via combine_tile_stats; the
+  fallback soft cap now uses tensor-valued m / T (true IEEE division) like softcap_golden.
+- kv_replication: import chain triton.gated_attention_fwd -> ops.gated_attention -> pure-torch
+  fallback (the strict forward kernel is not landed yet); provenance cites
+  triton.gated_attention_bwd.strict_gated_attention_bwd_partials for the backward rule.
+
+TP2 and TP4 are bitwise equal to TP1 on real shapes for all three rows with the sibling kernels;
+the NCCL all_reduce control still differs at TP4.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

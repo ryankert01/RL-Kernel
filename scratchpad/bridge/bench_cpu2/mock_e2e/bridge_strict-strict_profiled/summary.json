@@ -1,0 +1,657 @@
+{
+  "status": "ok",
+  "error": null,
+  "orchestrator": "rl_engine.models.muse_glimmer.e2e (single process; no VIME, no Ray)",
+  "rfc_row": "final_e2e_lora",
+  "mode": "strict/strict",
+  "train_strict": true,
+  "rollout_strict": true,
+  "config": {
+    "run_dir": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled",
+    "steps": 4,
+    "prompts_per_step": 4,
+    "samples_per_prompt": 4,
+    "max_tokens": 32,
+    "temperature": 1.0,
+    "lora_rank": 4,
+    "lr": 0.001,
+    "clip_eps": 0.2,
+    "kl_coef": 0.0,
+    "mode": "strict/strict",
+    "seed": 1234,
+    "model_path": "/home/ubuntu/models/Muse-Glimmer-30B",
+    "max_model_len": 4096,
+    "rollout_tp": 1,
+    "rollout_gpus": [
+      0
+    ],
+    "train_tp": 2,
+    "train_gpus": [
+      2,
+      3
+    ],
+    "sync_via_file": false,
+    "recheck_rollout_logprobs": true,
+    "mock": true,
+    "mock_perturb": 0.0,
+    "task": "arith",
+    "data_dir": "/home/ubuntu/data/gsm8k",
+    "split": "train",
+    "limit_examples": null,
+    "trainer_bridge": true,
+    "trainer_python": "/home/ubuntu/envs/megatron/bin/python",
+    "trainer_launcher": "process",
+    "trainer_factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+    "trainer_timeout_s": 3600.0,
+    "trainer_startup_timeout_s": 3600.0,
+    "mock_trainer_device": "cpu",
+    "profile_step": 1,
+    "train_strict": true,
+    "rollout_strict": true
+  },
+  "task": {
+    "task": "synthetic-arith",
+    "reward": "1.0 iff the gold number string appears in the decoded completion (mock only)",
+    "max_operand": 20,
+    "tokenizer": "ByteTokenizer"
+  },
+  "provenance": {
+    "rollout_start": {
+      "engine": "MockRolloutEngine",
+      "runtime": "cpu-mock (no vLLM)",
+      "strict": true,
+      "logprob_path": "strict: fp32 exactly-rounded primitives, polynomial exp/log, sequential sums",
+      "tensor_parallel_size": 1,
+      "gpu_ids": [
+        0
+      ],
+      "max_model_len": 4096,
+      "seed": 1234,
+      "lora_sha256": "645e0419cc7ef68ee6b6d65b66f014d4499202ec533a670371008bcbaff6ab79",
+      "lora_loads": 1,
+      "generate_calls": 0,
+      "tiny_config": {
+        "vocab_size": 259,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_layers": 2,
+        "rms_norm_eps": 1e-05
+      },
+      "base_seed": 20261015,
+      "perturb": 0.0,
+      "logprob_temperature": 1.0
+    },
+    "trainer_start": {
+      "engine": "MockTrainer",
+      "runtime": "cpu-mock (no Megatron)",
+      "strict": true,
+      "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+      "tensor_parallel_size": 2,
+      "gpu_ids": [],
+      "device": "cpu",
+      "lora_rank": 4,
+      "lr": 0.001,
+      "optimizer": "Adam",
+      "seed": 1234,
+      "optimizer_steps": 0,
+      "tiny_config": {
+        "vocab_size": 259,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_layers": 2,
+        "rms_norm_eps": 1e-05
+      },
+      "base_seed": 20261015,
+      "lora_storage": "fp32 master -> bf16 at use and at export",
+      "bridge": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "client": "RemoteTrainer",
+        "launcher": "process",
+        "python": "/home/ubuntu/envs/megatron/bin/python",
+        "factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+        "factory_kwargs": {
+          "device": "cpu"
+        },
+        "command": [
+          "/home/ubuntu/envs/megatron/bin/python",
+          "-m",
+          "rl_engine.models.muse_glimmer.e2e.trainer_server",
+          "--spec",
+          "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/trainer_server/spec.json"
+        ],
+        "server_pid": 290459,
+        "gpu_ids_physical": [],
+        "server_cuda_visible_devices": "",
+        "hello": {
+          "protocol": "muse_glimmer_trainer_bridge_v1",
+          "pid": 290459,
+          "world": 1,
+          "launcher": "process",
+          "trainer_class": "rl_engine.models.muse_glimmer.e2e.mocks.MockTrainer",
+          "build_s": 1.2609656740023638,
+          "versions": {
+            "python": "3.12.15",
+            "executable": "/home/ubuntu/envs/megatron/bin/python",
+            "torch": "2.13.0+cu129",
+            "torch_cuda": "12.9",
+            "triton": "3.7.1",
+            "megatron-core": "0.20.0+913159367",
+            "megatron-bridge": "0.7.0+d86a5c09b",
+            "transformer_engine": "2.20.2",
+            "transformers": "5.17.0",
+            "vllm": null
+          },
+          "devices": {
+            "cuda_visible_devices": "",
+            "devices": [],
+            "device_count": 0
+          },
+          "memory": null,
+          "startup_s": 3.269330211001943
+        },
+        "calls": 2,
+        "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/trainer_server/trainer_server.log"
+      }
+    },
+    "rollout_end": {
+      "engine": "MockRolloutEngine",
+      "runtime": "cpu-mock (no vLLM)",
+      "strict": true,
+      "logprob_path": "strict: fp32 exactly-rounded primitives, polynomial exp/log, sequential sums",
+      "tensor_parallel_size": 1,
+      "gpu_ids": [
+        0
+      ],
+      "max_model_len": 4096,
+      "seed": 1234,
+      "lora_sha256": "1fd900786a05cb63a842e195ed30edc9b84c727f44a779a4ac9628d428929b57",
+      "lora_loads": 5,
+      "generate_calls": 4,
+      "tiny_config": {
+        "vocab_size": 259,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_layers": 2,
+        "rms_norm_eps": 1e-05
+      },
+      "base_seed": 20261015,
+      "perturb": 0.0,
+      "logprob_temperature": 1.0
+    },
+    "trainer_end": {
+      "engine": "MockTrainer",
+      "runtime": "cpu-mock (no Megatron)",
+      "strict": true,
+      "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+      "tensor_parallel_size": 2,
+      "gpu_ids": [],
+      "device": "cpu",
+      "lora_rank": 4,
+      "lr": 0.001,
+      "optimizer": "Adam",
+      "seed": 1234,
+      "optimizer_steps": 4,
+      "tiny_config": {
+        "vocab_size": 259,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_layers": 2,
+        "rms_norm_eps": 1e-05
+      },
+      "base_seed": 20261015,
+      "lora_storage": "fp32 master -> bf16 at use and at export",
+      "bridge": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "client": "RemoteTrainer",
+        "launcher": "process",
+        "python": "/home/ubuntu/envs/megatron/bin/python",
+        "factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+        "factory_kwargs": {
+          "device": "cpu"
+        },
+        "command": [
+          "/home/ubuntu/envs/megatron/bin/python",
+          "-m",
+          "rl_engine.models.muse_glimmer.e2e.trainer_server",
+          "--spec",
+          "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/trainer_server/spec.json"
+        ],
+        "server_pid": 290459,
+        "gpu_ids_physical": [],
+        "server_cuda_visible_devices": "",
+        "hello": {
+          "protocol": "muse_glimmer_trainer_bridge_v1",
+          "pid": 290459,
+          "world": 1,
+          "launcher": "process",
+          "trainer_class": "rl_engine.models.muse_glimmer.e2e.mocks.MockTrainer",
+          "build_s": 1.2609656740023638,
+          "versions": {
+            "python": "3.12.15",
+            "executable": "/home/ubuntu/envs/megatron/bin/python",
+            "torch": "2.13.0+cu129",
+            "torch_cuda": "12.9",
+            "triton": "3.7.1",
+            "megatron-core": "0.20.0+913159367",
+            "megatron-bridge": "0.7.0+d86a5c09b",
+            "transformer_engine": "2.20.2",
+            "transformers": "5.17.0",
+            "vllm": null
+          },
+          "devices": {
+            "cuda_visible_devices": "",
+            "devices": [],
+            "device_count": 0
+          },
+          "memory": null,
+          "startup_s": 3.269330211001943
+        },
+        "calls": 16,
+        "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/trainer_server/trainer_server.log"
+      }
+    }
+  },
+  "steps_completed": 4,
+  "first_drift": null,
+  "drift_totals": {
+    "bitwise_mismatch_count": 0,
+    "token_count": 1951,
+    "bitwise_mismatch_frac": 0.0,
+    "max_abs_diff": 0.0,
+    "all_steps_bitwise_equal": true
+  },
+  "reward": {
+    "first_step": 0.0625,
+    "last_step": 0.0,
+    "mean": 0.078125,
+    "trajectory": [
+      0.0625,
+      0.0,
+      0.25,
+      0.0
+    ]
+  },
+  "weight_sync": {
+    "checks": 5,
+    "passed": 5,
+    "all_passed": true,
+    "initial_sha256": "645e0419cc7ef68ee6b6d65b66f014d4499202ec533a670371008bcbaff6ab79",
+    "final_sha256": "1fd900786a05cb63a842e195ed30edc9b84c727f44a779a4ac9628d428929b57",
+    "transport": "memory"
+  },
+  "timings_mean_s": {
+    "rollout_s": 11.753842635749606,
+    "train_logp_s": 0.5779027274984401,
+    "train_step_s": 1.265434872500009,
+    "sync_s": 0.012059935750585282,
+    "step_s": 14.343227520749679
+  },
+  "timeline": {
+    "schema": "muse_glimmer_e2e_timeline_v1",
+    "phase_order": [
+      "rollout_generate",
+      "reward",
+      "trainer_logprobs",
+      "drift_metrics",
+      "rollout_recheck",
+      "sidecar",
+      "grpo_loss",
+      "backward_step",
+      "lora_export",
+      "lora_transfer_load",
+      "other"
+    ],
+    "steps": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "profiled_steps": [
+      1
+    ],
+    "step_s": [
+      4.975118790000124,
+      46.00984554000024,
+      3.5129771969986905,
+      2.874968555999658
+    ],
+    "phases_s": {
+      "rollout_generate": [
+        2.0890213339989714,
+        41.03681499600134,
+        2.1573422820001724,
+        1.732191930997942
+      ],
+      "reward": [
+        0.0004664609987230506,
+        0.0005584450009337161,
+        0.0004442610006663017,
+        0.0005091729981359094
+      ],
+      "trainer_logprobs": [
+        0.9106392729991057,
+        1.0174184869974852,
+        0.22403798799859942,
+        0.15951516199856997
+      ],
+      "drift_metrics": [
+        0.0031510799999523442,
+        0.0030891790011082776,
+        0.00286892300209729,
+        0.0028794739992008545
+      ],
+      "rollout_recheck": [
+        1.0365412780010956,
+        0.6107155459976639,
+        0.6451982509970549,
+        0.5936194819987577
+      ],
+      "sidecar": [
+        0.004460203999769874,
+        0.00427419799962081,
+        0.004295350001484621,
+        0.004377051998744719
+      ],
+      "grpo_loss": [
+        0.0038446669968834613,
+        0.005058519000158412,
+        0.0036365830019349232,
+        0.003775696000957396
+      ],
+      "backward_step": [
+        0.9164241369981028,
+        3.315611368001555,
+        0.4628220720005629,
+        0.36688191299981554
+      ],
+      "lora_export": [
+        0.009474855000007665,
+        0.013659063999512,
+        0.011127786001452478,
+        0.010011647998908302
+      ],
+      "lora_transfer_load": [
+        0.000933572999201715,
+        0.0010497960029169917,
+        0.0009904549988277722,
+        0.0009925660015142057
+      ],
+      "other": [
+        0.0001619280083104968,
+        0.0015959419979481027,
+        0.0002132459958374966,
+        0.00021445900711114518
+      ]
+    },
+    "mean_s": {
+      "rollout_generate": 11.753842635749606,
+      "reward": 0.0004945849996147444,
+      "trainer_logprobs": 0.5779027274984401,
+      "drift_metrics": 0.0029971640005896916,
+      "rollout_recheck": 0.721518639248643,
+      "sidecar": 0.004351700999905006,
+      "grpo_loss": 0.004078866249983548,
+      "backward_step": 1.265434872500009,
+      "lora_export": 0.011068338249970111,
+      "lora_transfer_load": 0.0009915975006151712,
+      "other": 0.0005463937523018103
+    },
+    "total_s": {
+      "rollout_generate": 47.015370542998426,
+      "reward": 0.001978339998458978,
+      "trainer_logprobs": 2.3116109099937603,
+      "drift_metrics": 0.011988656002358766,
+      "rollout_recheck": 2.886074556994572,
+      "sidecar": 0.017406803999620024,
+      "grpo_loss": 0.016315464999934193,
+      "backward_step": 5.061739490000036,
+      "lora_export": 0.044273352999880444,
+      "lora_transfer_load": 0.003966390002460685,
+      "other": 0.0021855750092072412
+    },
+    "fraction_of_step": {
+      "rollout_generate": 0.8194698591196347,
+      "reward": 3.448212746393735e-05,
+      "trainer_logprobs": 0.040290982393078205,
+      "drift_metrics": 0.00020896022155779333,
+      "rollout_recheck": 0.05030378540707492,
+      "sidecar": 0.0003033976135154799,
+      "grpo_loss": 0.0002843757615977884,
+      "backward_step": 0.08822525269639371,
+      "lora_export": 0.0007716769628006013,
+      "lora_transfer_load": 6.913349866204613e-05,
+      "other": 3.809419822082359e-05
+    },
+    "tokens_generated": [
+      498,
+      497,
+      485,
+      471
+    ],
+    "rollout_tokens_per_s": [
+      238.38914035726415,
+      12.111076360298139,
+      224.81365337647483,
+      271.9098222150531
+    ],
+    "reward_mean": [
+      0.0625,
+      0.0,
+      0.25,
+      0.0
+    ],
+    "bitwise_mismatch_count": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "token_count": [
+      498,
+      497,
+      485,
+      471
+    ],
+    "max_abs_diff": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "mismatch_k3_kl": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "bridge": {
+      "token_logprobs": {
+        "count": 4,
+        "rtt_s_mean": 0.5776405104998048,
+        "server_compute_s_mean": 0.5680374757494064,
+        "overhead_s_mean": 0.009603034750398365,
+        "request_bytes_total": 18932,
+        "response_bytes_total": 28172,
+        "rtt_s": [
+          0.9103016650005884,
+          1.017142379998404,
+          0.22383820300092339,
+          0.15927979399930337
+        ],
+        "server_compute_s": [
+          0.9009349459993246,
+          1.0046542239979317,
+          0.21625865399983013,
+          0.15030207900053938
+        ]
+      },
+      "step": {
+        "count": 4,
+        "rtt_s_mean": 1.2645840849991146,
+        "server_compute_s_mean": 1.2542379790002087,
+        "overhead_s_mean": 0.010346105998905841,
+        "request_bytes_total": 26572,
+        "response_bytes_total": 7220,
+        "rtt_s": [
+          0.9155565619985282,
+          3.314600301997416,
+          0.46207611299905693,
+          0.3661033630014572
+        ],
+        "server_compute_s": [
+          0.9068112500026473,
+          3.306717822997598,
+          0.4510480139979336,
+          0.35237482900265604
+        ]
+      },
+      "export_lora": {
+        "count": 4,
+        "rtt_s_mean": 0.00998049799909495,
+        "server_compute_s_mean": 0.0014596017499570735,
+        "overhead_s_mean": 0.008520896249137877,
+        "request_bytes_total": 5300,
+        "response_bytes_total": 79820,
+        "rtt_s": [
+          0.008418399997026427,
+          0.012491984998632688,
+          0.010055597002065042,
+          0.008956009998655645
+        ],
+        "server_compute_s": [
+          0.0014811389992246404,
+          0.0014202130005287472,
+          0.0014547770006174687,
+          0.0014822779994574375
+        ]
+      },
+      "profile_arm": {
+        "count": 1,
+        "rtt_s_mean": 0.0013016640004934743,
+        "server_compute_s_mean": 1.6589998267591e-05,
+        "overhead_s_mean": 0.0012850740022258833,
+        "request_bytes_total": 1581,
+        "response_bytes_total": 1837,
+        "rtt_s": [
+          0.0013016640004934743
+        ],
+        "server_compute_s": [
+          1.6589998267591e-05
+        ]
+      }
+    }
+  },
+  "profiles": [
+    {
+      "step": 1,
+      "orchestrator_rollout_generate": {
+        "path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/profile/orchestrator_step0001_rollout_generate.json",
+        "label": "orchestrator.rollout.generate",
+        "wall_s": 4.876175492001494,
+        "device_activity": true,
+        "num_distinct_ops": 57
+      },
+      "orchestrator_trainer_logprobs": null,
+      "orchestrator_trainer_step": null,
+      "trainer_server": [
+        {
+          "op": "token_logprobs",
+          "path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/profile/trainer_server_step0001_token_logprobs_rank0.json",
+          "label": "trainer_server.token_logprobs",
+          "wall_s": 0.23129450299893506,
+          "device_activity": false,
+          "num_distinct_ops": 44
+        },
+        {
+          "op": "step",
+          "path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/bridge/bench_cpu2/mock_e2e/bridge_strict-strict_profiled/profile/trainer_server_step0001_step_rank0.json",
+          "label": "trainer_server.step",
+          "wall_s": 0.39833998800168047,
+          "device_activity": false,
+          "num_distinct_ops": 81
+        }
+      ]
+    }
+  ],
+  "bridge_initial_calls": [
+    {
+      "op": "export_lora",
+      "id": 1,
+      "request_bytes": 1325,
+      "response_bytes": 19843,
+      "encode_s": 0.00016622300245217048,
+      "send_s": 0.00034415899790474214,
+      "wait_s": 0.010292951999872457,
+      "decode_s": 0.0071452420015702955,
+      "rtt_s": 0.017948576001799665,
+      "server": {
+        "compute_s": 0.0017237080028280616,
+        "ranks": [
+          {
+            "rank": 0,
+            "compute_s": 0.0017237080028280616,
+            "memory": null,
+            "op_counts": {
+              "export_lora": 1
+            },
+            "sha256": "645e0419cc7ef68ee6b6d65b66f014d4499202ec533a670371008bcbaff6ab79",
+            "ok": true,
+            "error": null
+          }
+        ],
+        "world": 1,
+        "memory": null,
+        "profile": null
+      }
+    },
+    {
+      "op": "provenance",
+      "id": 2,
+      "request_bytes": 1325,
+      "response_bytes": 2093,
+      "encode_s": 0.00012028299897792749,
+      "send_s": 0.00030245500238379464,
+      "wait_s": 0.0006359889994200785,
+      "decode_s": 0.00040625000110594556,
+      "rtt_s": 0.0014649770018877462,
+      "server": {
+        "compute_s": 5.9680998674593866e-05,
+        "ranks": [
+          {
+            "rank": 0,
+            "compute_s": 5.9680998674593866e-05,
+            "memory": null,
+            "op_counts": {
+              "export_lora": 1,
+              "provenance": 1
+            },
+            "ok": true,
+            "error": null
+          }
+        ],
+        "world": 1,
+        "memory": null,
+        "profile": null
+      }
+    }
+  ],
+  "formulas": {
+    "bitwise_mismatch_count": "tokens whose 4 fp32 bytes differ (train vs rollout)",
+    "max_abs_diff": "max |train - rollout| in fp64 over active completion tokens",
+    "mismatch_k3_kl": "mean(exp(d) - d - 1), d = train - rollout",
+    "first_drift": "first (step, sample, token) with a bitwise mismatch, batch order",
+    "advantage": "(r - mean_group) / max(std_group, 1e-6), population std",
+    "loss": "-mean_tokens(min(rho*A, clip(rho, 1-eps, 1+eps)*A)), rho = exp(lp_train - lp_rollout)",
+    "lora_sha256": "sha256 over sorted(name|dtype|shape\\n + raw LE bytes)"
+  },
+  "files": {
+    "steps": "steps.jsonl",
+    "rounds": "rounds.csv",
+    "sidecars": "mismatch-sidecars/step{n:04d}.pt",
+    "lora_packages": "lora/step{n:04d}.pt (only with sync_via_file)",
+    "provenance": "provenance.json",
+    "config": "config.json",
+    "profiles": "profile/*.json (top-ops tables, only with profile_step)"
+  }
+}

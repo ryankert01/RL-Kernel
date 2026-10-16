@@ -1,0 +1,7 @@
+{
+ "module": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-11/rl_engine/models/muse_glimmer/ops/det_gemm.py",
+ "megatron_token_grad_Tpad512": "3fa042b520570030",
+ "megatron_token_grad_Tpad1024": "3c1da4abf4193782",
+ "vllm_lora_b_r32_kchunks1": "5f6c4aef98ca6321",
+ "vllm_lora_b_r64_kchunks1": "45d764884ee83f59"
+}

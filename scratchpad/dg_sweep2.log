@@ -1,0 +1,39 @@
+[gpu-lease] using GPUs [0]
+=== narrow N decode
+
+--- M=16 N=256 K=6656 cuBLAS 0.0218 ms
+  BM= 16 BN= 64 BK=64 w=4 s=4: 0.0702 ms x3.22 grid=(4,) regs=128 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=2 s=4: 0.0690 ms x3.16 grid=(8,) regs=126 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=1 s=4: 0.0783 ms x3.59 grid=(16,) regs=150 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=2 s=4: 0.0742 ms x3.40 grid=(16,) regs=80 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=32 w=1 s=5: 0.0745 ms x3.42 grid=(16,) regs=116 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=1 s=4: 0.0750 ms x3.44 grid=(8,) regs=240 spills=0 bitwise=True
+
+--- M=64 N=256 K=6656 cuBLAS 0.0222 ms
+  BM= 16 BN= 64 BK=64 w=4 s=4: 0.0708 ms x3.18 grid=(16,) regs=128 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=2 s=4: 0.0690 ms x3.11 grid=(32,) regs=126 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=1 s=4: 0.0736 ms x3.31 grid=(64,) regs=150 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=2 s=4: 0.0678 ms x3.05 grid=(64,) regs=80 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=32 w=1 s=5: 0.0641 ms x2.88 grid=(64,) regs=116 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=1 s=4: 0.0637 ms x2.87 grid=(32,) regs=240 spills=0 bitwise=True
+  BM= 32 BN= 16 BK=64 w=2 s=4: 0.0709 ms x3.19 grid=(32,) regs=128 spills=0 bitwise=True
+  BM= 32 BN= 32 BK=64 w=2 s=4: 0.0713 ms x3.21 grid=(16,) regs=222 spills=0 bitwise=True
+  BM= 32 BN= 64 BK=64 w=4 s=4: 0.0687 ms x3.09 grid=(8,) regs=212 spills=0 bitwise=True
+  BM= 64 BN= 16 BK=64 w=2 s=4: 0.0744 ms x3.35 grid=(16,) regs=227 spills=0 bitwise=True
+
+--- M=16 N=4096 K=6656 cuBLAS 0.0430 ms
+  BM= 16 BN= 64 BK=64 w=4 s=4: 0.0705 ms x1.64 grid=(64,) regs=128 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=2 s=4: 0.0727 ms x1.69 grid=(128,) regs=126 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=1 s=4: 0.0740 ms x1.72 grid=(256,) regs=150 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=64 w=2 s=4: 0.0771 ms x1.79 grid=(256,) regs=80 spills=0 bitwise=True
+  BM= 16 BN= 16 BK=32 w=1 s=5: 0.0767 ms x1.78 grid=(256,) regs=116 spills=0 bitwise=True
+  BM= 16 BN= 32 BK=64 w=1 s=4: 0.0722 ms x1.68 grid=(128,) regs=240 spills=0 bitwise=True
+
+=== backward layouts at M=4096 (pinned configs)
+q_proj   fwd   2.138 ms (104.5 TF) | dA   2.011 ms (111.1 TF, cuBLAS 0.992; BK=64 spills=88) | dW   2.058 ms (108.5 TF, cuBLAS 0.982; spills=102; with .contiguous() dyT: 2.226)
+k_proj   fwd   0.231 ms ( 60.5 TF) | dA   0.243 ms ( 57.4 TF, cuBLAS 0.093; BK=32 spills=0) | dW   0.139 ms (100.1 TF, cuBLAS 0.077; spills=102; with .contiguous() dyT: 0.156)
+down     fwd   9.005 ms (120.9 TF) | dA  10.120 ms (107.6 TF, cuBLAS 4.062; BK=64 spills=102) | dW   9.755 ms (111.6 TF, cuBLAS 4.194; spills=102; with .contiguous() dyT: 8.522)
+gate     fwd   8.890 ms (122.5 TF) | dA   8.449 ms (128.9 TF, cuBLAS 3.993; BK=64 spills=50) | dW   8.476 ms (128.4 TF, cuBLAS 4.225; spills=102; with .contiguous() dyT: 9.298)
+
+=== full autograd backward (M=4096 gate shape) strict vs torch bf16
+strict fwd+bwd 26.102 ms ; torch fwd+bwd 13.079 ms

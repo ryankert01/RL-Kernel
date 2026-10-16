@@ -1,0 +1,28 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 16:53:16] start pid=277736 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 16:53:16] client connected
+[trainer_server rank0 16:53:17] trainer MockTrainer built in 1.3 s
+[trainer_server rank0 16:53:18] export_lora id=1 ok=True compute=1.3 ms
+[trainer_server rank0 16:53:18] provenance id=2 ok=True compute=0.1 ms
+[trainer_server rank0 16:53:19] token_logprobs id=3 ok=True compute=83.4 ms
+[trainer_server rank0 16:53:19] step id=4 ok=True compute=176.5 ms
+[trainer_server rank0 16:53:19] export_lora id=5 ok=True compute=0.9 ms
+[trainer_server rank0 16:53:19] profile_arm id=6 ok=True compute=0.0 ms
+USDT:2026-10-15 16:54:06 277736:277736 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:54:07 277736:277736 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ERROR:2026-10-15 16:54:07 277736:277736 DeviceProperties.cpp:50] gpuGetDeviceCount failed with code 100
+[trainer_server rank0 16:54:07] token_logprobs id=7 ok=True compute=848.9 ms
+USDT:2026-10-15 16:54:08 277736:277736 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:54:08 277736:277736 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 16:54:11] step id=8 ok=True compute=3089.7 ms
+[trainer_server rank0 16:54:11] export_lora id=9 ok=True compute=2.5 ms
+[trainer_server rank0 16:54:12] token_logprobs id=10 ok=True compute=123.2 ms
+[trainer_server rank0 16:54:12] step id=11 ok=True compute=191.9 ms
+[trainer_server rank0 16:54:12] export_lora id=12 ok=True compute=1.8 ms
+[trainer_server rank0 16:54:13] token_logprobs id=13 ok=True compute=84.9 ms
+[trainer_server rank0 16:54:14] step id=14 ok=True compute=239.1 ms
+[trainer_server rank0 16:54:14] export_lora id=15 ok=True compute=1.3 ms
+[trainer_server rank0 16:54:14] provenance id=16 ok=True compute=0.1 ms
+[trainer_server rank0 16:54:14] close id=17 ok=True compute=0.0 ms
+[trainer_server rank0 16:54:14] bye

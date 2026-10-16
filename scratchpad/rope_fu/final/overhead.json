@@ -1,0 +1,10 @@
+{
+ "T": 64,
+ "fwd_bwd_us": 334.7869333386674,
+ "fwd_bwd_without_record_backward_us": 322.3701933347911,
+ "fwd_only_us": 77.18036333244527,
+ "rope_rows_us": 151.10784999706084,
+ "rope_rows_check_range_false_us": 46.311279996492274,
+ "qknorm_scaled_rope_at_local_us": 258.08718333185726,
+ "fwd_only_explicit_local_us": 77.13389000249056
+}

@@ -1,0 +1,105 @@
+========= COMPUTE-SANITIZER
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/TensorCompare.cu:109: _assert_async_cuda_kernel: block: [0,0,0], thread: [0,0,0] Assertion `strict gated attention: invalid metadata (cu_seqlens, max_seqlen_q < a query length, q_pos outside [0,len_k), seq_lens outside [len_q,max_pages*16] or a page id outside [0,num_pages) under a visible key)` failed.
+========= Warp assert
+=========     at __assertfail+0x1910
+=========     by thread (0,0,0) in block (0,0,0)
+=========         Device Frame: __assertfail+0x1880
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame:  [0x1376c] in libcudart.so.13
+=========         Host Frame: cudaLaunchKernel [0x745b7] in libcudart.so.13
+=========         Host Frame: at::native::_assert_async_msg_cuda(at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >) [0x2c66ced] in libtorch_cuda.so
+=========         Host Frame: c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<void (at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >), &at::(anonymous namespace)::(anonymous namespace)::wrapper_CUDA_msg__assert_async>, void, c10::guts::typelist::typelist<at::Tensor const&, std::basic_string_view<char, std::char_traits<char> > > >, void (at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >) [0x36f23e7] in libtorch_cuda.so
+=========         Host Frame: c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<void (c10::DispatchKeySet, at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >), &torch::autograd::VariableType::(anonymous namespace)::_assert_async_msg>, void, c10::guts::typelist::typelist<c10::DispatchKeySet, at::Tensor const&, std::basic_string_view<char, std::char_traits<char> > > >, void (c10::DispatchKeySet, at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >) [0x51e0a5b] in libtorch_cpu.so
+=========         Host Frame: at::_ops::_assert_async_msg::call(at::Tensor const&, std::basic_string_view<char, std::char_traits<char> >) [0x2c1887d] in libtorch_cpu.so
+=========         Host Frame: torch::autograd::THPVariable__assert_async(_object*, _object*, _object*) [0x4e04c1] in libtorch_python.so
+=========         Host Frame: cfunction_call [0x1406cd6] in python
+=========         Host Frame: _PyEval_EvalFrameDefault [0x141a7fa] in python
+=========         Host Frame: PyEval_EvalCode [0x147401d] in python
+=========         Host Frame: run_mod [0x14b1756] in python
+=========         Host Frame: pyrun_file [0x1635e84] in python
+=========         Host Frame: _PyRun_SimpleFileObject [0x16356cd] in python
+=========         Host Frame: _PyRun_AnyFileObject [0x16354c9] in python
+=========         Host Frame: pymain_run_file_obj [0x1635454] in python
+=========         Host Frame: pymain_run_file [0x163535c] in python
+=========         Host Frame: Py_RunMain.warm [0x16dd274] in python
+=========         Host Frame: pymain_main [0x158948e] in python
+=========         Host Frame: main [0x15892f5] in python
+========= 
+========= Program hit cudaErrorAssert (error 710) due to "device-side assert triggered" on CUDA API call to cudaDeviceSynchronize.
+=========     Saved host backtrace up to driver entry point at error
+=========         Host Frame: c10::cuda::device_synchronize() [0x4c776] in libc10_cuda.so
+=========         Host Frame: THCPModule_cudaSynchronize(_object*, _object*) [0xe801c4] in libtorch_python.so
+=========         Host Frame: cfunction_vectorcall_NOARGS [0x1415390] in python
+=========         Host Frame: _PyEval_EvalFrameDefault [0x141a9ac] in python
+=========         Host Frame: PyEval_EvalCode [0x147401d] in python
+=========         Host Frame: run_mod [0x14b1756] in python
+=========         Host Frame: pyrun_file [0x1635e84] in python
+=========         Host Frame: _PyRun_SimpleFileObject [0x16356cd] in python
+=========         Host Frame: _PyRun_AnyFileObject [0x16354c9] in python
+=========         Host Frame: pymain_run_file_obj [0x1635454] in python
+=========         Host Frame: pymain_run_file [0x163535c] in python
+=========         Host Frame: Py_RunMain.warm [0x16dd274] in python
+=========         Host Frame: pymain_main [0x158948e] in python
+=========         Host Frame: main [0x15892f5] in python
+========= 
+========= Program hit cudaErrorAssert (error 710) due to "device-side assert triggered" on CUDA API call to cudaGetLastError.
+=========     Saved host backtrace up to driver entry point at error
+=========         Host Frame: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, unsigned int, bool) [0x4b904] in libc10_cuda.so
+=========         Host Frame: c10::cuda::device_synchronize() [0x4c796] in libc10_cuda.so
+=========         Host Frame: THCPModule_cudaSynchronize(_object*, _object*) [0xe801c4] in libtorch_python.so
+=========         Host Frame: cfunction_vectorcall_NOARGS [0x1415390] in python
+=========         Host Frame: _PyEval_EvalFrameDefault [0x141a9ac] in python
+=========         Host Frame: PyEval_EvalCode [0x147401d] in python
+=========         Host Frame: run_mod [0x14b1756] in python
+=========         Host Frame: pyrun_file [0x1635e84] in python
+=========         Host Frame: _PyRun_SimpleFileObject [0x16356cd] in python
+=========         Host Frame: _PyRun_AnyFileObject [0x16354c9] in python
+=========         Host Frame: pymain_run_file_obj [0x1635454] in python
+=========         Host Frame: pymain_run_file [0x163535c] in python
+=========         Host Frame: Py_RunMain.warm [0x16dd274] in python
+=========         Host Frame: pymain_main [0x158948e] in python
+=========         Host Frame: main [0x15892f5] in python
+========= 
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/probes/child.py", line 90, in <module>
+    torch.cuda.synchronize()
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/__init__.py", line 1219, in synchronize
+    return torch._C._cuda_synchronize()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+========= Program hit cudaErrorAssert (error 710) due to "device-side assert triggered" on CUDA API call to cudaFree.
+========= 
+========= Program hit cudaErrorAssert (error 710) due to "device-side assert triggered" on CUDA API call to cudaGetLastError.
+========= 
+terminate called after throwing an instance of 'c10::AcceleratorError'
+  what():  CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+
+Exception raised from uncached_delete at /__w/pytorch/pytorch/c10/cuda/CUDACachingAllocator.cpp:4520 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x9d (0x73d855b63bfd in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0xc4e9 (0x73d85c66c4e9 in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libc10_cuda.so)
+frame #2: <unknown function> + 0x86ae4 (0x73d855b40ae4 in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #3: c10::TensorImpl::~TensorImpl() + 0x9 (0x73d855b3b219 in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #4: <unknown function> + 0x8752b5 (0x73d7d34752b5 in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libtorch_python.so)
+frame #5: <unknown function> + 0x875341 (0x73d7d3475341 in /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/lib/libtorch_python.so)
+frame #6: /home/ubuntu/envs/vllm/bin/python() [0x18314ec]
+frame #7: PyDict_SetItem + 0x50d (0x186024d in /home/ubuntu/envs/vllm/bin/python)
+frame #8: _PyModule_ClearDict + 0x163 (0x185f923 in /home/ubuntu/envs/vllm/bin/python)
+frame #9: /home/ubuntu/envs/vllm/bin/python() [0x196d460]
+frame #10: Py_FinalizeEx + 0x231 (0x196be31 in /home/ubuntu/envs/vllm/bin/python)
+frame #11: Py_RunMain + 0x3c4 (0x1988860 in /home/ubuntu/envs/vllm/bin/python)
+frame #12: /home/ubuntu/envs/vllm/bin/python() [0x198848f]
+frame #13: /home/ubuntu/envs/vllm/bin/python() [0x19882f6]
+frame #14: <unknown function> + 0x29d90 (0x73d85c829d90 in /lib/x86_64-linux-gnu/libc.so.6)
+frame #15: __libc_start_main + 0x80 (0x73d85c829e40 in /lib/x86_64-linux-gnu/libc.so.6)
+frame #16: _start + 0x29 (0x19bbfe9 in /home/ubuntu/envs/vllm/bin/python)
+
+========= Error: process didn't terminate successfully
+========= Target application returned an error
+========= ERROR SUMMARY: 5 errors

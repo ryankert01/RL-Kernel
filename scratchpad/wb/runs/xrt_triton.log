@@ -1,0 +1,16 @@
+[22:11:05] loading strict weights from /home/ubuntu/models/Muse-Glimmer-30B (layout for backend triton)
+[22:11:05] loading 541 text tensors from model-00001-of-00002.safetensors
+[22:11:15] loading 86 text tensors from model-00002-of-00002.safetensors
+[22:11:19] weights ready in 14.3s: 51.9 GiB on cuda:0; checkpoint a4e59da52a7bc87ae7251dd5545c0dd437c44b68
+INFO 10-15 22:11:19 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[22:11:19] ops: golden=[] sibling=['attention_paged', 'attention_varlen', 'centered_rmsnorm', 'fused_post_norm_residual_pre_norm', 'gemm', 'lm_head_softcap_logprob', 'normalized_embedding', 'pad_lm_head_weight', 'qknorm_scaled_rope', 'rope_table', 'swiglu_ffn', 'weighted_rmsnorm']
+[22:11:30] [score] gsm8k_test_0: 55 tokens, sum logp -98.9550, train 1.34s; prefill: 55/55 (0.4s), decode: 55/55 (7.5s), chunked:prompt_boundary: 55/55 (0.3s), chunked:block64: 55/55 (0.4s), chunked:ragged: 55/55 (0.6s)
+[22:11:44] [score] gsm8k_test_1: 47 tokens, sum logp -87.4959, train 0.13s; prefill: 47/47 (3.1s), decode: 47/47 (8.9s), chunked:prompt_boundary: 47/47 (0.6s), chunked:block64: 47/47 (0.9s), chunked:ragged: 47/47 (0.7s)
+[22:12:04] [score] gsm8k_test_2: 129 tokens, sum logp -128.4830, train 0.23s; prefill: 129/129 (0.2s), decode: 129/129 (17.5s), chunked:prompt_boundary: 129/129 (0.3s), chunked:block64: 129/129 (0.5s), chunked:ragged: 129/129 (0.7s)
+[22:12:14] [score] gsm8k_test_3: 39 tokens, sum logp -88.7494, train 0.14s; prefill: 39/39 (0.2s), decode: 39/39 (8.2s), chunked:prompt_boundary: 39/39 (0.3s), chunked:block64: 39/39 (0.6s), chunked:ragged: 39/39 (0.4s)
+[22:12:30] [score] gsm8k_test_4: 92 tokens, sum logp -123.1554, train 0.20s; prefill: 92/92 (0.2s), decode: 92/92 (14.6s), chunked:prompt_boundary: 92/92 (0.3s), chunked:block64: 92/92 (0.7s), chunked:ragged: 92/92 (0.7s)
+[22:12:55] [score] gsm8k_test_5: 149 tokens, sum logp -175.0335, train 0.20s; prefill: 149/149 (0.4s), decode: 149/149 (22.3s), chunked:prompt_boundary: 149/149 (0.6s), chunked:block64: 149/149 (0.8s), chunked:ragged: 149/149 (0.8s)
+[22:13:09] [score] gsm8k_test_6: 88 tokens, sum logp -102.1781, train 0.27s; prefill: 88/88 (0.2s), decode: 88/88 (11.9s), chunked:prompt_boundary: 88/88 (0.3s), chunked:block64: 88/88 (0.5s), chunked:ragged: 88/88 (0.7s)
+[22:13:34] [score] gsm8k_test_7: 156 tokens, sum logp -170.1770, train 0.19s; prefill: 156/156 (0.2s), decode: 156/156 (22.9s), chunked:prompt_boundary: 156/156 (0.4s), chunked:block64: 156/156 (0.7s), chunked:ragged: 156/156 (0.7s)
+[22:14:19] [score] gsm8k_long_window: 178 tokens, sum logp -133.6431, train 1.13s; prefill: 178/178 (1.2s), decode: 178/178 (25.4s), chunked:prompt_boundary: 178/178 (1.3s), chunked:block64: 178/178 (5.5s), chunked:ragged: 178/178 (6.5s), chunked:window_boundary_2047: 178/178 (1.3s), chunked:window_boundary_2048: 178/178 (1.3s), chunked:window_boundary_2049: 178/178 (1.3s)
+[22:14:19] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/runs/xrt_reference_triton.json: 933 tokens; 48 (mode, sequence) checks of ['prefill', 'decode', 'chunked:prompt_boundary', 'chunked:block64', 'chunked:ragged', 'chunked:window_boundary_2047', 'chunked:window_boundary_2048', 'chunked:window_boundary_2049']; byte-equal to train: True

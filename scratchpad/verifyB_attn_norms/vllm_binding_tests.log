@@ -1,0 +1,7 @@
+[gpu-lease] using GPUs [7]
+...........................ss...........................s.....           [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_vllm_strict_binding.py:488: set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease
+SKIPPED [1] tests/models/muse_glimmer/test_vllm_strict_binding.py:564: set RL_KERNEL_MUSEGLIMMER_E2E=1 with the checkpoint and a GPU lease
+SKIPPED [1] tests/models/muse_glimmer/test_museglimmer_fingerprint.py:262: set MUSEGLIMMER_CHECKPOINT
+59 passed, 3 skipped in 26.32s

@@ -1,0 +1,25 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 16:41:57] start pid=254571 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 16:41:57] client connected
+[trainer_server rank0 16:41:58] trainer MockTrainer built in 1.3 s
+[trainer_server rank0 16:41:58] export_lora id=1 ok=True compute=1.5 ms
+[trainer_server rank0 16:41:58] provenance id=2 ok=True compute=0.1 ms
+[trainer_server rank0 16:42:00] token_logprobs id=3 ok=True compute=192.8 ms
+[trainer_server rank0 16:42:02] step id=4 ok=True compute=301.8 ms
+[trainer_server rank0 16:42:02] export_lora id=5 ok=True compute=1.7 ms
+[trainer_server rank0 16:42:02] profile_arm id=6 ok=True compute=0.0 ms
+USDT:2026-10-15 16:42:33 254571:254571 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:42:33 254571:254571 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ERROR:2026-10-15 16:42:33 254571:254571 DeviceProperties.cpp:50] gpuGetDeviceCount failed with code 100
+[trainer_server rank0 16:42:34] token_logprobs id=7 ok=True compute=745.9 ms
+USDT:2026-10-15 16:42:35 254571:254571 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:42:36 254571:254571 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 16:42:39] step id=8 ok=True compute=4643.2 ms
+[trainer_server rank0 16:42:39] export_lora id=9 ok=True compute=2.7 ms
+[trainer_server rank0 16:42:41] token_logprobs id=10 ok=True compute=186.3 ms
+[trainer_server rank0 16:42:42] step id=11 ok=True compute=287.1 ms
+[trainer_server rank0 16:42:42] export_lora id=12 ok=True compute=2.3 ms
+[trainer_server rank0 16:42:42] provenance id=13 ok=True compute=0.1 ms
+[trainer_server rank0 16:42:42] close id=14 ok=True compute=0.0 ms
+[trainer_server rank0 16:42:42] bye

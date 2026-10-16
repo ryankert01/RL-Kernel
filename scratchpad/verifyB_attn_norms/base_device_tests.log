@@ -1,0 +1,212 @@
+[gpu-lease] using GPUs [7]
+FFFFFFFFFFFF..                                                           [100%]
+=================================== FAILURES ===================================
+____________ test_device_checks_fail_closed[max_seqlen_short_auto] _____________
+
+case = 'max_seqlen_short_auto'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: max_seqlen_short_auto: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+____________ test_device_checks_fail_closed[max_seqlen_short_token] ____________
+
+case = 'max_seqlen_short_token'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: max_seqlen_short_token: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+____________ test_device_checks_fail_closed[max_seqlen_short_head] _____________
+
+case = 'max_seqlen_short_head'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: max_seqlen_short_head: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+____________ test_device_checks_fail_closed[max_seqlen_short_paged] ____________
+
+case = 'max_seqlen_short_paged'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: max_seqlen_short_paged: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+______________ test_device_checks_fail_closed[q_end_beyond_rows] _______________
+
+case = 'q_end_beyond_rows'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: q_end_beyond_rows: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+______________ test_device_checks_fail_closed[k_end_beyond_rows] _______________
+
+case = 'k_end_beyond_rows'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: k_end_beyond_rows: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+______________ test_device_checks_fail_closed[q_pos_beyond_keys] _______________
+
+case = 'q_pos_beyond_keys'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: q_pos_beyond_keys: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+________________ test_device_checks_fail_closed[q_pos_negative] ________________
+
+case = 'q_pos_negative'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: q_pos_negative: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+_____________ test_device_checks_fail_closed[page_minus1_visible] ______________
+
+case = 'page_minus1_visible'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: page_minus1_visible: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+______________ test_device_checks_fail_closed[page_out_of_range] _______________
+
+case = 'page_out_of_range'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: page_out_of_range: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+____________ test_device_checks_fail_closed[seq_lens_beyond_table] _____________
+
+case = 'seq_lens_beyond_table'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: seq_lens_beyond_table: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+_____________ test_device_checks_fail_closed[seq_lens_below_len_q] _____________
+
+case = 'seq_lens_below_len_q'
+
+    @pytest.mark.parametrize("case", _BAD_CASES)
+    def test_device_checks_fail_closed(case):
+        """No-sync path: the kernel detects the bad metadata and the queued assert fires."""
+        window = W if case in ("page_minus1_visible", "q_pos_negative") else None
+        code, out = _run_child(case, window)
+>       assert code != 0 and "CHILD-OK" not in out, f"{case}: no error raised\n{out[-2000:]}"
+E       AssertionError: seq_lens_below_len_q: no error raised
+E         CHILD-OK
+E         
+E       assert (0 != 0)
+
+/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py:918: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_control[ok_varlen]
+PASSED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_control[ok_paged]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_auto]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_token]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_head]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[max_seqlen_short_paged]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_end_beyond_rows]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[k_end_beyond_rows]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_pos_beyond_keys]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[q_pos_negative]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[page_minus1_visible]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[page_out_of_range]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[seq_lens_beyond_table]
+FAILED ../../../../../../tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_attn_norms/base_tree/tests/models/muse_glimmer/test_gated_attention_fwd.py::test_device_checks_fail_closed[seq_lens_below_len_q]
+12 failed, 2 passed, 87 deselected in 46.17s

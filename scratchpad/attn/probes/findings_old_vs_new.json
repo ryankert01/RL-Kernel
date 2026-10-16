@@ -1,0 +1,20 @@
+{
+ "f4_old_do_vs_forward_y_mismatch": 59,
+ "f4_old_dgate_unit_digest": 1926275.25,
+ "f4_new_do_vs_forward_y_mismatch": 0,
+ "f4_new_dgate_unit_digest": 1926275.25,
+ "f4_dgate(sg*(1-sg))_old_vs_new_mismatch": 0,
+ "f4_values": 16777216,
+ "f5_old_tp2_shard_call": "ValueError: q must be (Tq, 32, 128), got (128, 16, 128)",
+ "f5_new_tp2_shard_call": "no error",
+ "f7_old_fp32_dy": "no error",
+ "f7_new_fp32_dy": "ValueError: dy must be bf16, got torch.float32 (no implicit cast)",
+ "f8_old_cu_k_last_100_vs_Tk_128": "no error",
+ "f8_old_cpu_cu_seqlens_q": "ValueError: Pointer argument cannot be accessed from Triton (cpu tensor?)",
+ "f8_new_cu_k_last_100_vs_Tk_128": "ValueError: cu_seqlens_k[-1]=100 must equal the number of K/V rows 128",
+ "f8_new_cpu_cu_seqlens_q": "ValueError: cu_seqlens_q must be on q's device cuda:0, got cpu",
+ "f9_old_backward_under_sync_debug_error": "RuntimeError: called a synchronizing CUDA operation",
+ "f9_new_backward_under_sync_debug_error": "no error",
+ "t1_old_backward_T1": "CompilationError: at 102:35:",
+ "t1_new_backward_T1": "no error"
+}

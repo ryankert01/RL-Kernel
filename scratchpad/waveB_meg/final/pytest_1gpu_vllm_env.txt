@@ -1,0 +1,7 @@
+[gpu-lease] using GPUs [2]
+.........................ss....................s..                       [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 2 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 4 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:1007: set RL_KERNEL_MUSEGLIMMER_E2E=1
+47 passed, 3 skipped in 45.31s

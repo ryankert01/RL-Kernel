@@ -1,0 +1,49 @@
+[gpu-lease] using GPUs [2]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 29776626688
+[load] {'init_seconds': 55.73618742200051, 'bridge_load_seconds': 40.98923325538635, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 58.05501842498779, 'allocated_gib': 56.008766174316406, 'peak_reserved_gib': 58.62890625}]}
+[xrt] strict scored 933 tokens in 5.58s
+[repeat] mismatches 0/933
+[lora_noop] mismatches 0/933
+[native] max|d| 0.314 mean|d| 0.01602
+[grad_repeat] pass 0: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 20.40165155899922}
+[grad_repeat] pass 1: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 16.412292693999916}
+[grad_repeat] mismatching elements 0/104792064
+[step] {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 16.34721622199868, 'grad_norm': 7.020294189453125, 'lr': 1e-05, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.27356170900020516, 'num_lora_params_local': 104792064, 'loss': 0.3581387996673584} sha 04c604ff2f24 -> 64d300651150
+[bench] {'tokens': 512, 'strict_forward_ms': 748.1718210001418, 'strict_forward_peak_gib': 57.40419816970825, 'strict_train_logprobs_ms': 750.347025001247, 'strict_recompute_fwd_bwd_ms': 3906.3076229995204, 'strict_optimizer_ms': 134.87704999897687, 'strict_step_total_ms': 4793.076957001176, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 58.66468954086304, 'native_forward_ms': 167.32729700015625, 'native_forward_peak_gib': 58.14491939544678, 'native_fwd_bwd_forward_ms': 166.5275510003994, 'native_fwd_bwd_backward_ms': 2463.9671459990495, 'native_fwd_bwd_peak_gib': 59.06576156616211}
+[bench] {'tokens': 1024, 'strict_forward_ms': 1357.5557059994026, 'strict_forward_peak_gib': 57.655601024627686, 'strict_train_logprobs_ms': 1370.5459379998501, 'strict_recompute_fwd_bwd_ms': 6107.1380939993105, 'strict_optimizer_ms': 154.65121700071904, 'strict_step_total_ms': 7634.635869999329, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 59.08152961730957, 'native_forward_ms': 301.626075999593, 'native_forward_peak_gib': 59.14181613922119, 'native_fwd_bwd_forward_ms': 299.0185099988594, 'native_fwd_bwd_backward_ms': 626.2464920000639, 'native_fwd_bwd_peak_gib': 60.98415184020996}
+[bench] {'tokens': 2048, 'strict_forward_ms': 2544.89337799896, 'strict_forward_peak_gib': 58.0963454246521, 'strict_train_logprobs_ms': 2542.438390000825, 'strict_recompute_fwd_bwd_ms': 11398.10500600106, 'strict_optimizer_ms': 97.28919299959671, 'strict_step_total_ms': 14039.807529001337, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 60.9090633392334, 'native_forward_ms': 669.5170949988096, 'native_forward_peak_gib': 61.07554340362549, 'native_fwd_bwd_forward_ms': 665.7049690002168, 'native_fwd_bwd_backward_ms': 1429.578320001383, 'native_fwd_bwd_peak_gib': 64.75890922546387}
+[rank0]:[W1015 16:45:59.903294185 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 3311403008 bytes (free: 138280960, total: 85094825984).
+[rank0]:[W1015 16:46:01.785887903 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 3311403008 bytes (free: 821952512, total: 85094825984).
+[rank0]:[W1015 16:46:01.535360553 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 3311403008 bytes (free: 2478702592, total: 85094825984).
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/run_megatron_strict.py", line 448, in <module>
+[rank0]:     sys.exit(main())
+[rank0]:              ^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/run_megatron_strict.py", line 414, in main
+[rank0]:     trainer.native_logprobs([seq], [1])
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 587, in native_logprobs
+[rank0]:     out["init_seconds"] = self.init_seconds
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 488, in _call
+[rank0]:     lr: float = 1e-5,
+[rank0]:            ^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 318, in cmd_native
+[rank0]:     t0 = time.perf_counter()
+[rank0]:              ^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_strict.py", line 849, in native_token_logprobs
+[rank0]:     mask = torch.triu(torch.ones(t, t, dtype=torch.bool, device=device), diagonal=1)[None, None]
+[rank0]:          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 3.08 GiB. GPU 0 has a total capacity of 79.25 GiB of which 2.31 GiB is free. Including non-PyTorch memory, this process has 76.93 GiB memory in use. Of the allocated memory 58.93 GiB is allocated by PyTorch, and 9.42 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

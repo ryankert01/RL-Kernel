@@ -1,0 +1,178 @@
+{
+ "status": "complete",
+ "branch": "worktree-wf_7b064961-36f-7",
+ "head": "10a9a39edbe60355c688dc9b2dd98d3d6117eb69",
+ "summary": "Row museglimmer_ablation is complete. Every factor below was measured on real Muse-Glimmer-30B weights (A100 sm80, GPUs 6 and 7). All 9 sequences of xrt_tokens.json were scored, 933 completion tokens. About 17 GPU-minutes in total.\n\nNative HF (transformers 5.17 bf16): every factor that changes the shape or schedule of any bf16 GEMM or attention kernel flips the fp32 logp bits of 918 to 927 of the 933 tokens (98 to 99%). These factors are: batch composition (right or left padding), KV-cache decode, chunked prefill at 64/256/1024, dropping the unused last token (M = L-1), SDPA instead of eager, and the cuBLAS bf16 reduced-precision flag. A rollout-like combination of factors 1+2 (+4) gives the same result. The size is also the same for all of them: mean |dlogp| 0.0173 to 0.0204, max 0.45 to 1.12, mean k3 1.2e-3 to 1.8e-3, and 4 to 8 argmax flips.\n\nThere is no small native factor. The per-layer taps show where it starts: the embedding is exact, then 56 to 67% of the bf16 elements differ already at the output of layer 0. This grows to 93 to 96% at the final norm, and mean |delta| grows about 100x with depth. Even M = 190 vs 191, which changes only a handful of layer-0 elements, reaches 68% by layer 12.\n\nThe logits/soft-cap dtype is a second, smaller source: 922/933 tokens differ, but mean |d| is 0.011 and k3 is about 3e-4. It is not amplified by depth.\n\nNull results (0/933 tokens differ):\n- TF32 on. A probe shows TF32 is really active (1,048,489 of 1,048,576 elements of a 1024^3 fp32 GEMM change). But the only fp32 GEMM in the bf16 model is the RoPE inv_freq@positions with K=1, and it is bit-identical with TF32 on and off, and also equal to the 5.19 elementwise build.\n- RoPE elementwise build (with TF32 off, and with TF32 on).\n- inv_freq computed on CUDA instead of CPU.\n- Immediate repeat, repeat after all factors, a new process on the same GPU, and the second GPU (6 vs 7).\n\nStrict reference (triton backend): 0/933 differing tokens under all 11 settings of factors 1 to 3. These include packed, reversed, right/left padded, paged batch prefill, prefill, decode, continuous-batching decode of all 9, and chunked 64/256/1024. It also holds on the 2439-token window-crossing sequence, in repeat, and on the second GPU.\n\nFor context, strict vs the HF baseline gives mean |d| 0.0192, max 0.68, k3 1.1e-3. That is the same size as HF's own batching noise.\n\nDrift concentrates on uncertain tokens. For gold-token p > 0.9 (535 tokens), mean |d| is about 0.001. For p <= 0.1 (123 tokens; the GSM8K gold answers contain <<calc>> annotations) it is about 0.08, and every maximum falls there.\n\nTiming (9 sequences, 4216 tokens):\n\n| | HF eager | strict |\n|---|---|---|\n| alone forward (repeat, warm) | 1.81 s | 2.46 s |\n| decode alone | 79 s | 108 s |\n| batched decode | 24.5 s (rollout-like) | 27.5 s (continuous batching) |\n\nMemory peak was 69.5 GiB for the HF padded batch and 57 GiB for the strict 21951-row padded pass.\n\nNot done:\n- flash_attention_2 was SKIPPED: flash_attn is not installed in ~/envs/vllm.\n- The harness blocked writing REPORT_ablation.md (subagents may not write report .md files). Its full content is in requests_to_integrator[0].",
+ "results_files": [
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/reports/muse_glimmer_poc/data/ablation.json",
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/rl_engine/models/muse_glimmer/ablation/ablation_strict.py",
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/rl_engine/models/muse_glimmer/ablation/run_ablation.py",
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/rl_engine/models/muse_glimmer/ablation/__init__.py",
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7/tests/models/muse_glimmer/test_ablation.py",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/ablation/parts/ (raw per-process parts: part_hf.json, part_strict.json, part_strict_gpu7.json, part_hf_layers.json, part_hf_gpu6.json, part_hf_rollout_like.json; logs *.log one level up; commands.txt)"
+ ],
+ "tests": [
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 7 --timeout 1800 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_ablation.py -q",
+   "outcome": "13 passed in 82.05s. Covers metrics, layouts and the token file; HF drivers (alone / L-1 / chunked / decode / padded right+left / batched left-padded decode) agree in fp32 on a tiny random model with window 40; layer tap; RoPE elementwise == matmul on CPU; factor contexts restore global state; and a CUDA tiny-config test showing the strict packed / reversed / right_pad / left_pad / paged batch prefill / continuous-batching decode / decode / chunked runners are torch.equal to reference logprobs(mode=train). Earlier runs: 12 passed (pool 6-7) and 13 passed (pool 7) before the batched-decode test was added."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --out $S/parts/part_hf.json",
+   "outcome": "OK on GPU 7, commit 84f30f8. Load 16.7 s (51.9 GiB). Baseline plus 16 settings plus repeat_after_all_factors, 2.5 min wall; 0 errors."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --out $S/parts/part_strict.json",
+   "outcome": "OK on GPU 6, commit 84f30f8, triton backend (all 12 sibling ops). All 12 settings show 0/933 differing tokens. 3.2 min wall."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-layers --out $S/parts/part_hf_layers.json",
+   "outcome": "OK on GPU 7, commit 4105697 (worktree dirty only in merge code). TF32 probe plus per-layer residual diff for gsm8k_test_0 and gsm8k_long_window under 9 settings. 5.5 min."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --settings repeat_immediate --out $S/parts/part_strict_gpu7.json",
+   "outcome": "OK on GPU 7. Strict baseline is bitwise equal to the GPU-6 baseline (0/933)."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 6 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_gpu6.json",
+   "outcome": "OK on GPU 6 after a 27 min queue. HF baseline is bitwise equal to the GPU-7 baseline (0/933); its own repeat is also 0/933."
+  },
+  {
+   "command": "~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --settings rollout_like_batched_decode rollout_like_batched_decode_sdpa --out $S/parts/part_hf_rollout_like.json",
+   "outcome": "OK on GPU 7, commit 106ba05. The new-process baseline is bitwise equal to the main baseline. The two combination settings give 922/933 and 923/933 differing tokens."
+  },
+  {
+   "command": "PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py merge --parts $S/parts/part_hf.json $S/parts/part_strict.json $S/parts/part_strict_gpu7.json $S/parts/part_hf_layers.json $S/parts/part_hf_gpu6.json $S/parts/part_hf_rollout_like.json --commands-file $S/commands.txt --out reports/muse_glimmer_poc/data/ablation.json",
+   "outcome": "Wrote 324 records and 36 settings, status complete (2.47 MB)."
+  }
+ ],
+ "key_numbers": [
+  {
+   "name": "HF padded_batch9_right: tokens differ / max / mean |dlogp| / mean k3 / argmax flips",
+   "value": "927/933, 0.602, 0.0190, 1.43e-3, 6",
+   "source": "ablation.json settings[setting=padded_batch9_right]"
+  },
+  {
+   "name": "HF padded_batch9_left",
+   "value": "926/933, 0.633, 0.0204, 1.78e-3, 4",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF kv_cache_decode",
+   "value": "923/933, 0.447, 0.0175, 1.16e-3, 7; 79.1 s",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF prefill_L_minus_1 (M=L-1 only)",
+   "value": "918/933, 1.119, 0.0186, 1.57e-3, 5",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF chunked_prefill 64 / 256 / 1024 (tokens differ, mean |d|)",
+   "value": "926 / 924 / 922 of 933; 0.0187 / 0.0179 / 0.0188",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF sdpa vs eager",
+   "value": "924/933, 0.711, 0.0173, 1.40e-3, 7",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF bf16_reduced_reduction_off",
+   "value": "927/933, 0.497, 0.0193, 1.42e-3, 6",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF rollout-like combo (left-padded batched decode; + sdpa)",
+   "value": "922/933 mean 0.0188 max 0.602; 923/933 mean 0.0177 max 0.633",
+   "source": "ablation.json settings (factor_id 11)"
+  },
+  {
+   "name": "HF logits dtype: softcap_fp32 / logits_fp32",
+   "value": "922/933 mean 0.0112 max 0.148 k3 2.7e-4; 922/933 mean 0.0118 max 0.163 k3 3.1e-4",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "HF TF32 on / rope_elementwise / rope_elementwise+tf32 / inv_freq on CUDA",
+   "value": "0/933 each",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "TF32 probe",
+   "value": "square fp32 GEMM 1024^3: 1,048,489/1,048,576 elements change with TF32; RoPE K=1 GEMM (1x64x1x2439): 0 elements change, and matmul == elementwise (0 differ) although 63/64 inv_freq entries are not TF32-representable",
+   "source": "ablation.json tf32_probe"
+  },
+  {
+   "name": "HF null controls (repeat, after-all, new process, second GPU 6 vs 7)",
+   "value": "0/933 each",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "Strict reference, all factor 1-3 settings + repeat + second GPU",
+   "value": "0/933 differing tokens in all 13 strict comparisons",
+   "source": "ablation.json settings[engine=strict]"
+  },
+  {
+   "name": "strict vs HF baseline (context)",
+   "value": "933/933, max 0.679, mean 0.0192, k3 1.11e-3",
+   "source": "ablation.json settings[engine=cross]"
+  },
+  {
+   "name": "mean |dlogp| by gold-token prob (padded_right)",
+   "value": "p>0.9 (535 tok) 0.0011; 0.5-0.9 (148) 0.0133; 0.1-0.5 (127) 0.0387; p<=0.1 (123) 0.0836",
+   "source": "ablation.json analysis.abs_dlogp_by_baseline_prob"
+  },
+  {
+   "name": "per-layer drift, gsm8k_test_0 padded_right: frac bf16 elems differ / mean |delta|",
+   "value": "embedding 0; layer_0 0.65 / 2.4e-3; layer_12 0.88 / 2.1e-2; layer_25 0.92 / 5.8e-2; layer_51 0.95 / 0.27 (rms 8.7); final_norm 0.95 / 0.10",
+   "source": "ablation.json layer_records"
+  },
+  {
+   "name": "per-layer drift, prefill_L_minus_1 t0",
+   "value": "layer_0 ~0.00 (mean 1.1e-6) -> layer_12 0.68 -> final 0.80",
+   "source": "ablation.json layer_records"
+  },
+  {
+   "name": "baseline wall (9 seqs, 4216 tokens)",
+   "value": "HF eager 2.68 s first / 1.81 s repeat; strict triton 3.41 s first / 2.46 s repeat",
+   "source": "ablation.json baselines / settings"
+  },
+  {
+   "name": "decode wall",
+   "value": "HF per-seq decode 79.1 s; strict per-seq decode 107.8 s; strict continuous-batching 27.5 s; HF rollout-like batched decode 24.5 s",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "peak memory",
+   "value": "HF padded batch 69.5 GiB; HF baseline 53.9 GiB; strict right_pad (21951 rows) 57.0 GiB; strict baseline 52.5 GiB",
+   "source": "ablation.json settings"
+  },
+  {
+   "name": "GPU time used",
+   "value": "about 17 GPU-minutes (budget 2 GPU-hours)",
+   "source": "run logs"
+  }
+ ],
+ "rfc_feedback": [
+  "Native drift has no ranking among shape/schedule factors. Batch composition, padding side, decode vs prefill, chunk size, dropping one unused token, SDPA vs eager, and the cuBLAS split-K reduction flag each flip about 99% of the logp bits. They also give the same distribution: mean |dlogp| about 0.018, max 0.45 to 1.1, k3 about 1.4e-3, 0.4 to 0.9% argmax flips. A combination is no worse. The RFC should treat them as one class, 'any change of kernel schedule', whose only fix is end-to-end batch- and sequence-split-invariant kernels. It should not try to prioritise individual knobs.",
+  "TF32 is NOT a drift source for the bf16 HF Muse-Glimmer model on A100. The only fp32 GEMM is the K=1 RoPE inv_freq@positions, which cuBLAS computes identically with TF32 on or off, and which equals the elementwise (5.19) build bit for bit. The RFC should keep 'TF32 off' as a rule for fp32 GEMMs (fp32 logits heads, golden paths) but drop it from the list of observed native drift sources. The same goes for 'RoPE table construction' (5.17 vs 5.19 is bitwise identical here) and inv_freq CPU vs CUDA.",
+  "Logits/soft-cap dtype is a separate, smaller source that does not grow with depth: mean |d| 0.011 and k3 about 3e-4 versus 0.018 and 1.4e-3 for schedule factors. HF's bf16 soft-capped logits have an ulp of 0.0625 for |z| in [8, 16). This supports O7's fp32 logits. The RFC should name the bf16 soft cap explicitly.",
+  "Bitwise 'tokens with different bits' saturates at about 100% for every native perturbation, so drift metrics in the RFC must also report magnitudes (mean |dlogp|, k3) and a breakdown by token probability. Drift is about 0.001 for p > 0.9 and about 0.08 for p <= 0.1. GSM8K gold answers put 13% of tokens at p <= 0.1 because of <<calc>> annotations.",
+  "Drift seeds in decoder layer 0. The embedding is exact, then 56 to 67% of the layer-0 bf16 outputs change, rising to 93 to 96% at the final norm with about 100x growth of mean |delta|. A seed of only a few changed elements (M = 190 vs 191) still reaches 68% by layer 12. The RFC's 'first drift localizer' gate should therefore expect layer 0 / first GEMM for any native mismatch.",
+  "The strict path's distance from HF-bf16 (mean 0.0192, max 0.68) is the same size as HF's own batching noise. HF-bf16 is therefore a tolerance anchor only, and the strict path does not cost accuracy relative to the native noise floor.",
+  "Experiments list: add 'drop the unused last token (prefill L-1 vs train L)' and 'cuBLAS allow_bf16_reduced_precision_reduction'. Both are as large as batching and are present in every real train/rollout pair."
+ ],
+ "requests_to_integrator": [
+  "Please write rl_engine/models/muse_glimmer/ablation/REPORT_ablation.md with the content below; the harness blocked this subagent from writing report .md files.\n\n# REPORT \u2014 museglimmer_ablation: where does train/rollout drift come from in the native stacks?\n\nSTATUS: complete. Measured at commit 84f30f8 (main HF and strict parts; later parts at 4105697 / 106ba05 / 97c6855 add only reporting, layer taps and the rollout-like driver). A100-SXM4-80GB sm80, torch 2.13.0+cu130, Triton 3.7.1, transformers 5.17.0, vLLM 0.31.0 env, GPUs 6 and 7. Data: reports/muse_glimmer_poc/data/ablation.json (schema muse_glimmer_ablation_v1, 324 per-sequence records with per-token arrays dlogp / k3 / bits_differ / argmax_flip / logp_hex, 36 setting summaries, layer_records, tf32_probe, analysis).\n\n## Summary\n1. Native HF bf16: every factor that changes the shape or schedule of a bf16 GEMM or attention kernel flips the fp32 logp bits of 98-99% of the 933 completion tokens. The size is the same for all of them: mean |dlogp| 0.017-0.020, max 0.45-1.12, mean k3 1.2-1.8e-3, 4-8 argmax flips. The factors are padded batch (right/left), KV-cache decode, chunked prefill 64/256/1024, rollout-style prefill of L-1 tokens, SDPA vs eager, and the cuBLAS bf16 reduced-precision reduction flag. A rollout-like combination (left-padded batched decode, with or without SDPA) is no larger.\n2. Where it starts: the embedding is exact. 56-67% of layer-0 output elements already differ, rising to 93-96% at the final norm, and mean |delta| grows about 100x with depth. A seed of only a few elements (M = 190 vs 191) reaches 68% by layer 12.\n3. Logits/soft-cap dtype is smaller and not amplified by depth: 922/933 tokens differ, mean 0.011-0.012, max 0.15-0.16, k3 about 3e-4.\n4. Null results (0/933): TF32 on; RoPE 5.19 elementwise; elementwise RoPE with TF32 on; inv_freq computed on CUDA; immediate repeat; repeat after all factors; new process on the same GPU; second GPU (6 vs 7). The TF32 probe shows TF32 is really active on a square fp32 GEMM (1,048,489/1,048,576 elements change), but the model's only fp32 GEMM (RoPE inv_freq@positions, K=1) is unchanged and equals the elementwise build.\n5. The strict reference (triton) stays at 0/933 under all 11 settings of factors 1-3, under repeat and on the second GPU. The settings include continuous-batching decode of all 9 and the 2439-token window-crossing sequence.\n6. Strict vs HF baseline (context): 933/933 differ, mean 0.0192, max 0.68. That is the size of HF's own batching noise.\n7. Drift lives on uncertain tokens. Mean |d| is about 0.001 for gold-token p > 0.9 (535 tokens) and about 0.08 for p <= 0.1 (123 tokens; GSM8K <<calc>> annotations).\n\n## What was measured\nWorkload: xrt_tokens.json, 8 GSM8K chat prompts with gold answers plus one 2439-token sequence (completion 2261..2438, past the 2048 window), 933 scored tokens. Model: the built-in transformers 5.17 MuseGlimmerTextModel (trust_remote_code=False). Text weights only (51.9 GiB bf16) are built on the meta device and filled from the shards. inv_freq is recomputed by HF compute_default_rope_parameters on CPU in fp32 and kept fp32.\n\nBaseline hf_baseline: eager, TF32 off, each sequence alone over all L tokens (trainer style), one-shot, 5.17 matmul RoPE, HF head (bf16 GEMM, then *m, /T, tanh, *T in bf16), fp32 log_softmax.\n\nMetrics per token, with d = logp_var - logp_base: bits_differ, |d|, k3 = exp(d)-d-1, argmax_flip. Tokens are gold answers, so mean k3 is a mismatch size, not an unbiased KL.\n\nFactors (factor_id):\n1. Batch: padded_batch9_right / _left.\n2. kv_cache_decode.\n3. prefill_L_minus_1, chunked_prefill_64 / 256 / 1024.\n4. sdpa (flash_attention_2 SKIPPED: flash_attn not installed).\n5. tf32_on.\n6. softcap_fp32, logits_fp32.\n7. rope_elementwise, rope_elementwise_tf32_on, rope_inv_freq_cuda.\n8. Second GPU.\n9. Repeat (immediate, after all factors, new process).\n10. bf16_reduced_reduction_off.\n11. Rollout-like combination of 1+2 (+4).\n\nStrict (backend triton, all 12 sibling ops), against its own baseline mode=train per sequence: packed_batch9, packed_batch9_reversed, right_pad_batch9 (21951 rows), left_pad_batch9, paged_prefill_batch9, prefill_alone, decode_alone, batched_decode9 (continuous batching), chunked_prefill_64 / 256 / 1024, repeat, second GPU.\n\n## Results (933 tokens)\n\n| engine | setting | tokens differ | max abs dlogp | mean abs dlogp | mean k3 | argmax flips | wall ms |\n|---|---|---|---|---|---|---|---|\n| hf | repeat_immediate / repeat_after_all / new_process_same_gpu_7 / second_gpu_6_vs_7 | 0 | 0 | 0 | 0 | 0 | 1812 / 1839 / 2664 / 3821 |\n| hf | padded_batch9_right | 927 | 0.602 | 0.0190 | 1.43e-3 | 6 | 9011 |\n| hf | padded_batch9_left | 926 | 0.633 | 0.0204 | 1.78e-3 | 4 | 8532 |\n| hf | kv_cache_decode | 923 | 0.447 | 0.0175 | 1.16e-3 | 7 | 79105 |\n| hf | prefill_L_minus_1 | 918 | 1.119 | 0.0186 | 1.57e-3 | 5 | 1799 |\n| hf | chunked_prefill_64 | 926 | 0.602 | 0.0187 | 1.36e-3 | 8 | 7446 |\n| hf | chunked_prefill_256 | 924 | 0.602 | 0.0179 | 1.45e-3 | 7 | 2220 |\n| hf | chunked_prefill_1024 | 922 | 1.119 | 0.0188 | 1.60e-3 | 4 | 1809 |\n| hf | sdpa | 924 | 0.711 | 0.0173 | 1.40e-3 | 7 | 1512 |\n| hf | tf32_on | 0 | 0 | 0 | 0 | 0 | 1831 |\n| hf | softcap_fp32 | 922 | 0.148 | 0.0112 | 2.74e-4 | 4 | 1837 |\n| hf | logits_fp32 | 922 | 0.163 | 0.0118 | 3.06e-4 | 8 | 2111 |\n| hf | rope_elementwise / _tf32_on / rope_inv_freq_cuda | 0 | 0 | 0 | 0 | 0 | 1832-1836 |\n| hf | bf16_reduced_reduction_off | 927 | 0.497 | 0.0193 | 1.42e-3 | 6 | 1939 |\n| hf | rollout_like_batched_decode | 922 | 0.602 | 0.0188 | 1.40e-3 | 7 | 24537 |\n| hf | rollout_like_batched_decode_sdpa | 923 | 0.633 | 0.0177 | 1.29e-3 | 5 | 22142 |\n| strict | every factor 1-3 setting, repeat, second_gpu_7_vs_6 | 0 | 0 | 0 | 0 | - | packed 1845, right_pad 9406, paged batch 2098, decode 107818, batched decode 27531, chunk64 8461 |\n| cross | strict_vs_hf_baseline | 933 | 0.679 | 0.0192 | 1.11e-3 | - | - |\n\nPer-sequence counts are in records[] (`run_ablation.py merge` prints the setting x sequence matrices). Every HF schedule factor gives 38-55 of 39-55 tokens differing on short sequences and 172-177 of 178 on the long sequence. Every strict row is 0 for all 9 sequences.\n\nPairwise (analysis.hf_pairwise_identical_tokens):\n- Baseline, tf32_on, the RoPE variants and all repeats are mutually identical (933).\n- prefill_L_minus_1 and chunked_prefill_1024 share 757 tokens: identical on the 8 short sequences, which fit in one chunk.\n- padded right, padded left and bf16_reduced_reduction_off share about 184 tokens: the long row is identical in all three, which points to the same non-split-K kernel choice at large M.\n- Any other pair shares fewer than 25 tokens. The tokens that stay identical sit at saturation (logp about -1e-6 or the soft-cap floor at about -30).\n\n## Per-layer drift (layer_records; frac bf16 elements differ / mean |delta|)\n- gsm8k_test_0, padded right: emb 0; L0 0.65 / 2.4e-3; L12 0.88 / 2.1e-2; L25 0.92 / 5.8e-2; L51 0.95 / 0.27 (rms 8.7); final norm 0.95 / 0.10.\n- Decode, SDPA and rr_off look the same on test_0.\n- prefill_L_minus_1 and chunked_256 on test_0: L0 about 0 (mean 1.1e-6), then 0.68 at L12 and 0.80 at the final norm.\n- Long sequence, KV decode: L0 0.04 (rows from 17), L2 0.67, final 0.93.\n- tf32_on and the repeat show 0 at every layer.\n\n## Conclusions\nIn the native bf16 stack, train/rollout drift comes from kernel schedule (GEMM M-dependence and split-K, attention implementation, cache/chunk shapes). It enters in layer 0 and is amplified by depth to one common noise floor: about 1.4e-3 k3 per token, and about 0.5% greedy argmax flips. Fixing one knob leaves the floor unchanged. A smaller, depth-independent part comes from bf16 logits/soft cap. TF32 and RoPE table construction contribute nothing here. The strict path removes all of it: 0/933 differing tokens across batching, padding, paging, decode, continuous batching, chunking, repeats and GPUs. Its offset from HF equals HF's own batching noise.\n\n## Deviations\n- The strict batch layouts are run by ablation_strict.packed_pass. It calls the reference's own OpSet in MuseGlimmerStrictModel._run order over several cu_seqlens segments or paged slots, because the public API takes one sequence per call. It imports the private strict_model._row_parallel. The single-sequence modes call the reference API unchanged. The tiny CUDA test proves the packed runner is byte-equal to the reference.\n- Strict padding has no key mask. Right padding appends pads inside a segment; left padding is a separate pad segment in front, with positions from 0.\n- Strict records have no argmax.\n- The HF baseline scores L tokens; the L-1 rollout prefill is its own setting.\n- First-sequence timings include warm-up.\n- flash_attention_2: not installed, so not run.\n\n## How to reproduce\nRun from the worktree root; S is the session scratchpad. The exact command lines are in ablation.json commands[].\n```\nT=\"~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py\"\n$T hf --out $S/parts/part_hf.json\n$T strict --out $S/parts/part_strict.json\n$T hf-layers --out $S/parts/part_hf_layers.json\n# null controls: hf-baseline and strict --settings repeat_immediate, each pinned with --pool <the other GPU>\n# combination: hf --settings rollout_like_batched_decode rollout_like_batched_decode_sdpa\nPYTHONPATH=$PWD ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py merge --parts $S/parts/*.json --out reports/muse_glimmer_poc/data/ablation.json\n~/bin/gpu-lease -n 1 --pool 6-7 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_ablation.py -q   # 13 passed\n```\n\n## Figures for the HTML blog (all from ablation.json)\n- (a) Bar chart of settings[].frac_bits_differ and mean_k3 (log scale), HF vs strict side by side. Strict is all zero.\n- (b) Heatmap of setting x sequence n_bits_differ / n_tokens from records[].\n- (c) Per-token dlogp strip for gsm8k_long_window: padded_right, kv_cache_decode, sdpa, softcap_fp32 and strict, where strict is a flat zero line.\n- (d) Bars of mean |dlogp| by gold-token probability bucket (analysis.abs_dlogp_by_baseline_prob).\n- (e) Per-layer growth lines: frac_elems_differ, and mean_abs / ref_rms on a log scale (layer_records[].layers[]). The headline image is 'one ulp in layer 0 becomes 95% of the residual stream'.\n- (f) Pairwise identical-token matrix (analysis.hf_pairwise_identical_tokens).\n- (g) TF32 probe: square GEMM 1,048,489 changed elements vs RoPE K=1 GEMM 0.\n- (h) Wall-time bars: baseline, decode and batched decode for HF vs strict.\n\n## Time spent\nAbout 1.5 h of agent time and about 17 GPU-minutes.",
+  "Merge branch worktree-wf_7b064961-36f-7 (HEAD 10a9a39) into feat/museglimmer-poc. It only adds files: the new directory rl_engine/models/muse_glimmer/ablation/, tests/models/muse_glimmer/test_ablation.py and reports/muse_glimmer_poc/data/ablation.json. The superseded uncommitted e2e/ablation_* files in worktree agent-aff98d33dd3f64af6 should not be merged; RESUME.md lists that row under e2e/, but it now lives under ablation/.",
+  "Optional: add `tests/models/muse_glimmer/test_ablation.py` to the single-GPU pytest list. It needs a CUDA device only for the last tiny strict test and runs in about 40-80 s."
+ ],
+ "open_issues": [
+  "flash_attention_2 is NOT RUN: the flash_attn package is not installed in ~/envs/vllm, and installs are forbidden.",
+  "REPORT_ablation.md was not written to the repo: the subagent harness blocks writing report .md files. Its full content is in requests_to_integrator[0].",
+  "Strict records carry no argmax-flip data, because the reference API returns selected-token logp only. With 0 differing logp bits there is nothing to flip, but it was not measured separately.",
+  "The hf-layers part ran with uncommitted merge-only edits in the worktree (worktree_dirty=true in the part metadata). The measuring code (ablation_hf.py drivers and the layer tap) was committed at 5463eb4.",
+  "k3 is computed on gold-answer tokens, not on model samples, so mean k3 is a per-token mismatch size, not an unbiased KL(rollout||train) estimate.",
+  "The strict batch runner imports the private helper strict_model._row_parallel. If the reference's _run order changes, ablation_strict.packed_pass must follow; the tiny CUDA test would catch a divergence."
+ ]
+}

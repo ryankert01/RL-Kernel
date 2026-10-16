@@ -1,0 +1,113 @@
+ 22:29:23 up 10:09,  1 user,  load average: 20.31, 214.71, 241.85
+b3e5066fd2ce7cc9f1aedea8e0e89120e9a49839
+..................................................................       [100%]
+==================================== PASSES ====================================
+______ test_cli_mock_through_bridge_equals_in_process_and_writes_timeline ______
+----------------------------- Captured stdout call -----------------------------
+run dir: /tmp/pytest-of-ubuntu/pytest-82/test_cli_mock_through_bridge_e0/local  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.5s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.3s
+done: 3 steps, bitwise mismatches 0/96, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 4/4 -> /tmp/pytest-of-ubuntu/pytest-82/test_cli_mock_through_bridge_e0/local/summary.json
+run dir: /tmp/pytest-of-ubuntu/pytest-82/test_cli_mock_through_bridge_e0/remote  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 11.5s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+done: 3 steps, bitwise mismatches 0/96, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 4/4 -> /tmp/pytest-of-ubuntu/pytest-82/test_cli_mock_through_bridge_e0/remote/summary.json
+----------------------------- Captured stderr call -----------------------------
+USDT:2026-10-15 22:30:57 468415:468415 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:30:58 468415:468415 SyncActivityProfilerHandler.cpp:59] profiler_stop
+______________________________ test_cli_main_mock ______________________________
+----------------------------- Captured stdout call -----------------------------
+run dir: /tmp/pytest-of-ubuntu/pytest-82/test_cli_main_mock0/cli  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.3s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.3s
+done: 2 steps, bitwise mismatches 0/64, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 3/3 -> /tmp/pytest-of-ubuntu/pytest-82/test_cli_main_mock0/cli/summary.json
+============================= slowest 15 durations =============================
+17.37s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_cli_mock_through_bridge_equals_in_process_and_writes_timeline
+10.89s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_trainer_builds_while_the_caller_starts_the_rollout
+8.46s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_tp2_all_ranks_execute_and_match
+7.22s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank1_crash_is_reported
+6.81s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_lora_export_bit_exact_and_hash_lie_detected
+6.21s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_hung_server_times_out_and_is_killed
+5.89s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_logprobs-token_logprobs-RemoteTrainerError]
+5.64s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_lora-export_lora-WeightSyncError]
+5.49s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_server_terminates_when_client_is_killed
+5.37s call     tests/models/muse_glimmer/test_e2e_loop_mock.py::test_hf_chat_tokenizer_prompt_shape
+4.05s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_trainer_equals_in_process_trainer_bitwise[megatron_env]
+4.03s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_trainer_equals_in_process_trainer_bitwise[same_env]
+3.78s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_ping_large_payload_round_trips_bit_exact
+3.69s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_forward_only_trainer_is_rejected_at_scoring
+3.65s call     tests/models/muse_glimmer/test_e2e_bridge.py::test_nagle_variant_is_selectable_and_bit_exact
+=========================== short test summary info ============================
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_surrogate_gradient_is_exactly_the_shipped_gradient
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_surrogate_matches_in_process_backward_on_a_real_grpo_loss
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_cpu_mock_trainer_never_initializes_cuda
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_surrogate_rejects_mismatches_and_forward_only_logprobs
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_wire_roundtrip_is_bit_exact
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_plan_gpu_placement_validates_flags
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_gpu_ids_default_to_the_lease
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_rank_hash_check_fails_closed
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_child_env_and_server_command
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_trainer_equals_in_process_trainer_bitwise[megatron_env]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_trainer_equals_in_process_trainer_bitwise[same_env]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_lora_export_bit_exact_and_hash_lie_detected
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_ping_large_payload_round_trips_bit_exact
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_server_crash_gives_clear_error_and_no_hang
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_hung_server_times_out_and_is_killed
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_exception_in_a_stateful_op_retires_the_bridge
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_trainer_builds_while_the_caller_starts_the_rollout
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_forward_only_trainer_is_rejected_at_scoring
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_lora-export_lora-WeightSyncError]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_logprobs-token_logprobs-RemoteTrainerError]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_nagle_variant_is_selectable_and_bit_exact
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_startup_failure_reports_remote_traceback[rl_engine.models.muse_glimmer.e2e.mocks:NoSuchTrainer-kwargs0-NoSuchTrainer]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_startup_failure_reports_remote_traceback[rl_engine.models.muse_glimmer.e2e.mocks:FaultyMockTrainer-kwargs1-injected fault: trainer construction failed]
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_server_terminates_when_client_is_killed
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_tp2_all_ranks_execute_and_match
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank1_crash_is_reported
+PASSED tests/models/muse_glimmer/test_e2e_bridge.py::test_cli_mock_through_bridge_equals_in_process_and_writes_timeline
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_loop_three_steps_strict_strict_zero_drift
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_perturbed_rollout_gives_nonzero_drift
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_mixed_and_native_modes_drift[native/native]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_mixed_and_native_modes_drift[strict/native]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_mixed_and_native_modes_drift[native/strict]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_sidecar_recompute_matches_logged
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_sync_via_file_roundtrip_and_tamper
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_cli_main_mock
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_strict_primitives_shape_invariant_and_accurate
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_strict_engines_batch_and_phase_invariance
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_byte_tokenizer_roundtrip
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_coerce_samples_accepts_duck_types
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_lora_sha256_known_answer_stability_and_sensitivity
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_validate_lora_state_dict_schema
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_load_lora_rejects_wrong_hash_and_lying_rollout
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_rollout_hash_only_from_the_engine_level_provenance_key
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_sync_record_names_both_hops
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_group_advantages_zero_mean_and_uniform_groups
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_grpo_zero_drift_ratio_one_and_no_clipping
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_grpo_clipping_active_blocks_gradient
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_grpo_optional_kl_term
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_compare_logprobs_bitwise_vs_value_and_first_index
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_parse_mode
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[so the answer is 72.\n#### 72-72-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 1,000-1000-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### $5.50-5.5-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 72.0-72-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 71-72-0.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[the answer is 72-72-0.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 10\nwait\n#### 12-12-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 10\nwait\n#### 12-10-0.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### -3--3-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[<|start|>assistant<|message|>#### 18 <|eot|>-18-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[#### 18 dollars-18-1.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_reward_exact_match[####-18-0.0]
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_normalize_and_gold_extraction
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_gsm8k_jsonl_parsing_and_task
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_gsm8k_real_file_parses
+PASSED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_hf_chat_tokenizer_prompt_shape
+66 passed in 119.85s (0:01:59)
+exit=0

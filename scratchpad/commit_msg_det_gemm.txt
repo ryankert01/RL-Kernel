@@ -1,0 +1,27 @@
+poc(muse_glimmer): dense_gemm_qualification fast det_gemm with canonical 8-chunk K tree
+
+Implements RFC #501 row dense_gemm_qualification (strict contract O3) for the
+Muse-Glimmer-30B POC:
+
+- rl_engine/models/muse_glimmer/triton/det_gemm_tree.py: Triton kernel, one
+  program per (BLOCK_M, BLOCK_N) tile, K walked in the 8 canonical chunks in
+  order, fp32 MMA accumulation per chunk, chunk partials combined in registers
+  in the fixed fp32 tree ((0+1)+(2+3))+((4+5)+(6+7)) with at most 4 live
+  accumulators, one rounding to bf16/fp32. No split-K, atomics or autotune;
+  tl.dot(allow_tf32=False). Pinned tile constants per shape class
+  (decode16 / decode64 / prefill) from an offline sweep; verified to be
+  performance-only (24 configs bitwise equal).
+- rl_engine/models/muse_glimmer/ops/det_gemm.py: fast_det_gemm (nn.Linear
+  (N, K) or (K, N) weights, bf16/fp32 out, deterministic autograd dA/dW via
+  the same kernel; dW uses an M-padded-to-256 masked chunk rule),
+  fast_det_gemm_partial (TP sub-tree partials), forward_fp32, trace().
+- rl_engine/models/muse_glimmer/ops/canonical_tree.py: combine_tree and
+  rank_chunk_ids (pure torch) for the collectives / lm_head agents.
+- tests/models/muse_glimmer/test_det_gemm.py: G1-G5 gates, batch invariance
+  decode vs prefill, TP1 vs simulated TP2/4/8 bitwise, all 9 Muse shapes.
+- benchmarks/models/muse_glimmer/bench_det_gemm.py and REPORT_det_gemm.md:
+  108-134 TFLOP/s at M=4096 on A100 (2.0-2.5x cuBLAS, 12-121x the existing
+  TritonDetGemmOp); 80 tests pass.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

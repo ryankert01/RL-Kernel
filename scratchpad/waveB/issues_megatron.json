@@ -1,0 +1,128 @@
+[
+ {
+  "id": "megatron_runtime:R1",
+  "severity": "blocking",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_strict.py",
+  "line": 300,
+  "claim": "Strict mode fails open: when a strict kernel is missing or broken, the binding and StrictTrainer(strict=True) silently use torch/cuBLAS fallback ops. A strict op must fail closed.",
+  "evidence": "MuseGlimmerStrictBinding.__init__ calls sk.resolve_ops() and never checks provenance()['all_strict'], and nothing in strict_trainer.py or e2e/loop.py checks it either. strict_kernels._optional_module (lines 50-54) swallows every Exception. Any MUSE_STRICT_ATTN value other than auto/sibling/composed falls through to _fb_gated_attention ('binding_torch_fp32_cublas_per_head ... not batch invariant'). Probe at HEAD: MUSE_STRICT_ATTN=off gives all_strict=False and gated_attention -> fallback:binding_torch_fp32_cublas_per_head, with no exception. With a simulated failed import of ops.norms, all_strict=False and four norm ops become fallback:torch_fp32_rowwise, again with no exception. run_megatron_strict.py:219 only relabels the dump backend as 'mixed'. Probe script: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_megatron_runtime/probe_fallback.py",
+  "suggested_fix": "In install_museglimmer_megatron_strict, or in _RankState when strict=True, raise StrictBindingError listing the non-strict ops whenever ops.provenance()['all_strict'] is False. Allow fallbacks only behind an explicit allow_fallback=True flag used by tests. Reject unknown MUSE_STRICT_ATTN values. Add a unit test that monkeypatches _optional_module to return None and asserts the error is raised."
+ },
+ {
+  "id": "megatron_runtime:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_lora.py",
+  "line": 77,
+  "claim": "LoRA gradients, and therefore post-step weights and hashes, depend on micro-batch packing. The HEAD default (4096) differs from the 8192 used for every committed run, so the recorded commands do not reproduce the committed gradient and LoRA hashes at HEAD. This is an undeclared contract deviation: the contract says fp32 fixed order must not depend on batch size or sequence chunking.",
+  "evidence": "_token_grad_gemm pads the token axis to a multiple of 512 and reduces over 8 chunks of M_pad/8, so the reduction order depends on the micro-batch token count M. strict_trainer.cmd_backward (lines 288-295) also accumulates gradients across micro-batches. My HEAD TP1 run (micro_batches=2) against the committed grads_tp1.pt (micro_batches=1): 101,842,999 of 104,792,064 elements differ, in all 832 tensors, max_abs 1.79e-7. Aggregate hash is 12950f30... against fc43a833..., grad_norm 7.020298480987549 against 7.020294189453125, post-step LoRA hash 02b3d04a... against 64d30065..., and 899/933 post-step logprobs differ. Pre-step forward logprobs are identical (0/933). TP parity still holds at 4096: my TP2 run equals my TP1 run bitwise. The JSON commands list no --micro-batch-tokens, and DEFAULT_MICRO_BATCH_TOKENS changed from 8192 to 4096 in a104f2c after all evidence runs.",
+  "suggested_fix": "Re-generate the committed TP1/TP2 results at the HEAD default, or record --micro-batch-tokens 8192 in every command. Declare in the REPORT under Contract deviations that LoRA gradients are packing-dependent and that micro_batch_tokens is part of the bitwise identity of a training run. Long term, reduce dA/dB per sequence (or per fixed 512-token block in absolute order) and sum the partials in a fixed tree, so packing no longer matters. Add a test asserting equal gradients for budgets 4096 and 8192, or document why that cannot hold."
+ },
+ {
+  "id": "megatron_runtime:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/strict_trainer.py",
+  "line": 290,
+  "claim": "A non-zero recompute mismatch count is reported but not enforced. In strict mode the gradient of a forward that differs from the returned logprobs is still back-propagated and applied by AdamW.",
+  "evidence": "cmd_backward counts mismatches into 'recompute_logp_mismatches', then calls logp.backward(g) and step() runs the optimizer whatever the count. Only the opt-in protocol test asserts the count is 0, and e2e/loop.py never reads it (grep found no hits).",
+  "suggested_fix": "When self.strict is True and mismatches > 0, raise before backward and before the optimizer step, so the step fails closed. Keep the count in info for the native mode."
+ },
+ {
+  "id": "megatron_runtime:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/strict_trainer.py",
+  "line": 114,
+  "claim": "An 8192-token sequence (inside the contract's T range of 1..8192) cannot be trained at TP1, and lowering DEFAULT_MICRO_BATCH_TOKENS to 4096 does not fix the recorded OOM, although observed_failures implies it does. Training at 8192 tokens is not measured at any TP.",
+  "evidence": "micro_batches() puts any sequence longer than the budget into its own pack, so an 8192-token sequence is still one 8192-token recompute pack. scratchpad/meg/run_tp1_bench.log shows the OOM inside small_k_fp32, in the LoRA (M,N) fp32 temporaries of the recompute forward, with 69.77 GiB allocated. megatron_runtime.json:36824 says 'default micro_batch_tokens lowered to 4096'. TP2 bench_tokens was 512..4096, so there is no 8192 row at any TP.",
+  "suggested_fix": "Fail early with a clear error when a single sequence exceeds the TP1 budget, or cut memory: accumulate small_k_fp32 in place (acc.addcmul_) instead of allocating prod plus a new acc per rank step, and drop the unreleased vision tower (R7). Run the 8192-token bench at TP2, and at TP1 once memory is fixed, and record the result."
+ },
+ {
+  "id": "megatron_runtime:R5",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md",
+  "line": 3,
+  "claim": "The row's REPORT was not updated in the reviewed diff and now contradicts both the code and the results JSON.",
+  "evidence": "Line 3 says 'STATUS: partial ... the 30B GPU runs (a)-(f) did NOT run'. Line 6 says it 'Fails closed on ... TP>2', but SUPPORTED_TP is now (1,2,4,8). Line 14 says 'Full 627 sweep ... not run', but it ran (626/627 at TP1 and TP2). Line 16 says 'Runs (a)-(f): NOT RUN'. Line 25 says '--native forward-only', but there is now a native LoRA trainer. Line 29 says the hash is 'over the canonical stream in megatron_lora.lora_state_bytes', but that stream is now legacy and the sync v1 hash is used. Line 32 says 'pytest is missing in ~/envs/megatron', which is wrong. The Resume commands use flags (--prompt-file, --out, --identity-out) that run_megatron_strict no longer accepts. The briefing's required sections are missing: contract deviations, benchmark table, verbatim test output.",
+  "suggested_fix": "Rewrite the REPORT from megatron_runtime.json. Cover the status, per-check numbers, the TP2==TP1 and cross-runtime results, the benchmark table, and verbatim pytest output (17 passed, 1 skipped). Under contract deviations, list: R2 packing-dependent gradients, composed attention, column dX order, the final-norm HF reload, and TP4/8 canonical reshard (untested on the real model). Under open issues, list R4, R7 and R8."
+ },
+ {
+  "id": "megatron_runtime:R6",
+  "severity": "should_fix",
+  "file": "reports/muse_glimmer_poc/data/megatron_runtime.json",
+  "line": 3,
+  "claim": "The top-level status overstates completion, and the per-file provenance is inconsistent.",
+  "evidence": "Top-level status is 'complete_tp1_tp2', but runs.tp1.status is 'failed' (OOM in the native forward at 4096 tokens during bench, line 25) and tp1_bench_followup.status is 'failed' (strict train OOM at 8192, line 35056). The TP1 bench rows come from two commits (512-2048 from a362599, 4096 from 17dafef). The committed xrt_megatron_{strict,native}_tp1.json carry commit 17dafef because the follow-up run overwrote them, yet runs.tp1 and cross_runtime_xrt.meta attribute them to a362599. The bits are identical: I checked against scratchpad/meg/*_run1.json, 0/933.",
+  "suggested_fix": "Set status to something like 'tp1_tp2_parity_complete; tp1_bench_partial (OOM at native 4096 and strict-train 8192)'. Record each xrt file's sha256 and producing commit as found on disk, and mark that the TP1 files come from the follow-up run."
+ },
+ {
+  "id": "megatron_runtime:R7",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_strict.py",
+  "line": 322,
+  "claim": "Dropping the vision tower frees no GPU memory, so about 3.6 GiB of vision parameters stay resident on the memory-bound TP1 trainer. The provenance note 'dropped vision_tower (text-only trainer)' overstates what happens.",
+  "evidence": "provenance.memory_gib shows after_vision_drop equal to bound_start: 55.463 vs 55.463 GiB at TP1 (tp1_bench_followup, and my HEAD run 55.541 vs 55.541), and 29.523 vs 29.523 GiB at TP2. model_params after the drop is 51.88 GiB at TP1, which equals the 27.85B text parameters, while the model held 29.78B parameters (55.46 GiB) at load. Some other reference keeps the deleted modules alive.",
+  "suggested_fix": "Find and release the remaining reference (for example the wrapper or list from bridge.get_model, or a contiguous parameter buffer). Assert memory_allocated drops by the vision parameter bytes, or stop claiming the drop and record the true resident size."
+ },
+ {
+  "id": "megatron_runtime:R8",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_strict.py",
+  "line": 79,
+  "claim": "TP4/TP8 are now accepted (the fail-closed TP>2 check was removed, the CLI offers --tp 4/8, and docstrings claim support), but no real-model TP4/8 run exists: no Bridge load, identity check, xrt dump or gradient parity.",
+  "evidence": "SUPPORTED_TP=(1,2,4,8) and run_megatron_strict.py:155 has choices=(1,2,4,8). megatron_runtime.json has runs only for tp1 and tp2. The _qkv_views reshard path (all-gather of the MCore fused shard when t > kv_heads) is exercised only by the single-process simulated test test_attention_block_tp_equals_tp1_with_canonical_qkv_reshard. megatron_weights_identity at TP4/8 is unexercised.",
+  "suggested_fix": "Either run TP4 once (identity, xrt, grad_repeat and step, compared with TP1) and add it to the JSON, or gate TP4/8 behind an explicit experimental flag that raises by default and document them as untested."
+ },
+ {
+  "id": "megatron_runtime:R9",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/run_megatron_strict.py",
+  "line": 425,
+  "claim": "The benchmark data is weak for plotting: one sample per point, no warm-up for native forward+backward, first-row outliers, TP1 rows split across runs, and no 8192 point.",
+  "evidence": "native_fwd_bwd_backward_ms at 512 tokens is 2464 ms at TP1 and 5826 ms at TP2, against 626 and 364 ms at 1024 tokens (a warm-up artifact). strict_optimizer_ms in the first TP2 row is 434 ms, against about 170 ms afterwards. There are no repeats or spread statistics. TP1 4096 comes from a different run and commit than 512-2048.",
+  "suggested_fix": "Warm up every measured phase at each size, repeat at least 3 times and store all samples plus the median, and produce every row of a TP size in one run at one commit."
+ },
+ {
+  "id": "megatron_runtime:R10",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_strict.py",
+  "line": 516,
+  "claim": "The RoPE table cache is unbounded during training. It is keyed by the full positions tuple for packs of up to 4096 tokens and never evicted, so every new packing in an E2E run adds about 1 KiB per token of GPU memory (about 4 MiB per 4096-token pack).",
+  "evidence": "rope(): key = tuple(positions.tolist()) if numel <= 4096, and entries are stored in self._rope_cache with no eviction. Packing varies at every GRPO step. This is pre-existing code, but it sits on the StrictTrainer path, where TP1 headroom is about 15 GiB.",
+  "suggested_fix": "Cache a single table up to the maximum position seen and index_select it by positions, or use a small LRU cache."
+ },
+ {
+  "id": "megatron_runtime:R11",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_megatron_strict_binding.py",
+  "line": 379,
+  "claim": "Some test assertions are tautological, and key behaviours have no tests.",
+  "evidence": "megatron_lora.lora_sha256 is now an alias of e2e.sync.lora_sha256 (megatron_lora.py:41,320-322), so `sha == sync.lora_sha256(state) == lora_sha256(state)` cannot fail. Only the validate_lora_state_dict schema check is meaningful. test_composed_strict_attention_matches_sibling_kernels (line 413) compares the wrapper against the same kernels it calls, with no fp32 or fp64 golden check. No test covers strict fail-closed behaviour (R1), recompute-mismatch enforcement (R3) or gradient invariance under packing (R2).",
+  "suggested_fix": "Replace the alias equality with a check against a precomputed known hash of a fixed state. Compare the composed attention against attention_golden_bwd within ws1 tolerances. Add the tests listed in R1, R2 and R3."
+ },
+ {
+  "id": "megatron_runtime:R12",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/megatron_runtime.json",
+  "line": 36399,
+  "claim": "The cross_runtime_xrt result depends on uncommitted files in other worktrees, and its recorded metadata is already stale. Dump files were also rewritten by an uncommitted script that the JSON does not mention.",
+  "evidence": "The paths are 'wf_7b064961-36f-1/...' and 'wf_7b064961-36f-8/...'. On disk, vllm_native_tp1 now carries commit d491fca (the JSON records 0c5c597) and reference_triton carries f7d3723 with dirty=false (the JSON records 69b4409 with dirty=true). My recompute against the current files still gives 0/933 for all strict pairs. scratchpad/meg/fix_hex.py rewrote the signed hex strings in the xrt and run JSONs to uint32. The rewrite is exact (cross-checked against the floats; my script found no hex/float disagreement), but megatron_runtime.json does not mention it.",
+  "suggested_fix": "Store the sha256 and producing commit of each compared file, keep the comparison script in-repo (e.g. megatron_results --cross-runtime), and note the hex post-processing in the JSON."
+ },
+ {
+  "id": "kernels_gemm:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/megatron_lora.py",
+  "line": 64,
+  "claim": "The token-axis weight-gradient rule declared by this row (T_pad = roundup(T, 256), 8 chunks of T_pad/8) disagrees with the shipped Megatron binding. Its LoRA token-gradient GEMM pads tokens to a multiple of 512 (_TOKEN_PAD = CANONICAL_CHUNKS * 64). Yet REPORT_swiglu_ffn.md:258 says declaring the 256 rule makes 'both runtimes agree on it'. REPORT_det_gemm.md:102-105 proposes contract text under which the binding's rule would be out of contract ('Any other K ... must raise'). Neither report mentions the conflict.",
+  "evidence": "megatron_lora.py:64 `_TOKEN_PAD = CANONICAL_CHUNKS * 64`. megatron_lora.py:76-83 `_token_grad_gemm` pads to ceil_to(T, 512) and then calls gemm_fp32, which runs 8 chunks over m_pad. ops det_gemm.py:94-97 (DW_CHUNK_RULE), swiglu_ffn.py:61-64 and lm_head_softcap_logprob.py:480 use roundup(T, 256). Example, T=200: the 256 rule gives 8 chunks of 32 rows, with data in chunks 0..6. The 512 rule gives 8 chunks of 64 rows, with data in chunks 0..3. These are different MMA chains and trees, so the bits differ for every T where roundup(T,256) != roundup(T,512), e.g. T in (32,256] and (512,768].",
+  "suggested_fix": "Pick one token rule repo-wide. Either set _TOKEN_PAD = CANONICAL_CHUNKS * 32 (or route _token_grad_gemm through fast_det_gemm(..., ragged_k=True)), or change the ops and the proposed contract text to 512. Add a test that a Megatron LoRA dA/dB at T=200 equals the ops dW rule. Fix the 'both runtimes agree' sentence."
+ },
+ {
+  "id": "kernels_gemm:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/det_gemm.py",
+  "line": 361,
+  "claim": "det_gemm:2 is reported 'confirmed, fixed', but the fix is new public API (column_parallel_fast_det_gemm, row_parallel_fast_det_gemm, tree_reduce_over_ranks) that no runtime calls. Its only evidence is a single-GPU simulation with a fake all-gather that returns a stacked tensor. The list-returning gather branch, which is the convention TPComm uses (strict_kernels.py:280-284), is untested. The reports never say the Megatron binding uses its own StrictColumnLinear/StrictRowLinear. The finding's failure scenario ('Megatron Bridge trains at TP>1, dA differs') was never checked against that binding. The real cross-runtime defect was det_gemm:1.",
+  "evidence": "A grep for column_parallel_fast_det_gemm|row_parallel_fast_det_gemm|tree_reduce_over_ranks finds only det_gemm.py and test_det_gemm.py. The Megatron binding computes column dX in megatron_lora.py:114-160 with single-chunk leaves plus combine plus all_gather_tree. Reviewer probe probe_megatron_vs_ops.py compared StrictColumnLinear/StrictRowLinear (TP1) dX with fast_det_gemm autograd dA. Base tree: k_proj dx_mismatch = 1 / 21 / 148 at M = 1 / 64 / 300. Reviewed tree: 0 everywhere; q_proj and o_proj are 0 in both trees. tree_reduce_over_ranks (det_gemm.py:453-459) has an untested `else: leaves = [g.reshape(...) for g in gathered]` branch. The multi-process distributed tests were not run.",
+  "suggested_fix": "In REPORT_det_gemm.md, state that the TP autograd entries are reference implementations not wired into any runtime, and that the binding's own column dX was already a canonical tree; the actual parity gain is det_gemm:1. Add a regression test: Megatron StrictColumnLinear/StrictRowLinear dX at TP1, and at simulated TP2 with a fake TPComm, equals ops fast_det_gemm autograd for k_proj, q_proj and o_proj at M in {1, 64, 300}. Add a list-returning fake gather to the TP tests."
+ }
+]

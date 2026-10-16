@@ -1,0 +1,11 @@
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/mode_strict-strict  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1774 max 0.000e+00 first - | sync f7cab7e2ee9e ok=True | 3.5s
+step   1 | reward 0.094 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1775 max 0.000e+00 first - | sync 375d9d692ca3 ok=True | 3.2s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1935 max 0.000e+00 first - | sync 1a24194ea351 ok=True | 2.9s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1501 max 0.000e+00 first - | sync e6176db75ecd ok=True | 2.9s
+step   4 | reward 0.062 | loss -0.00893 ratio 1.000000 clip 0.000 | drift bitwise 0/1679 max 0.000e+00 first - | sync 32246863d4e8 ok=True | 3.1s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1714 max 0.000e+00 first - | sync cae1ca25c1d3 ok=True | 3.8s
+step   6 | reward 0.031 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1740 max 0.000e+00 first - | sync 9bffa1307560 ok=True | 3.0s
+step   7 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1833 max 0.000e+00 first - | sync 47ddcac784ed ok=True | 3.2s
+done: 8 steps, bitwise mismatches 0/13951, max |Δ| 0.000e+00, first drift None, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/mode_strict-strict/summary.json

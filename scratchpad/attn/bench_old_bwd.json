@@ -1,0 +1,136 @@
+{
+ "prefill_forward": [],
+ "decode_forward": [],
+ "backward": [
+  {
+   "T": 512,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.6703104019165039,
+   "transient_peak_GiB": 0.02178955078125,
+   "sdpa_causal_bwd_ms": 0.1901909351348877,
+   "ratio": 3.5244077297432956
+  },
+  {
+   "T": 1024,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 1.0422271728515624,
+   "transient_peak_GiB": 0.0435791015625,
+   "sdpa_causal_bwd_ms": 0.371234130859375,
+   "ratio": 2.8074659257188888
+  },
+  {
+   "T": 2048,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.3842816670735676,
+   "transient_peak_GiB": 0.087158203125,
+   "sdpa_causal_bwd_ms": 0.9630378723144531,
+   "ratio": 2.475792215049095
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 6.529092407226562,
+   "transient_peak_GiB": 0.17431640625,
+   "sdpa_causal_bwd_ms": 2.4352086385091147,
+   "ratio": 2.6811223909027393
+  },
+  {
+   "T": 8192,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 19.863688151041668,
+   "transient_peak_GiB": 0.3486328125,
+   "sdpa_causal_bwd_ms": 8.231663004557292,
+   "ratio": 2.4130832542639977
+  },
+  {
+   "T": 512,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.6357674916585286,
+   "transient_peak_GiB": 0.02178955078125,
+   "sdpa_causal_bwd_ms": 0.211080535252889,
+   "ratio": 3.011966455821402
+  },
+  {
+   "T": 1024,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.896887461344401,
+   "transient_peak_GiB": 0.0435791015625,
+   "sdpa_causal_bwd_ms": 0.31348053614298504,
+   "ratio": 2.86106267514903
+  },
+  {
+   "T": 2048,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.0523690541585284,
+   "transient_peak_GiB": 0.087158203125,
+   "sdpa_causal_bwd_ms": 0.8104618708292644,
+   "ratio": 2.5323449850374145
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 4.439654541015625,
+   "transient_peak_GiB": 0.17431640625,
+   "sdpa_causal_bwd_ms": 2.430156707763672,
+   "ratio": 1.826900515029409
+  },
+  {
+   "T": 8192,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 9.563135782877604,
+   "transient_peak_GiB": 0.3486328125,
+   "sdpa_causal_bwd_ms": 8.266274007161458,
+   "ratio": 1.1568858925548093
+  }
+ ],
+ "tp_shard_forward": [],
+ "tp_shard_backward": [],
+ "sections": [
+  "backward"
+ ],
+ "iters": 30,
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "triton": "3.7.1",
+  "cuda": "13.0",
+  "python": "3.12.15"
+ },
+ "modules": {
+  "forward": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/old_tree/rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "backward": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/old_tree/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "backward_kernel_id": "muse_glimmer.triton.gated_attention_bwd.v1"
+ },
+ "argv": [
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/drv/ga_bench_driver.py",
+  "bench",
+  "--sections",
+  "backward",
+  "--iters",
+  "30",
+  "--out",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/bench_old_bwd.json"
+ ],
+ "head_count_params": false,
+ "wall_s": 7.6101343631744385
+}

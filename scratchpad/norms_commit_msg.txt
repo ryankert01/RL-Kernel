@@ -1,0 +1,23 @@
+poc(muse_glimmer): normalized_embedding + fused_add_rmsnorm strict norms
+
+RFC #501 rows normalized_embedding (contract O1) and fused_add_rmsnorm (O2):
+fp32 goldens, Triton kernels and deterministic backward for the normalized
+token embedding and the four-norm decoder sandwich.
+
+- triton/norms.py: one-row-per-program kernels (weightless / centered (1+w) /
+  weighted forms, gathered row source for the embedding), fused
+  post-norm -> residual add -> pre-norm kernel with the two declared bf16
+  casts, row-local fp32 VJP kernels, fixed-order column fold for dw
+  (no atomics); inv = div_rn(1, sqrt_rn(mean(x^2)+eps)); enable_fp_fusion=False.
+- ops/norms.py: normalized_embedding, centered_rmsnorm, weighted_rmsnorm,
+  residual_add, fused_post_norm_residual_pre_norm (+ *_fp32 goldens, trace()).
+  Embedding dweight reuses the repo's sorted-segment Triton backward.
+- tests: G1 vs fp32/fp64 (ws1.json tolerances), G2 batch invariance
+  (torch.equal), G4 repeat-determinism + fp32 autograd, fusion == composition
+  (torch.equal), G5 trace; H=6656, T in {1,16,4096}, V=202048 incl. the real
+  checkpoint embedding table. 43 passed.
+- benchmark at T=4096: strict 0.14-0.21 ms fwd vs 0.69-1.59 ms torch eager.
+- REPORT_norms.md with design, deviations, parity, benchmark, RFC feedback.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

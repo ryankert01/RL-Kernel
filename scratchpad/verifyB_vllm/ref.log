@@ -1,0 +1,5 @@
+[gpu-lease] using GPUs [4]
+INFO 10-16 00:19:32 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+loaded in 11.1s
+train: 933 tokens -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_vllm/ref/xrt_reference_train.json
+prefill: 933 tokens -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_vllm/ref/xrt_reference_prefill.json

@@ -1,0 +1,25 @@
+{
+ "probe": "f2",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "torch.float32": {
+  "accepted": true,
+  "out_dtype": "torch.float32",
+  "mismatch_vs_bf16_path_after_bf16_cast": 0,
+  "mismatch_vs_bf16_path_without_cast_fp32_compare": 262139,
+  "grad_dtype": "torch.float32"
+ },
+ "torch.float16": {
+  "accepted": true,
+  "out_dtype": "torch.float16",
+  "mismatch_vs_bf16_path_after_bf16_cast": 16424,
+  "mismatch_vs_bf16_path_without_cast_fp32_compare": 229227,
+  "grad_dtype": "torch.float16"
+ },
+ "wall_s": 3.68
+}

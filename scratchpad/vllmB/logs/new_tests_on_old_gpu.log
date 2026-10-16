@@ -1,0 +1,65 @@
+[gpu-lease] using GPUs [6]
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+____ TestStrictSamplingLogits.test_logits_match_o7_and_are_batch_invariant _____
+
+self = <test_new_on_old.TestStrictSamplingLogits object at 0x7848a863dbe0>
+
+    def test_logits_match_o7_and_are_batch_invariant(self):
+        state = _logits_state()
+        if not state.ops.all_strict:
+            pytest.skip("strict sibling ops not importable")
+        h = _bf(9, 512) * 4.0
+>       logits, z_tiles = vs.strict_logits(state, h)
+                          ^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'strict_logits'
+
+.tmp_oldtree/test_new_on_old.py:615: AttributeError
+__________________ TestStrictSamplingLogits.test_empty_batch ___________________
+
+self = <test_new_on_old.TestStrictSamplingLogits object at 0x7848a863c0e0>
+
+    def test_empty_batch(self):
+        state = _logits_state()
+>       logits, tiles = vs.strict_logits(state, _bf(0, 512))
+                        ^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.runtime.vllm_strict' has no attribute 'strict_logits'
+
+.tmp_oldtree/test_new_on_old.py:636: AttributeError
+_ TestLoRARuleCheckIsIndependent.test_formula_detects_a_broken_binding_helper __
+
+self = <test_new_on_old.TestLoRARuleCheckIsIndependent object at 0x7848a863fd40>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x784898156b40>
+
+    def test_formula_detects_a_broken_binding_helper(self, monkeypatch):
+        state = vs.StrictBindingState(ops=probe_ops(resolve_ops(), DEVICE))
+        if not state.ops.all_strict:
+            pytest.skip("strict sibling ops not importable")
+        state.model = self._mock_model()
+        state.lora = {
+            0: {
+                "q_proj": (_bf(16, 512) * 0.03, _bf(512, 16) * 0.05),
+                "o_proj": (_bf(16, 512) * 0.03, _bf(512, 16) * 0.05),
+            }
+        }
+        monkeypatch.setattr(vs, "_STATE", state)
+        good = vs.worker_check_lora_rule(None, 0)
+        assert good["all_equal"], good
+        original = vs._padded_partial
+    
+        def broken(*args, **kwargs):
+            out = original(*args, **kwargs)
+            return out * (1.0 + 2.0**-10)
+    
+        monkeypatch.setattr(vs, "_padded_partial", broken)
+        bad = vs.worker_check_lora_rule(None, 0)
+>       assert not bad["slots"]["q_proj"]["binding_equals_formula"]
+E       assert not True
+
+.tmp_oldtree/test_new_on_old.py:821: AssertionError
+=========================== short test summary info ============================
+FAILED .tmp_oldtree/test_new_on_old.py::TestStrictSamplingLogits::test_logits_match_o7_and_are_batch_invariant
+FAILED .tmp_oldtree/test_new_on_old.py::TestStrictSamplingLogits::test_empty_batch
+FAILED .tmp_oldtree/test_new_on_old.py::TestLoRARuleCheckIsIndependent::test_formula_detects_a_broken_binding_helper
+3 failed, 64 deselected in 7.49s
+exit=1

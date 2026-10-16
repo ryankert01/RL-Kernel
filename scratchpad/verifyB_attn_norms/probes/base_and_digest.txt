@@ -1,0 +1,7 @@
+[gpu-lease] using GPUs [3]
+CUDA_VISIBLE_DEVICES=3
+BASE q_end_beyond_rows rc=1 invalid=5 child_ok=0 ========= ERROR SUMMARY: 3810 errors
+BASE k_end_beyond_rows rc=0 invalid=0 child_ok=1 ========= ERROR SUMMARY: 0 errors
+BASE page_out_of_range rc=6 invalid=5 child_ok=0 ========= ERROR SUMMARY: 132 errors
+base digest rc=0
+head digest rc=0

@@ -1,0 +1,18 @@
+[gpu-lease] using GPUs [3]
+[22:11:02] start xrt_triton
+[22:14:20] xrt_triton exit 0
+[22:14:20] start xrt_triton_repeat
+[22:16:41] xrt_triton_repeat exit 0
+[22:16:41] start pytest_full_chain_triton
+[22:17:22] pytest_full_chain_triton exit 0
+[22:17:22] start xrt_hf
+[22:17:46] xrt_hf exit 0
+[22:17:46] start chain_triton_512_hf
+[22:18:44] chain_triton_512_hf exit 0
+[22:18:44] start chain_triton_2100_hf
+[22:20:25] chain_triton_2100_hf exit 0
+[22:20:25] start profile_strict
+[22:23:47] profile_strict exit 0
+[22:23:47] start profile_hf
+[22:25:30] profile_hf exit 0
+[22:25:30] queue1 done

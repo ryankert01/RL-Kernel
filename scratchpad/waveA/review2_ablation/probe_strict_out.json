@@ -1,0 +1,38 @@
+{
+ "env": {
+  "torch": "2.13.0+cu130",
+  "cuda_runtime": "13.0",
+  "triton": "3.7.1",
+  "python": "3.12.15",
+  "gpu_lease": "7",
+  "tf32_matmul_default": false,
+  "transformers": "5.17.0",
+  "vllm": "0.31.0",
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "gpu_uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+  "sm": "80",
+  "gpu_index_in_process": 0
+ },
+ "ops": {
+  "normalized_embedding": "rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+  "centered_rmsnorm": "rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+  "weighted_rmsnorm": "rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+  "fused_post_norm_residual_pre_norm": "rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+  "gemm": "rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+  "rope_table": "rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+  "qknorm_scaled_rope": "rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+  "attention_varlen": "rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+  "attention_paged": "rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+  "swiglu_ffn": "rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu_ffn",
+  "pad_lm_head_weight": "rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.pad_lm_head_weight",
+  "lm_head_softcap_logprob": "rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.lm_head_softcap_logprob"
+ },
+ "baseline_vs_committed": 0,
+ "packed_vs_base": 0,
+ "paged_prefill_vs_base": 0,
+ "batched_decode65_wall_s": 78.89902050399905,
+ "batched_decode65_peak_gib": 62.23784399032593,
+ "batched_decode65_steps": 177,
+ "batched_decode65_vs_base_tokens_differ": 0,
+ "batched_decode65_n_tokens": 6218
+}

@@ -1,0 +1,4 @@
+[gpu-lease] using GPUs [4]
+========= COMPUTE-SANITIZER
+case q: wrapper accepted the call; y finite=True
+========= ERROR SUMMARY: 0 errors

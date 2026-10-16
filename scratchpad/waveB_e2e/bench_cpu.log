@@ -1,0 +1,45 @@
+USDT:2026-10-15 22:09:07 438108:438108 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:09:09 438108:438108 SyncActivityProfilerHandler.cpp:59] profiler_stop
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.062 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/498 max 0.000e+00 first - | sync ae2a733e921e ok=True | 7.9s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/497 max 0.000e+00 first - | sync 725432e608c1 ok=True | 3.9s
+step   2 | reward 0.250 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/485 max 0.000e+00 first - | sync e7b3478b22b3 ok=True | 4.7s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/471 max 0.000e+00 first - | sync 1fd900786a05 ok=True | 6.6s
+done: 4 steps, bitwise mismatches 0/1951, max |Δ| 0.000e+00, first drift None, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_native-native  mode: native/native  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.062 | loss +0.00005 ratio 0.999310 clip 0.000 | drift bitwise 498/498 max 2.197e-02 first (0,0) | sync 42ca9e0b31c4 ok=True | 0.2s
+step   1 | reward 0.000 | loss +0.00000 ratio 0.999906 clip 0.000 | drift bitwise 497/497 max 4.043e-02 first (0,0) | sync 8ee0d67bb1e2 ok=True | 0.2s
+step   2 | reward 0.250 | loss +0.00001 ratio 0.999870 clip 0.000 | drift bitwise 485/485 max 3.797e-02 first (0,0) | sync 19737b9454a7 ok=True | 1.4s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000179 clip 0.000 | drift bitwise 471/471 max 3.761e-02 first (0,0) | sync bf0dc436cb23 ok=True | 2.6s
+done: 4 steps, bitwise mismatches 1951/1951, max |Δ| 4.043e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.0016689300537109375}, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_native-native/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-native  mode: strict/native  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.062 | loss +0.00004 ratio 0.999283 clip 0.000 | drift bitwise 498/498 max 1.868e-02 first (0,0) | sync c344f921b08d ok=True | 2.8s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000122 clip 0.000 | drift bitwise 497/497 max 3.648e-02 first (0,0) | sync 09982154e359 ok=True | 1.5s
+step   2 | reward 0.250 | loss -0.00008 ratio 0.999773 clip 0.000 | drift bitwise 485/485 max 3.870e-02 first (0,0) | sync fc2a94dd37e3 ok=True | 0.8s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000139 clip 0.000 | drift bitwise 471/471 max 2.735e-02 first (0,0) | sync 34d9d0456588 ok=True | 0.4s
+done: 4 steps, bitwise mismatches 1951/1951, max |Δ| 3.870e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.0022296905517578125}, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-native/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_native-strict  mode: native/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.062 | loss +0.00001 ratio 1.000026 clip 0.000 | drift bitwise 498/498 max 9.061e-03 first (0,0) | sync 9756f028b387 ok=True | 1.1s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000030 clip 0.000 | drift bitwise 497/497 max 7.108e-03 first (0,0) | sync e370d86f743d ok=True | 1.1s
+step   2 | reward 0.250 | loss +0.00001 ratio 0.999990 clip 0.000 | drift bitwise 485/485 max 6.413e-03 first (0,0) | sync 183310dcc0f5 ok=True | 1.1s
+step   3 | reward 0.000 | loss +0.00000 ratio 0.999992 clip 0.000 | drift bitwise 471/471 max 8.898e-03 first (0,0) | sync 77587927a819 ok=True | 1.1s
+done: 4 steps, bitwise mismatches 1951/1951, max |Δ| 9.061e-03, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.000560760498046875}, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_native-strict/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/inprocess_strict-strict  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via memory
+step   0 | reward 0.062 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/498 max 0.000e+00 first - | sync ae2a733e921e ok=True | 1.3s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/497 max 0.000e+00 first - | sync 725432e608c1 ok=True | 1.3s
+step   2 | reward 0.250 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/485 max 0.000e+00 first - | sync e7b3478b22b3 ok=True | 1.3s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/471 max 0.000e+00 first - | sync 1fd900786a05 ok=True | 1.3s
+done: 4 steps, bitwise mismatches 0/1951, max |Δ| 0.000e+00, first drift None, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/inprocess_strict-strict/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via bridge+memory
+step   0 | reward 0.062 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/498 max 0.000e+00 first - | sync ae2a733e921e ok=True | 1.3s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/497 max 0.000e+00 first - | sync 725432e608c1 ok=True | 33.3s
+step   2 | reward 0.250 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/485 max 0.000e+00 first - | sync e7b3478b22b3 ok=True | 1.9s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/471 max 0.000e+00 first - | sync 1fd900786a05 ok=True | 1.9s
+done: 4 steps, bitwise mismatches 0/1951, max |Δ| 0.000e+00, first drift None, reward mean 0.078125, weight sync 5/5 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/summary.json
+wrote /home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-3/reports/muse_glimmer_poc/data/e2e_bridge.json

@@ -1,0 +1,71 @@
+[22:20:30] loading 541 text tensors from model-00001-of-00002.safetensors
+[22:20:36] loading 86 text tensors from model-00002-of-00002.safetensors
+INFO 10-15 22:20:40 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[22:20:40] strict weights 51.89 GiB loaded in 9.7s
+[22:20:40] [strict] train forward T=512
+USDT:2026-10-15 22:20:44 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:44 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:20:45 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:45 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:20:46 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:47 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:20:47]   total 281.2 ms (clean 266.2) peak 52.22 GiB
+[22:20:47] [strict] paged prefill T=512
+USDT:2026-10-15 22:20:50 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:50 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:20:52 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:52 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:20:54 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:20:54 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:20:57]   total 329.0 ms (clean 307.8)
+[22:20:57] [strict] train forward T=2048
+USDT:2026-10-15 22:21:04 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:05 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:05 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:06 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:07 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:08 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:21:09]   total 954.5 ms (clean 949.6) peak 52.57 GiB
+[22:21:09] [strict] paged prefill T=2048
+USDT:2026-10-15 22:21:16 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:17 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:18 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:19 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:20 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:21 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:21:23]   total 995.2 ms (clean 985.4)
+[22:21:23] [strict] train forward T=4096
+USDT:2026-10-15 22:21:36 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:38 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:39 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:41 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:21:42 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:21:43 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:21:44]   total 1907.9 ms (clean 1901.3) peak 53.03 GiB
+[22:21:44] [strict] paged prefill T=4096
+USDT:2026-10-15 22:21:58 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:00 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:22:04 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:06 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:22:08 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:10 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:22:13]   total 2012.5 ms (clean 1962.6)
+[22:22:29] [strict] filled 16 sequences x 2048 tokens in 15.9s
+[22:22:32] [strict] decode batch invariance: batch1 == batch16: 16/16, permuted batch-4: 4/4
+[22:22:32] [strict] decode batch 1 context 2048
+USDT:2026-10-15 22:22:34 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:34 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:22:36 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:36 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:22:38 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:38 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:22:40]   step 195.91 ms (clean 149.01) peak 53.75 GiB
+[22:22:40] [strict] decode batch 16 context 2048
+USDT:2026-10-15 22:22:45 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:22:46 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:22:57 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:23:00 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 22:23:25 458274:458274 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:23:27 458274:458274 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[22:23:41]   step 381.95 ms (clean 348.51) peak 53.76 GiB
+[22:23:44] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/runs/profile_strict.json

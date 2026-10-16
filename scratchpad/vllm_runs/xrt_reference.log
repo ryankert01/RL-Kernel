@@ -1,0 +1,22 @@
+[gpu-lease] using GPUs [1]
+INFO 10-15 16:47:12 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+loaded 13.767174831999
+train gsm8k_test_0 55 0.93
+train gsm8k_test_1 47 0.14
+train gsm8k_test_2 129 0.16
+train gsm8k_test_3 39 0.14
+train gsm8k_test_4 92 0.2
+train gsm8k_test_5 149 0.19
+train gsm8k_test_6 88 0.16
+train gsm8k_test_7 156 0.19
+train gsm8k_long_window 178 1.15
+prefill gsm8k_test_0 55 0.25
+prefill gsm8k_test_1 47 0.17
+prefill gsm8k_test_2 129 0.19
+prefill gsm8k_test_3 39 0.16
+prefill gsm8k_test_4 92 0.23
+prefill gsm8k_test_5 149 0.22
+prefill gsm8k_test_6 88 0.18
+prefill gsm8k_test_7 156 0.22
+prefill gsm8k_long_window 178 1.18
+done

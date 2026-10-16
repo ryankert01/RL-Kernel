@@ -1,0 +1,22 @@
+[gpu-lease] using GPUs [5]
+{'shape': 'q_proj', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 2, 'numel': 1703936, 'naive_mismatch': 639150, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0]}
+{'shape': 'q_proj', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 4, 'numel': 1703936, 'naive_mismatch': 686487, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'q_proj', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 8, 'numel': 1703936, 'naive_mismatch': 703717, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'attn_gate', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 2, 'numel': 1703936, 'naive_mismatch': 638578, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0]}
+{'shape': 'attn_gate', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 4, 'numel': 1703936, 'naive_mismatch': 685139, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'attn_gate', 'N': 4096, 'K': 6656, 'M': 256, 'tp': 8, 'numel': 1703936, 'naive_mismatch': 706422, 'naive_max_abs_diff': 0.03125, 'canonical_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'k_proj', 'N': 256, 'K': 6656, 'M': 256, 'tp': 2, 'numel': 1703936, 'naive_mismatch': 637737, 'naive_max_abs_diff': 0.0078125, 'canonical_mismatch_per_rank': [0, 0]}
+{'shape': 'k_proj', 'N': 256, 'K': 6656, 'M': 256, 'tp': 4, 'numel': 1703936, 'naive_mismatch': 686523, 'naive_max_abs_diff': 0.0078125, 'canonical_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'k_proj', 'N': 256, 'K': 6656, 'M': 256, 'tp': 8, 'numel': 1703936, 'naive_mismatch': 705177, 'naive_max_abs_diff': 0.0078125, 'canonical_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'mlp_gate', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 2, 'numel': 1703936, 'naive_mismatch': 638731, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0]}
+{'shape': 'mlp_gate', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 4, 'numel': 1703936, 'naive_mismatch': 685582, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'mlp_gate', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 8, 'numel': 1703936, 'naive_mismatch': 705060, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'up_proj', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 2, 'numel': 1703936, 'naive_mismatch': 638619, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0]}
+{'shape': 'up_proj', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 4, 'numel': 1703936, 'naive_mismatch': 686361, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'up_proj', 'N': 19968, 'K': 6656, 'M': 256, 'tp': 8, 'numel': 1703936, 'naive_mismatch': 706276, 'naive_max_abs_diff': 0.0625, 'canonical_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'o_proj', 'N': 6656, 'K': 4096, 'M': 256, 'tp': 2, 'numel_y': 1703936, 'left_fold_mismatch': 0, 'canonical_fwd_mismatch_per_rank': [0, 0], 'canonical_dA_mismatch_per_rank': [0, 0], 'canonical_dW_mismatch_per_rank': [0, 0]}
+{'shape': 'o_proj', 'N': 6656, 'K': 4096, 'M': 256, 'tp': 4, 'numel_y': 1703936, 'left_fold_mismatch': 30, 'canonical_fwd_mismatch_per_rank': [0, 0, 0, 0], 'canonical_dA_mismatch_per_rank': [0, 0, 0, 0], 'canonical_dW_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'o_proj', 'N': 6656, 'K': 4096, 'M': 256, 'tp': 8, 'numel_y': 1703936, 'left_fold_mismatch': 85, 'canonical_fwd_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0], 'canonical_dA_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0], 'canonical_dW_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}
+{'shape': 'down_proj', 'N': 6656, 'K': 19968, 'M': 256, 'tp': 2, 'numel_y': 1703936, 'left_fold_mismatch': 0, 'canonical_fwd_mismatch_per_rank': [0, 0], 'canonical_dA_mismatch_per_rank': [0, 0], 'canonical_dW_mismatch_per_rank': [0, 0]}
+{'shape': 'down_proj', 'N': 6656, 'K': 19968, 'M': 256, 'tp': 4, 'numel_y': 1703936, 'left_fold_mismatch': 28, 'canonical_fwd_mismatch_per_rank': [0, 0, 0, 0], 'canonical_dA_mismatch_per_rank': [0, 0, 0, 0], 'canonical_dW_mismatch_per_rank': [0, 0, 0, 0]}
+{'shape': 'down_proj', 'N': 6656, 'K': 19968, 'M': 256, 'tp': 8, 'numel_y': 1703936, 'left_fold_mismatch': 87, 'canonical_fwd_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0], 'canonical_dA_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0], 'canonical_dW_mismatch_per_rank': [0, 0, 0, 0, 0, 0, 0, 0]}

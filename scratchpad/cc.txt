@@ -1,0 +1,557 @@
+=== GROUP top verified 104 n 18
+--- #0
+  kind: wrong
+  section: verdict
+  where: build_blog.py:787 (hard-coded tail of the 代价 tile)
+  text: 严格训练一步约慢 2–3 倍。
+  evidence: megatron_runtime.json runs.tp1/tp2.checks.bench.rows (same table in rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md:231-242). Strict step (scoring + recompute fwd/bwd + AdamW) divided by native fwd+bwd is 9.7x/6.7x/5.1x at TP1 for 512/1024/2048 tokens, and 7.5x/7.7x/5.9x/4.4x/3.1x at TP2 for 512 to 8192 tokens. Strict recompute fwd+bwd alone vs native fwd+bwd is 2.4x to 7.6x. Strict fwd vs native fwd is 2.2x to 5.3x. Only the single longest TP2 row (8192 tokens) comes near 2–3x. The native baseline also has no LoRA and no optimizer. The same wrong figure is in REPORT.md:17.
+  replacement: 严格训练一步（打分 + 重算前向/反向 + AdamW）是原生前向+反向的 3.1–9.7 倍；序列越短差距越大（TP2：8192 token 时 3.1 倍，512 token 时 7.5 倍）。
+--- #1
+  kind: misleading
+  section: verdict
+  where: build_blog.py:768-771 (tile computed from xrt_summary.matrix; description text hard-coded)
+  text: 原生：921–933 / 933 — vLLM、Megatron、HF 的原生实现两两比较，几乎每个 token 的 bit 都不同。
+  evidence: The code picks labels that contain ' native': megatron native tp1/tp2, vllm native tp1/tp2 and vllm native lora tp1. 'reference hf bf16' is not among them, so HF is never compared, even though the text names it. The upper bound 933 comes only from pairs with 'vllm native lora tp1', a run that has a random LoRA (091a39f4…) loaded, so it uses different weights. Recomputed from the xrt_*.json hex: same-weight native pairs without HF give 921–927; adding HF bf16 gives 921–930 (megatron tp1 vs HF = 930).
+  replacement: 原生：921–930 / 933 — vLLM TP1/TP2、Megatron TP1/TP2、HF bf16 的原生实现（同一权重、无 LoRA）两两比较，几乎每个 token 的 bit 都不同。(Code fix: nat = [l for l in matrix if ' native' in l and 'lora' not in l] + ['reference hf bf16'].)
+--- #2
+  kind: misleading
+  section: verdict
+  where: build_blog.py:797 (hard-coded)
+  text: 漂移来源：执行细节 — 拼 batch、KV cache decode、prefill 长度、注意力实现、cuBLAS 归约开关、RoPE 在哪构表：任何一个都让 918–927/933 个 token 变 bit。
+  evidence: The numbers match ablation.json analysis.one_factor_settings (926/927, 923, 918, 924, 927, 924). But ablation.json.scope says: 'HF transformers 5.17.0 … and the strict reference … vLLM 0.31 and Megatron were NOT run in this row'. Placed next to the vLLM/Megatron tiles without that qualifier, the tile reads as a measured cause of the vLLM/Megatron drift.
+  replacement: 漂移来源：执行细节（在 HF transformers 5.17 bf16 上逐个因素测）— 拼 batch、KV cache decode、prefill 长度、注意力实现、cuBLAS 归约开关、RoPE 在哪构表：任何一个都让 918–927/933 个 token 变 bit；vLLM/Megatron 没有做这项消融。
+--- #3
+  kind: misleading
+  section: masthead (hero bit strip)
+  where: build_blog.py:643-660; token chosen by xrt_summary.json example_token = {sequence: gsm8k_long_window, index: 0}
+  text: 同一个 token（gsm8k_long_window 第 0 个答案 token）的 fp32 logprob … vLLM 原生 TP1 0xc2078000 / vLLM 原生 TP2 0xc2078000 / Megatron 原生 TP1 0xc2078000 / Megatron 原生 TP2 0xc2078000
+  evidence: Recomputed from the xrt_*.json logprobs_hex: this is one of only 2 of 933 tokens where all four native runs agree bit for bit. Both are large-magnitude values that bf16 logits round to the same number (-33.875 = 0xc2078000). On the other 931 tokens the native runs disagree with each other. So the page's first figure suggests the native stacks agree with each other and only differ from strict, which is the opposite of the 921–930/933 result. Index 1 of the same sequence: strict 0xc106d227 (all 8); vLLM native TP1 0xc106a675, TP2 0xc10656c0, Megatron native TP1 0xc105018a, TP2 0xc10880ae; HF 0xc1071310.
+  replacement: Use example_token {sequence: gsm8k_long_window, index: 1}: the strict paths give 1 result (0xc106d227) and the native paths give 4 different results. Otherwise add to the caption: “这个 token 恰好是 933 个里 4 个原生实现一致的 2 个之一（bf16 logits 舍入到同一个数）；其余 931 个原生实现彼此也不同。”
+--- #4
+  kind: stale
+  section: masthead
+  where: build_blog.py:663
+  text: RFC RL-Align/RL-Kernel#501 · POC 报告 · 2026-10-15
+  evidence: The GRPO runs that the page reports (runs/grpo_*/run.log) started 2026-10-16 00:37 UTC and were committed at 41f4ff5 on 2026-10-16 01:23 UTC. The blog commits came after that.
+  replacement: RFC RL-Align/RL-Kernel#501 · POC 报告 · 2026-10-16
+--- #5
+  kind: stale
+  section: scope (row card museglimmer_ablation)
+  where: data/row_status.json (written at c3650ed, 2026-10-15 20:48, before wave B re-measured the ablation at 23:12)
+  text: museglimmer_ablation — 完成 — 22 个 HF 设置 + 13 个严格设置
+  evidence: 22 HF / 13 strict are the wave-A counts (git show 10a9a39:data/ablation.json gives settings hf 22, strict 13). The current ablation.json has 45 setting summaries: 23 measured HF settings plus 6 derived one-factor comparisons, 15 strict settings and 1 cross. Its headline, shown on the same page in #why, says '13 of 16 one-factor settings … 15 strict settings', so the card contradicts the page.
+  replacement: 16 个 HF 单因素比较（13 个变 bit）+ 15 个严格设置（0/27057）
+--- #6
+  kind: stale
+  section: scope (row card vLLM 0.31 严格绑定)
+  where: data/row_status.json (pre-wave-B)
+  text: 933/933 == 参考链；TP2 == TP1；decode == prefill
+  evidence: xrt_summary.json strict_groups.base now contains vllm strict tp4, and vllm_runtime.json.generate has strict tp4 runs with decode_vs_prefill 0/512. The verdict tile on the same page already says vLLM TP1/TP2/TP4.
+  replacement: 933/933 == 参考链；TP2 == TP4 == TP1；decode == prefill
+--- #7
+  kind: stale
+  section: scope (row card Megatron Bridge 严格绑定)
+  where: data/row_status.json (pre-wave-B)
+  text: logprob、LoRA 梯度、AdamW 一步 TP2 == TP1
+  evidence: megatron_runtime.json notes.status_per_check.tp4: 'xrt == tp1 0/933 … grads == tp1, post-step hash == tp1'. The verdict tile says 'TP1 = TP2 = TP4'. Note that the TP4 run was dirty=true at 58deb44.
+  replacement: logprob、LoRA 梯度、AdamW 一步 TP2 == TP4 == TP1
+--- #8
+  kind: wrong
+  section: scope (system diagram)
+  where: diagrams.py:238 default rollout_tp="TP2"; called without arguments at build_blog.py:128
+  text: vLLM 严格 rollout — TP2 · 采样 + fp32 logprob
+  evidence: Every GRPO run that the page reports used rollout TP1 on 1 GPU: e2e_run.json modes[*].config.rollout_tp = 1, and runs/grpo_strict_strict/config.json rollout_tp 1 with rollout_gpus [0]. The #e2e text itself says 'rollout TP1（1 张）+ 训练 TP2（2 张）'.
+  replacement: vLLM 严格 rollout — TP1 · 采样 + fp32 logprob (call D.fig_system(rollout_tp="TP1", train_tp="TP2"), or derive both from e2e_run.json config)
+--- #9
+  kind: wrong
+  section: scope (system diagram)
+  where: diagrams.py:253
+  text: trainer server — torchrun，rank 0 收发
+  evidence: runs/grpo_*/config.json trainer_launcher = "process", and provenance.json has "launcher": "process". REPORT_e2e_loop.md:134-137 says 'process (default): StrictTrainer spawns its own TP workers'; torchrun is the optional launcher.
+  replacement: trainer server — 单进程启动，StrictTrainer 自己拉起 TP2 worker
+--- #10
+  kind: misleading
+  section: scope (system diagram caption)
+  where: build_blog.py:128
+  text: trainer 跑在子进程里，中间只传 token id、fp32 的 dL/dlogp 和带哈希的 LoRA。
+  evidence: The trainer also sends its fp32 logprobs back to the orchestrator. REPORT_e2e_loop.md:128-132: 'token_logprobs returns fresh CPU leaf tensors with the trainer's fp32 values'. The diagram right above the caption draws a 'logprob' arrow from the trainer, and the drift comparison depends on those logprobs.
+  replacement: trainer 跑在另一个 env 的服务进程里，中间只传 token id、trainer 的 fp32 logprob、fp32 的 dL/dlogp 和带哈希的 LoRA。
+--- #11
+  kind: misleading
+  section: scope (row card dense_gemm)
+  where: build_blog.py:94
+  text: 8 叶 K 树，105–135 TFLOP/s
+  evidence: The range comes from ws1_bench.json / bench_ws1.log (M=4096: 104.6–134.6 for the N≥4096 shapes). The newer kernels_gemm.json (wave B, b5b77b0) measures 100.6–131.2 for the same shapes (q_proj 100.6, down_proj 131.2). k_proj/v_proj reach only 50–71, and decode M=16 reaches 0.5–25. The card gives no M or shape qualifier.
+  replacement: 8 叶 K 树；M=4096 大形状 101–135 TFLOP/s（约 cuBLAS 的 1/2）
+--- #12
+  kind: misleading
+  section: scope (row card swiglu_ffn)
+  where: build_blog.py:99
+  text: GEMM 占 98.7% 时间
+  evidence: ws1_bench.json gives GEMM 26.27 ms and swiglu 0.356 ms, and 26.27/(26.27+0.356) = 98.7%. That is GEMM's share of the summed kernel times. Against the measured strict FFN forward wall time (30.477 ms) GEMM is 86%. REPORT_swiglu_ffn.md:69 (newer run) says 99.0%.
+  replacement: 三个 GEMM 占 FFN 内核时间约 99%（SwiGLU 内核 1%）
+--- #13
+  kind: misleading
+  section: model (layer diagram legend)
+  where: diagrams.py:131-155
+  text: 蓝框 = 这次 POC 里由严格（定序、定 tile、fp32 累加）Triton 内核实现的算子；其余是逐元素或小归约，同样定序。 (o_proj and the four norms drawn as non-blue boxes)
+  evidence: o_proj is a 6656×4096 GEMM that runs through the strict det_gemm canonical K-chunk tree (contract O3 'o = row-parallel det_gemm(a, Wo) (tree)'; runtime/tp_canonical_tree.py). It is neither elementwise nor a small reduction. The norms also have their own strict Triton kernels (ops/norms.py, REPORT_norms.md).
+  replacement: Mark o_proj (and the norm boxes) blue, or change the legend to: “蓝框 = 主要的严格 Triton 内核；o_proj 也走同一个树形 GEMM，norm 有各自的严格内核。”
+--- #14
+  kind: misleading
+  section: model (layer diagram)
+  where: diagrams.py:133
+  text: o_proj — TP 下行并行
+  evidence: o_proj is row-parallel over 8 canonical K-chunks (contract lines 55-59). The standard Chinese term is 行并行; '下行并行' is not a term and reads as 'downlink parallel'.
+  replacement: o_proj — TP 行并行（K 维 8 块树）
+--- #15
+  kind: misleading
+  section: contract
+  where: build_blog.py:178-179
+  text: 一棵树管住所有加法 / 契约把每个长归约都切成 8 个固定的块，块内 fp32 累加，块间按一棵固定的平衡二叉树相加，最后只舍入一次到 bf16。
+  evidence: The 8-chunk tree applies to the GEMM K axis, the vocab tiles and the dK/dV query chunks. In the attention forward the key-axis reduction walks 64-key blocks in ascending order with online softmax, not 8 leaves (contract lines 88-99). Norms are row-local fixed-order reductions (R3). The LM-head logits are explicitly NOT rounded to bf16 and stay fp32 (contract line 154).
+  replacement: 一棵树管住跨 rank 的加法 / 契约给每个归约都定死顺序：GEMM 的 K 维、词表和 dK/dV 切成 8 个固定的块，块内 fp32 累加，块间按一棵固定的平衡二叉树相加，再在声明的位置舍入一次（GEMM 输出到 bf16；logits 保持 fp32）；注意力按 64 个 key 一块、升序做 online softmax。TP 只决定“谁算哪棵子树”，不改变树本身。
+--- #16
+  kind: misleading
+  section: contract
+  where: build_blog.py:157-162 (tp_bars data) and :181 (caption)
+  text: 到 TP4 就错了 46–48 个元素
+  evidence: REPORT_ws2_tp.md:35-37 and :185-187 give two NCCL control runs at TP4: 31/50 (fallback run) and 46/48 (sibling-kernel run), and the summary says '31-50 mismatching bf16 elements of 1,703,936 per run'. The chart shows only one of the two runs, and the count varies from run to run, which is the point of the control.
+  replacement: 到 TP4 就错了 31–50 个元素（两次运行，每次结果都不同）
+--- #17
+  kind: misleading
+  section: contract
+  where: build_blog.py:172-173 (timing chart) and :183 (caption)
+  text: 代价很小：all-gather + 树和 NCCL all_reduce 同一个量级（TP4 多 0.07 ms）。
+  evidence: The numbers match REPORT_ws2_tp.md:199-204. But the baseline is an fp32 all_reduce of the (256, 6656) root. Native vLLM/Megatron all-reduce bf16, which is half the bytes (the report says 'the fp32 root is 2x the bytes of a bf16 all-reduce'). The strict path is also 1.0–1.5x the NCCL time (TP2 down 0.155 vs 0.114 ms). These are single rank-0 samples at M=256 only.
+  replacement: 代价：在 M=256 时，all-gather + 树是同尺寸 fp32 NCCL all_reduce 的 1.0–1.5 倍（TP4 多 0.07 ms）；原生运行时实际做的是 bf16 all_reduce，字节数只有一半。
+=== GROUP kernels_runtimes verified 140 n 20
+--- #0
+  kind: stale
+  section: #ws1
+  where: ratio chart, attention rows built from ws1_bench.json (build_blog.py:199-203), caption at build_blog.py:290
+  text: 注意力 prefill Tq=4096 B=1 全局 1.35× / decode B=64 ctx=4096 全局 1.54× / prefill 局部 0.05× / decode 局部 0.02× / 注意力反向 全局 T=4096 2.39× / 注意力反向 局部 T=4096 1.84×; caption: “严格版因此显得快 20–50 倍，这两行不能当作真实的速度比较”
+  evidence: These rows come from the first-round bench_ws1.log (v1 backward, pre-wave-B forward). kernels_attention.json headline + benchmarks_wave_b.run_1_all_sections (alternating rounds): prefill T=4096 global 1.27x SDPA / 1.39x vLLM FA2; local prefill T=4096 1.18x FA2; paged decode B=64 global 1.15x SDPA / 1.04x FA2; local decode B=64 0.17x FA2. The v2 backward is 2.5x SDPA at T=4096 (6.12–6.16 ms vs 2.43). The local SDPA rows are explicitly withdrawn in the JSON (ratio=null, baseline_not_comparable: dense-mask forward, full-causal backward), so plotting 0.05×/0.02×/1.84× contradicts the regenerated data. The raw ratios also work out to 19×–56×, not 20–50×.
+  replacement: Build the attention rows from kernels_attention.json benchmarks_wave_b, e.g. “注意力 prefill T=4096 全局 1.27×（vs SDPA）/1.39×（vs FA2）”, “prefill 局部 1.18×（vs FA2 滑窗）”, “decode B=64 全局 1.15×/1.04×”, “注意力反向 全局 T=4096 2.5×”. Drop the local SDPA rows and the local backward row. Caption: “局部层用 vLLM FA2 的滑窗内核作基线；旧的 SDPA 整张 mask 基线已撤回。”
+--- #1
+  kind: wrong
+  section: #ws1
+  where: ratio chart row from bench_swiglu_ffn table (build_blog.py:209-211)
+  text: swiglu share of strict FFN fwd  [未运行]
+  evidence: The filter r["case"].startswith("swiglu") also picks up the table row 'swiglu share of strict FFN fwd | 0.356 | - | 1.3%'. That row holds a time share, not a strict/native ratio. num('1.3%') returns None, so the bar is drawn as “未运行” (not run), but the benchmark did run.
+  replacement: Leave the row out (filter on r["case"] in ("swiglu (T x F) fwd", "swiglu_ffn fwd (T tokens)")), or state the share in the caption: “SwiGLU 本身只占严格 FFN 前向的 1.3%，GEMM 占 98.7%”.
+--- #2
+  kind: misleading
+  section: #ws1
+  where: review stacked bar, ws1_review_block (build_blog.py:224-235)
+  text: QK-norm + RoPE（5 条）：确认并修复 2 条
+  evidence: kernels_rope.json findings use free-text verdicts for 3 of the 5: qknorm_rope:1 'fixed_in_module_builder; wave B: …', qknorm_rope:3 'coverage_gap_test_added', qknorm_rope:4 'partially_fixed: … open until the call sites pass local='. The counter only knows the four enum keys, so those 3 are dropped without a trace. The bar reads 2 of 5 with no category for the other 3, and the partially-fixed finding 4 is hidden.
+  replacement: Map the rope verdicts before counting: 1 → 确认并修复 (wave B), 3 → 覆盖缺口，已补测试, 4 → 部分修复（open）. Or add a “其他/部分修复” series so the bar adds up to 5 (2 fixed + 1 fixed in wave B + 1 test added + 1 partially fixed).
+--- #3
+  kind: stale
+  section: #ws1
+  where: tests chart caption (build_blog.py:294)
+  text: 本轮合并后：vLLM 环境单卡 581 个通过、0 失败；Megatron 环境 222 个通过、0 失败。
+  evidence: 581/7 skipped and 222/1 skipped come from RESUME.md:102, the wave A merge regression. Wave B runs after that report: kernels_attention.json wave_b.tests.full_single_gpu_suite_vllm_env '675 passed, 8 skipped' (060d7d4); kernels_rope.json '653 passed, 8 skipped'; Megatron env subset '35 passed, 2 skipped'. Commit 7d60df9 records 'Binding + RoPE tests: 202 passed, 5 skipped'. The data has no full-suite count on the final merged HEAD. Also, '0 失败' for Megatron leaves out the 1 skipped.
+  replacement: “wave A 合并后：vLLM 环境 581 通过/7 跳过，Megatron 环境 222 通过/1 跳过；wave B 各分支的单卡全套为 653–675 通过/8 跳过（最终合并 HEAD 的全套回归未记录）。” Better still, re-run the suite on the final HEAD and cite that number.
+--- #4
+  kind: wrong
+  section: #ws1
+  where: legacy GEMM chart title (build_blog.py:277)
+  text: 为什么要重写 GEMM：仓库原有确定性 GEMM 在 A100 上只有 ~5 TFLOP/s
+  evidence: bench_ws1.log, M=4096 legacy TritonDetGemmOp ms: q_proj 40.12 ms gives 2·4096·4096·6656/0.04012 ≈ 5.6 TFLOP/s; mlp_gate 561 ms ≈ 1.9 TFLOP/s; down_proj 981.5 ms ≈ 1.1 TFLOP/s. ~5 TFLOP/s holds only for the N=4096/K=6656 shapes; on the FFN shapes, which dominate the model, it is 1–2 TFLOP/s (64×–121× slower). RFC_CHANGES F10 repeats the same '~5'.
+  replacement: 为什么要重写 GEMM：仓库原有确定性 GEMM 在 A100 上只有 1–6 TFLOP/s（FFN 形状约 1–2）
+--- #5
+  kind: wrong
+  section: #ws1
+  where: TFLOP/s chart caption (build_blog.py:291)
+  text: 树形 GEMM 跑到 cuBLAS 的 40–50%。
+  evidence: bench_ws1.log M=4096 strict/cuBLAS: q_proj 2.61x (38%), k/v_proj 2.45x (41%), attn_gate 2.22x (45%), o_proj 2.31x (43%), mlp_gate/up 2.06–2.08x (48%), down_proj 1.92x (52%), lm_head 2.09x (48%).
+  replacement: 树形 GEMM 跑到 cuBLAS 的 38–52%。
+--- #6
+  kind: wrong
+  section: #ws1
+  where: det_gemm:1 caption (build_blog.py:244)
+  text: 约一半输出偏离契约
+  evidence: kernels_gemm.json det_gemm_1_iters_probe.before.forward_sweep (the chart directly above): K=256 47.5–48.6%, K=512 65.6–66.7%. The headline says '48-67 % of outputs differed from the declared tree for K=256/512'.
+  replacement: K=256/512 时 48–67% 的输出偏离契约
+--- #7
+  kind: misleading
+  section: #ws1
+  where: RoPE CPU-vs-CUDA caption (build_blog.py:258)
+  text: 约 20% 的表项 bit 不同
+  evidence: kernels_rope.json experiments.table_cpu_vs_cuda_per_bucket: cos 17.8–27.0% (mean 23.3%), sin 17.8–25.6%, and the fraction grows with position. Finding qknorm_rope:1: cos 3,916,740 / sin 3,958,164 of 16,777,216 elements (≈23.5%).
+  replacement: 约 18–27%（平均约 23%）的表项 bit 不同，位置越大越多
+--- #8
+  kind: unsupported
+  section: #ws1
+  where: prose (build_blog.py:289)
+  text: 编译扩展 rl_engine._C 也无法对 CUDA 13 的 torch 构建 … 和 fp64 参考的误差在 ws1 容差内
+  evidence: AGENT_BRIEFING.md:26 and RESUME.md:8 only say rl_engine._C is NOT built or available. No source says it cannot be built against CUDA 13. On the tolerance claim, MERGE_LOG.md (gated_attention backward row) says 'ws1 bf16 gradient atol 5e-2 unmeetable at |dK|≈26' and a scale-free tolerance was applied instead, so not every row meets the ws1 tolerance as written.
+  replacement: 编译扩展 rl_engine._C 在这套环境里没有构建 … 和 fp64 参考的误差在 ws1 容差内（门控注意力反向的梯度容差按量级缩放，已在报告中声明）
+--- #9
+  kind: misleading
+  section: #ws1
+  where: LM-head memory chart title (build_blog.py:279) and caption (:293)
+  text: 词表 202752 … 不物化 4096×202752 的 logits
+  evidence: bench_lm_head_softcap_logprob raw: 'T=4096 H=6656 V=202048 (padded 202752, 8 tiles)'. The real vocabulary is 202048; 202752 is the strict path's tile-padded size.
+  replacement: 词表 202048（严格路径补齐到 202752）… 不物化 4096×202048 的 logits
+--- #10
+  kind: stale
+  section: #chain
+  where: HF anchor charts, hard-coded (build_blog.py:314-323), caption :329
+  text: 严格 golden vs HF fp32 0.041 / 严格 Triton vs HF fp32 0.046 / HF bf16 vs HF fp32 0.046 / golden vs HF bf16 0.064 / Triton vs HF bf16 0.066; argmax 99.63/99.63/98.53/98.9/98.5; caption “以 HF fp32 为准，严格路径比 HF 自己的 bf16 还近”
+  evidence: These numbers are not in any data JSON. They come from the 'Original hand-back (HEAD 09eef9d)' of REPORT_full_model_chain.md:366-371/442-444: one 512+32 sequence, max|Δlogp| over 32 completion tokens, argmax over all 544 positions (the chart does not say this), measured before the O7 fix (c88607f). Wave B (reference_profile.json) re-measured only the HF-bf16 anchor: Triton 512+32 0.0656/98.90% (matches); Triton 2100+32 0.0852 max, 98.08% argmax. HF fp32 was not re-run. On the 933-token xrt file, Triton vs HF bf16 max|Δlogp| is 0.392 and golden 0.246. The caption also overstates: Triton's max |Δlogp| vs fp32 (0.046) ties HF bf16 (0.046); it is closer only on the mean (0.016 vs 0.019) and on argmax.
+  replacement: Label the chart: “单条序列 512+32，|Δlogp| 取 32 个答案 token 的最大值，argmax 取全部 544 个位置；HF fp32 锚点在 O7 修复前测得（wave A）”. Add the wave B 2100+32 row (Triton vs HF bf16 0.085 / 98.08%). Caption: “以 HF fp32 为准，严格路径的误差不比 HF 自己的 bf16 大：golden 更近，Triton 最大误差持平、均值和 argmax 更好。”
+--- #11
+  kind: misleading
+  section: #chain
+  where: window figure caption (build_blog.py:328)
+  text: golden（纯 PyTorch 定序）
+  evidence: reference/backend.py: the golden backend's GEMM is GoldenGemm[gemm_impl='triton_fp32'] (default). REPORT_full_model_chain.md:353-354: 'backend="golden" = pure-torch fp32 fixed-order fallbacks + repo TritonDetGemmOp.forward_fp32 GEMM'. So it is not pure PyTorch.
+  replacement: golden（fp32 定序参考：PyTorch 算子 + 仓库原有的 fp32 Triton GEMM）
+--- #12
+  kind: misleading
+  section: #chain
+  where: path-timing caption (build_blog.py:311)
+  text: xrt 的 9 条序列（933 个 token）也做了 train = prefill = decode = 两种分块 的检查
+  evidence: reference_profile.json experiments.xrt_scoring.triton.check_modes = prefill, decode, prompt_boundary, block64, ragged, window_boundary_2047/2048/2049 (48 checks; the window chunkings run only on the long sequence). Golden: prefill, decode, prompt_boundary, W2048 (28 checks). So there are up to 6 chunkings, not 2.
+  replacement: xrt 的 9 条序列（933 个 token）也做了 train = prefill = decode = 多种分块（Triton：prompt 边界、64 对齐、不规则、W−1/W/W+1；golden：prompt 边界、W）的检查，全部逐 bit 相同。
+--- #13
+  kind: wrong
+  section: #multi
+  where: TP heatmap caption (build_blog.py:358)
+  text: 所以 TP 下不需要复制 KV、也不需要 all-gather 头。
+  evidence: This contradicts the same caption (“TP4、TP8 是 8/1、4/1（KV 头复制）”). Contract O5 (docs/contracts/muse-glimmer-30b-strict-contract.md:136-138): 'the t/2 replicas of a KV head (TP4/TP8) all_gather their fp32 nodes in rank order and fold them with the same tree'. REPORT_ws2_cp.md also says TP4/TP8 dK/dV 'are partials that need the cross-TP replica tree first'. At TP4/TP8, KV heads are replicated and their dK/dV partials are all-gathered.
+  replacement: 所以 TP 下每个 rank 只算自己的 Q 头，不需要 all-gather Q 头；TP4/TP8 时 KV 头按副本复制，副本的 fp32 dK/dV 部分和按 rank 顺序 all-gather 后用同一棵树合并一次。
+--- #14
+  kind: stale
+  section: #multi
+  where: CP diagram caption (build_blog.py:337)
+  text: CP 下 K/V 先 all-gather（T=8192、CP2 时 0.23 ms，约占前向 4%）
+  evidence: 0.23 ms / ~4% is from the original section of REPORT_ws2_cp.md:78-79. The 'Wave A update' at the top of the same report supersedes it: 'AG of K+V 0.280 ms (global) / 0.343 ms (local) vs a 5.1-6.3 ms (global) / 3.0-3.2 ms (local) rank forward', which is about 4–5% global and about 11% local.
+  replacement: CP 下 K/V 先 all-gather（T=8192、CP2 时全局层 0.28 ms，约占该 rank 前向的 5%；局部层 0.34 ms，约 11%），query 按 rank 切。
+--- #15
+  kind: wrong
+  section: #multi
+  where: backward cost caption (build_blog.py:370)
+  text: T=512 时慢 55%
+  evidence: kernels_attention.json benchmarks.backward_before_after: T=512 global v2/v1 = 1.547, local = 1.580.
+  replacement: T=512 时慢 55–58%
+--- #16
+  kind: stale
+  section: #multi
+  where: per-rank TP timing chart (build_blog.py:371-379), reads benchmarks.tp_shard_*
+  text: T=4096 时一个 rank 的注意力耗时（ms）: TP4 全局 0.673/2.18, TP8 全局 0.430/1.40 …
+  evidence: These are wave A single-series means. kernels_attention.json benchmarks_wave_b.run_2_backward_tp re-measures them on the wave B kernels: TP4 global fwd 0.56 / bwd 1.87, TP4 local 0.409/1.547, TP8 global 0.357/1.23, TP8 local 0.243/1.002. The wave B description warns that backward/TP rows 'vary up to ~2x run to run'. The chart gives no run-to-run caveat.
+  replacement: Plot benchmarks_wave_b.run_2_backward_tp (or both runs as a range) and add to the caption: “单次序列的均值，反向会因 host 同步在不同运行之间相差最多约 2 倍。”
+--- #17
+  kind: misleading
+  section: #runtimes
+  where: vLLM decode-vs-prefill chart labels, lab() (build_blog.py:425-427)
+  text: 原生 TP1 贪心 156 / … / 原生 TP1 贪心 144 (the same label appears twice, likewise 原生 TP1 T=1)
+  evidence: vllm_runtime.json generate: the first four native TP1 rows come from runs/native_lora_tp1.json (engine_lora_enabled=True, no adapter loaded for the 'no LoRA' rows). The next two come from runs/native_tp1.json (engine_lora_enabled=False). lab() ignores engine_lora_enabled, so a reader sees two identical bars with different values.
+  replacement: Include engine_lora_enabled in the label, e.g. “原生 TP1 贪心（LoRA 引擎、未加载适配器）” versus “原生 TP1 贪心”.
+--- #18
+  kind: misleading
+  section: #runtimes
+  where: contract-shapes heatmap row name (SHAPE_ZH, build_blog.py:414)
+  text: 长序列 + 极小 KV 池（抢占）（2304 token）
+  evidence: vllm_runtime.json contract_shapes long_window_tightkv_no_lora: scheduler_events {preempted: 0, resumed: 0} for both native and strict, with max decode batch 2. The 13 preemptions in the caption all happened in decode_batch_64_tightkv_no_lora (preempted 13). REPORT_vllm_runtime_adapter.md:20-21 says the same.
+  replacement: Row names: “长序列 + 极小 KV 池（页复用，无抢占）” and “batch 64 + 极小 KV 池（抢占 13 次）”. Caption: “…KV 池不够导致的抢占（batch 64 时 13 次）”.
+--- #19
+  kind: misleading
+  section: #runtimes
+  where: Megatron fact tile (build_blog.py:479)
+  text: AdamW 一步后 TP1 = TP2 = TP4 相同 — 更新后 LoRA 哈希 69968212…；micro batch 512/4096/8192 三种打包也一样
+  evidence: megatron_runtime.json runs.*.checks.packing compares the gradient aggregate (aggregate_sha256 1df6d60b…, grad_bit_mismatching_elements_vs_default 0) and the recompute logprobs across micro-batch budgets 4096/512/8192. It does not compare the post-AdamW LoRA hash. The step check ran only with micro_batches=2. As placed, the tile suggests the packing invariance was shown for the updated weights.
+  replacement: Move the packing clause to the gradient tile: “…聚合 SHA-256 一致（1df6d60b…）；micro batch 512/4096/8192 三种打包的梯度也逐 bit 相同”. The AdamW tile then reads only “更新后 LoRA 哈希 69968212…（TP1/TP2/TP4 相同）”.
+=== GROUP results verified 71 n 16
+--- #0
+  kind: misleading
+  section: #xrt
+  where: build_blog.py:515-518 (computed) + 523 caption "原生实现两两之间有 {best}–{worst} 个 token 不同"
+  text: 原生实现两两之间有 921–933 个 token 不同。
+  evidence: data/xrt_summary.json matrix: the `nat` list includes "vllm native lora tp1", which has a random LoRA loaded, so it is a different model from the other native dumps. Its pairs (928, 931, 932, 933) produce the upper bound of 933. If you compare only the same weights (megatron native tp1/tp2, vllm native tp1/tp2), the range is 921–927. The same calculation feeds the #verdict tile at build_blog.py:771.
+  replacement: 原生实现（同一权重、无 LoRA）两两之间有 921–927 个 token 不同。 (code: exclude labels containing "lora" from `nat`, or compare only within the same strict_group/LoRA hash)
+--- #1
+  kind: wrong
+  section: #xrt
+  where: build_blog.py:523 (hard-coded caption tail)
+  text: golden 是纯 PyTorch 的 fp32 精度参考，不是逐 bit 目标。
+  evidence: data/xrt_reference_golden.json ops_provenance.gemm = "golden_ops.GoldenGemm[triton_fp32]". The rl_engine/models/muse_glimmer/reference/golden_ops.py docstring says GEMMs run through the repo Triton `TritonDetGemmOp.forward_fp32`, with bf16 at the declared cast points. So golden is not pure PyTorch and not a high-precision fp32 reference: it is a second fixed-order strict implementation (checks.all_byte_equal_to_train = true over 28 prefill/decode/chunked checks). REPORT_full_model_chain.md:51 says golden vs triton is 39/933 byte-equal because of different op sets.
+  replacement: golden 是另一套固定顺序的严格实现（PyTorch fp32 算子 + Triton fp32 GEMM，bf16 只在契约规定的位置舍入，自身 prefill/decode/分块逐 bit 一致），算子分解和 Triton 后端不同，所以和严格路径有 894 个 token 不同；它是精度对照，不是逐 bit 目标。
+--- #2
+  kind: stale
+  section: #xrt
+  where: build_blog.py:400-410 (XRT_NAMES / XRT_ORDER)
+  text: Heatmap row/column labels "reference triton repeat" and "vllm strict lora tp4" (raw English, sorted after 参考链 golden)
+  evidence: Wave B added xrt_reference_triton_repeat.json and xrt_vllm_strict_lora_tp4.json (both in xrt_summary.json strict_groups), but XRT_NAMES and XRT_ORDER were not updated. The two dumps render untranslated and land at the end of the matrix, away from their strict group, so the green 0-blocks are split.
+  replacement: Add to XRT_NAMES: "reference triton repeat": "参考链 Triton（重跑）", "vllm strict lora tp4": "vLLM 严格 TP4+LoRA". Insert them into XRT_ORDER after "reference triton" and after "vllm strict lora tp2" respectively.
+--- #3
+  kind: misleading
+  section: #xrt
+  where: build_blog.py:514 (gtxt) / 523
+  text: 同一个随机 LoRA：3 份 dump 两两 0 差异
+  evidence: xrt_summary.json strict_groups[lora:091a39…] = vllm strict lora tp1/tp2/tp4 only. No Megatron or reference LoRA dump is in the xrt matrix, so with LoRA this is a vLLM-only TP check, not a three-way comparison (the section heading says 三方). The cross-runtime LoRA evidence is the E2E strict/strict 0/61139.
+  replacement: 同一个随机 LoRA：vLLM TP1/TP2/TP4 共 3 份 dump 两两 0 差异（Megatron 侧的 LoRA 对比见下面的 GRPO 端到端结果）
+--- #4
+  kind: wrong
+  section: #e2e
+  where: build_blog.py:753 (working tree; :733 at HEAD) drift caption
+  text: 只要有一边是原生实现，每一步都有 55–70% 的 token 不同。
+  evidence: data/e2e_run.json per-step bitwise_mismatch/tokens: native/native 60.0, 58.8, 54.6, 60.1, 55.8, 55.8, 58.8, 60.0%; strict/native 65.2–70.0%; native/strict 65.4–71.4% (step 6: 5319/7446 = 71.4%, step 7: 5627/7960 = 70.7%). The actual range is 54.6–71.4%.
+  replacement: 只要有一边是原生实现，每一步都有约 55–71% 的 token 不同（原生/原生 55–60%，两种混合模式 65–71%）。
+--- #5
+  kind: unsupported
+  section: #e2e
+  where: build_blog.py:753 (working tree; :733 at HEAD) drift caption
+  text: 两种混合模式比原生/原生还高：严格侧用 fp32 logits，原生侧用 bf16 logits，差异是系统性的。
+  evidence: The comparison itself checks out (68.3% / 68.5% vs 58.0% token-weighted). No run isolates the cause. RFC_CHANGES.md:785 lists "vLLM's logits dtype (whether LogitsProcessor upcasts to FP32 …) — not verified". The strict and native paths also differ in every GEMM (tree GEMM vs cuBLAS), attention and RoPE, not only in logits dtype; in the xrt matrix strict vs native is 932–933/933 and native vs native is 921–927/933. Also, first_drift abs_diff in the mixed modes is 6e-7, which a bf16 rounding of the logits alone would not explain.
+  replacement: 两种混合模式（约 68%）比原生/原生（58%）还高：严格和原生是两套完全不同的数值实现（树形 GEMM、fp32 logits 对 cuBLAS bf16），而原生/原生两侧共享更多 bf16 算子；具体是哪一项造成的没有单独消融。
+--- #6
+  kind: misleading
+  section: #ablation
+  where: build_blog.py:589 (prose, last sentence)
+  text: rollout 引擎恰好同时改了这几个因素。
+  evidence: ablation.json scope: "vLLM 0.31 and Megatron were NOT run in this row". REPORT_ablation.md: "Anything below about those engines is a hypothesis". The size of the effect also does not carry over: HF one-factor changes hit 918–927/933 (~99%), while native vLLM decode vs prefill differs on 144–168/512 (~30%, vllm_runtime.json generate) and the E2E native rollout recheck is 49–55%.
+  replacement: vLLM 这样的 rollout 引擎会同时改变其中好几个因素（批处理、KV cache decode、分块 prefill）；这一点是推断，本节只跑了 HF 和严格参考，没有跑 vLLM/Megatron。
+--- #7
+  kind: misleading
+  section: #ablation
+  where: build_blog.py:594 (layer chart caption)
+  text: 差异从第 0 层就出现，三四层内扩散到约 85% 的隐藏元素；只改 TF32 的那条线始终是 0。
+  evidence: ablation.json layer_records, gsm8k_test_0: padded_batch9_left and kv_cache_decode are at 64–65% at layer 0, 83–84% at layers 2–3, and keep rising to 95–96% at the final norm, so 85% is not where they settle. prefill_L_minus_1 is only 8.4e-4 at layer 0 (REPORT_ablation.md §7), 18% at layer 1 and 53% at layer 2, then plateaus at about 67–72% and ends at 80%, so it never reaches 85%. The TF32 line is 0 throughout (verified).
+  replacement: 拼 batch 和 KV cache decode 在第 0 层输出就有约 65% 的元素不同，两三层后约 85%，到 final norm 约 95%；prefill 少一个 token 在第 0 层只改了 3 行，之后升到约 70%，final norm 80%。只改 TF32 的那条线始终是 0。
+--- #8
+  kind: misleading
+  section: #ablation
+  where: build_blog.py:565 (strict chart title)
+  text: 严格参考路径：同样的扰动
+  evidence: The strict settings (ablation.json settings, engine=strict) are packing, padding, paged prefill, prefill/decode alone, batched decode 9/72, mixed step, chunked 64/256/1024, repeat and second GPU. TF32, SDPA, RoPE inv_freq on GPU, the bf16 reduced-reduction flag, softcap/logits dtype and L-1 prefill were not applied; the contract fixes them. The caption correctly lists the subset, but the title says 'the same perturbations'.
+  replacement: 严格参考路径：可比的执行扰动（拼 batch、padding、paged KV、decode、分块、换卡）
+--- #9
+  kind: stale
+  section: #ablation
+  where: build_blog.py:531-543 (ABL_ZH)
+  text: Strict chart row label "second_gpu_7_vs_3" (raw English)
+  evidence: ablation.json has strict setting "second_gpu_7_vs_3". ABL_ZH only maps second_gpu_6_vs_7 and second_gpu_3_vs_7 (both from older runs), so this row renders untranslated. ABL_ZH also has duplicate keys (rope_inv_freq_cuda, new_process_same_gpu_7).
+  replacement: Add "second_gpu_7_vs_3": "换一张 GPU" to ABL_ZH (and drop the duplicate keys).
+--- #10
+  kind: misleading
+  section: #ablation
+  where: build_blog.py:592 (magnitude chart caption)
+  text: 单个 token 的漂移可以到 0.4–1.1 nat，平均约 0.02 nat。
+  evidence: The chart (ablation.json settings with n_bits_differ > 0) also includes softcap_fp32 (max 0.148, mean 0.011), logits_fp32 vs softcap (max 0.040, mean 0.0031) and chunk 1024 (max 0.241, mean 0.0031). 0.4–1.1 / ~0.02 holds only for the shape and scheduling factors (max 0.447–1.119, mean 0.0167–0.0204; REPORT_ablation.md §1).
+  replacement: 形状、调度类因素：单个 token 的漂移最大 0.45–1.12 nat，平均约 0.017–0.020 nat；只改 logits dtype 的设置小一个量级（最大 0.04–0.15 nat）。
+--- #11
+  kind: misleading
+  section: #ablation
+  where: build_blog.py:588 (h2)
+  text: 原生栈的漂移从哪来：bf16 GEMM 或注意力的形状、调度，任何一处变化
+  evidence: Two of the one-factor settings that flip ~99% of bits are neither GEMM/attention shape nor scheduling: RoPE inv_freq built on the GPU (924/933, a 4-of-64 table value change) and softcap in fp32 (922/933, a dtype change). The scope is also HF only, not 'the native stack'.
+  replacement: 原生 HF 栈的漂移从哪来：GEMM/注意力的形状与调度、RoPE 表在哪构造、logits 精度，任何一处变化
+--- #12
+  kind: misleading
+  section: #profile
+  where: build_blog.py:638 (caption)
+  text: decode batch 1 时严格路径反而更快
+  evidence: REPORT_full_model_chain.md:76-82 and reference_profile.json notes.host_load: the node was shared (load avg 335/404/296). Decode B=1 is launch-bound and its wall times move with host load: HF B=1 was 130 ms in wave A and 260 ms in wave B; strict was 132 then 149. In wave A the ratio was 1.01×. GPU busy is 50.1 ms strict vs 56.1 ms HF. In wave B, HF B=1 (260 ms clean) is even slower than HF B=16 (110 ms), which is not physically meaningful. A skeptical reader will catch this.
+  replacement: decode batch 1 两边都受 kernel 启动开销限制（GPU 忙碌时间 50 vs 56 ms），墙钟时间随主机负载波动：wave A 时 132 vs 130 ms 基本持平，本次 HF 的 260 ms 是共享节点高负载造成的，不说明严格路径更快。
+--- #13
+  kind: stale
+  section: #profile
+  where: build_blog.py:628-639 (ratio caption code)
+  text: 严格路径耗时 / HF：… (caption of the 按占比 chart; currently renders empty)
+  evidence: Wave B changed reference_profile.json experiments.profile.stacked_bars.strict_over_hf_clean from a dict to a list aligned with configs: [1.82, None, 1.61, None, 1.56, None, 0.57, 3.16]. `isinstance(ratio, dict)` is now False, so rtxt is "" and the second figure is published with no caption. The strict decode B=16 3.16× slowdown is never stated anywhere in the section.
+  replacement: Handle the list form: vals = [(zh(c), r) for c, r in zip(cfgs, ratio) if 'paged' not in c and isinstance(r, (int, float))]. Caption: "严格路径耗时 / HF（无插桩总时间）：prefill T=512 1.82×；T=2048 1.61×；T=4096 1.56×；decode batch 1 0.57×（受主机负载影响）；decode batch 16 3.16×"
+--- #14
+  kind: misleading
+  section: #profile
+  where: build_blog.py:638 (caption)
+  text: batch 16 时严格路径的 paged KV 写入（橄榄色）占了一半时间
+  evidence: Verified for the wall view: kv_cache wall_frac is 0.533 (204.9 ms of 384 ms instrumented). But GPU kernel time for the KV write is 20.7 ms of 70.5 ms GPU busy (29%), and the step is ~80% host time (clean 348.5 ms vs GPU busy 70.5 ms; REPORT_full_model_chain.md:97). The cost is the host-side per-sequence PagedKVCache.append, not GPU write bandwidth. The chart title 'CUDA event' does not say these are instrumented wall times that include CPU launch gaps.
+  replacement: batch 16 时严格路径的 paged KV 写入占了一半墙钟时间（205 ms，其中 GPU 只有 21 ms，主要是逐序列 append 的主机开销），是下一步最值得优化的地方。Title: 单卡 52 层前向的时间分解（ms，CUDA event 插桩墙钟时间，含 CPU 启动间隙，中位数）
+--- #15
+  kind: misleading
+  section: #profile
+  where: build_blog.py:638 (caption)
+  text: 长序列 prefill 里 FFN 的三个 GEMM 占大头（深蓝），其次是 Q/K/V/门/O 投影
+  evidence: For strict this is verified (T=4096: FFN 1375 ms, QKVGO 317 ms). For HF at T=4096 the second-largest part is norms+residual (167 ms) and local attention (153 ms), ahead of QKVGO (142 ms). Also, ffn_gemm is var(--c8), which is #15275A (dark blue) only in light mode; in dark mode it is #C3D1FF (pale blue), so "深蓝" is wrong there.
+  replacement: 长序列 prefill 里 FFN 的三个 GEMM 占大头，严格路径中其次是 Q/K/V/门/O 投影（drop the colour word, or say “FFN GEMM 段”）
+=== GROUP process_rfc verified 96 n 25
+--- #0
+  kind: stale
+  section: #rfc F20 card + RFC_CHANGES.md F20 + #left item 4
+  where: data/rfc_findings.json F20; data/left_for_community.json item 4; RFC_CHANGES.md:161-167
+  text: 严格 vLLM 记录的 logprob 来自严格路径，但选 token 时仍用原生 bf16 logits（已声明的偏差）。 / The strict vLLM binding reports strict logprobs but still selects tokens from the native bf16 logits (a declared deviation). / 严格模式下 token 选择仍用原生 bf16 logits（已声明的偏差）；是否也改用严格 logits，需要 RFC 决定。
+  evidence: Wave B switched this. REPORT_vllm_runtime_adapter.md:89-92 says 'Strict token selection (R5). compute_logits returns the strict fp32 zhat ... vLLM V2's seeded Gumbel sampler / greedy argmax picks the token from it; the native cuBLAS lm_head is no longer run'. Commit 88fe1b8 is titled '... strict token selection ...'. RFC feedback item 3 (line 198) now reads 'Token selection must read strict logits'. The only remaining deviation is that the sampler kernels themselves are vLLM's (line 142).
+  replacement: F20 title: 'Token selection must read the strict logits'. Body: 'The first binding reported strict logprobs but chose tokens from the native cuBLAS bf16 logits, so at near-ties the chosen token depended on batch composition and TP. Wave B makes compute_logits return the strict fp32 zhat; vLLM V2's seeded Gumbel sampler / argmax picks from it and the native lm_head is no longer run. Require this in strict mode, and declare the sampler's own kernels (temperature division, Gumbel noise from (seed, position), argmax) as contract ops.' #left item 4: '采样器自身的 kernel（温度除法、按 (seed, position) 生成的 Gumbel 噪声、argmax）仍是 vLLM 原生实现；是否纳入契约需要 RFC 决定。'
+--- #1
+  kind: wrong
+  section: #rfc F9 card + RFC_CHANGES.md F9
+  where: data/rfc_findings.json F9 (body_zh, body_en); RFC_CHANGES.md:77
+  text: 5.17 和 5.19 的区别：RoPE 表的构造（5.17 是受 TF32 影响的 matmul）。 / note that 5.17 builds the RoPE table with a TF32-sensitive matmul while 5.19 uses an fp32 elementwise product
+  evidence: The repo's own ablation contradicts this. REPORT_ablation.md:25 says 'TF32 on, the transformers-5.19 elementwise RoPE build, and TF32 under that build: 0/933 each. The only fp32 GEMM in this bf16 model (the RoPE product, K = 1) is bitwise the same with TF32 on or off (tf32_probe)'. ablation.json records tf32_on, rope_elementwise and rope_elementwise_tf32_on each at 0/933. The matmul-vs-elementwise difference is real (5.17 L207 'inv_freq_expanded @ position_ids_expanded'; 5.19 L197 elementwise), but on A100 it is not TF32-sensitive.
+  replacement: 5.17 builds the RoPE angles with a K=1 fp32 matmul and 5.19 with an fp32 elementwise product. On A100 the two builds, and TF32 on/off, give bit-identical logprobs (ablation tf32_probe, 0/933). The strict path still builds its own fixed fp32 CUDA table on both runtimes, so it does not depend on either.
+--- #2
+  kind: wrong
+  section: #timeline item '版本三角' + #rfc F9 card + RFC_CHANGES.md F9
+  where: build_blog.py:808 (hard-coded); rfc_findings.json F9 body_en; RFC_CHANGES.md:77
+  text: 只有 5.17.0 两边都接受 / Only transformers 5.17.0 satisfies both vLLM 0.31 (<5.18) and Megatron Bridge main (>=5.15,<5.18).
+  evidence: vllm-0.31.0 METADATA requires 'transformers<5.18.0,>=5.10.4'. ~/src/Megatron-Bridge/pyproject.toml:74 requires 'transformers>=5.15,<5.18'. The intersection is [5.15, 5.18), so 5.15.0, 5.15.1, 5.16.0, 5.16.1 and 5.17.0 all satisfy both. huggingface/transformers v5.15.0 and v5.16.0 both contain src/transformers/models/muse_glimmer/modeling_muse_glimmer.py (HTTP 200; v5.14.0 gives 404).
+  replacement: vLLM 0.31 要 transformers ≥5.10.4,<5.18，Megatron Bridge main 要 ≥5.15,<5.18（且 Python 3.12）：交集是 5.15–5.17，取其中最新的 5.17.0，指纹的语义源从 5.19 改钉 5.17。 / Only transformers 5.15-5.17 satisfies both ...; pin the newest of them, 5.17.0 (856157a2...).
+--- #3
+  kind: misleading
+  section: #timeline item 'Bridge 的 PyPI 版没有这个模型'
+  where: build_blog.py:809 (hard-coded)
+  text: PyPI 0.3.1 还钉着 transformers<5；改为从 git main 可编辑安装。
+  evidence: PyPI megatron-bridge 0.3.1 does pin 'transformers<5.0.0'. But the newest PyPI release is 0.6.2 (2026-09-18, transformers>=5.8,<=5.12.1). RFC audit D1 says the muse_glimmer bridge is 'main only since 2026-09-02 ... not in any tag up to v0.6.2'. Naming 0.3.1 suggests it is the current PyPI release, which it is not.
+  replacement: PyPI 上最新的 0.6.2 也还没有这个模型（且钉 transformers≤5.12.1；resolver 退到的 0.3.1 甚至钉 <5）；改为从 git main 可编辑安装。
+--- #4
+  kind: wrong
+  section: #rfc F6 card + RFC_CHANGES.md F6
+  where: data/rfc_findings.json F6; RFC_CHANGES.md:53
+  text: 整行都被 mask 掉时…：α = 1，p = 0，不产生 NaN。 / define alpha = 1 and p = 0 so no NaN is produced
+  evidence: The implemented guard and the contract both subtract 0. contracts O5: 'm_safe = 0 if m_new = −inf else m_new; α = exp(m − m_safe)'. triton/gated_attention_fwd.py:293-294 does the same. With m = −inf this gives α = exp(−inf) = 0, not 1, and REPORT_gated_attention_fwd.md:270-273 says the state stays exactly (m, l, acc) = (−inf, 0, 0). Also, docs/contracts O5 already contains this guard, so the finding only applies to the RFC text.
+  replacement: While a row has not met a visible key (m_new = −inf), subtract 0 instead of m_new (m_safe = 0). Then α = exp(−inf) = 0 and p = 0, the state stays exactly (−inf, 0, 0), and once a key appears this is a bitwise no-op. Write this into O5 as in docs/contracts O5.
+--- #5
+  kind: wrong
+  section: #rfc F2 card
+  where: data/rfc_findings.json F2 body_zh
+  text: vLLM 与 Megatron 都已改用这种调用，不再复制 KV 或 all-gather 头。
+  evidence: REPORT_megatron_strict.md:78-95 shows that at TP4/8 the KV head is still 'replicated on 2 / 4 ranks', and that 'GatherKVHead (TP4/8 only) all-gathers the k/v column shards'. contracts O5 itself specifies KV replication on t/2 ranks. Wave B removed the workaround of all-gathering Q heads, or zero-padding, back to full 32/2 geometry. It did not remove KV replication.
+  replacement: vLLM 与 Megatron 都已改用每 rank 自己的头数调用，不再把头 all-gather 回 32/2 的完整几何或补零调用；TP4/8 下 KV 头仍按契约在 t/2 个 rank 上复制（Megatron 用 GatherKVHead 按 rank 顺序收集 k/v 列分片）。
+--- #6
+  kind: stale
+  section: #rfc F1/F2 evidence + RFC_CHANGES.md F1/F2
+  where: rfc_findings.json F1.evidence, F2.evidence; RFC_CHANGES.md:15,23
+  text: REPORT_ws2_cp.md (CP1/2/4 equal; TP1 one-shot kernel rel 1.6e-5 apart) / REPORT_ws2_tp.md (open finding); vLLM and Megatron bindings worked around it
+  evidence: Both are fixed. kernels_attention.json headline: 'The one-shot backward kernel now equals the CP path bit for bit: 0 mismatches ... simulated CP2/4/8, real CP2 ... CP4/CP8 replay'. parity.tp_total_mismatches = 0. REPORT_megatron_strict.md:78 says 'Per-rank attention heads (wave B; the head all-gather workaround is removed)'. The card text says this too, but the evidence lines still describe the wave A state.
+  replacement: F1 evidence: 'kernels_attention.json parity (one-shot v2 kernel == CP1 == simulated CP2/4/8 == real CP2, 0 mismatches); REPORT_ws2_cp.md'. F2 evidence: 'kernels_attention.json parity.tp_matrix (TP2/4/8 per-rank calls == TP1 slices, 0 mismatches); REPORT_megatron_strict.md per-rank heads; REPORT_vllm_runtime_adapter.md'.
+--- #7
+  kind: misleading
+  section: #rfc F1 card + RFC_CHANGES.md F1
+  where: rfc_findings.json F1 body_zh/body_en; RFC_CHANGES.md:13
+  text: 代价是反向慢 5–14%。 / the 8 chunk partials are combined in the O3 tree in fp32 and rounded once.
+  evidence: (a) kernels_attention.json benchmarks.backward_before_after gives v2/v1 = 1.547 (T=512 global), 1.58 (T=512 local), 1.12-1.13 (T=1024) and 1.05-1.14 (T>=2048). REPORT_gated_attention_bwd.md:59 states '+5..14 % at T >= 1024, +55 % at T = 512'. (b) The English replacement text leaves out the second fold level that docs/contracts O5 and the kernel use: leaves per (chunk c, 4-head group g), P_g = O3 tree over chunks, then dK/dV of a KV head = (P_g0+P_g1)+(P_g2+P_g3). Someone implementing from F1 alone would get different bits. docs/contracts O5 already holds the complete rule.
+  replacement: zh: 代价是 T ≥ 1024 时反向慢 5–14%，T = 512 时慢约 55%。 en: replace the paraphrase with the O5 text from docs/contracts (leaf (c, g) per canonical query chunk c and 4-head group g; P_g = O3 tree over the 8 chunks; dK/dV of KV head h = O3 tree over the 4 groups that read h; fp32, one bf16 rounding), or point to it verbatim.
+--- #8
+  kind: stale
+  section: #timeline item 'rollout 自己和自己一致'
+  where: data/timeline_extra.json item 4
+  text: 严格 vLLM 在 TP1/TP2、贪心/采样、有无 LoRA 的 8 种组合里，decode 时记下的 logprob 与事后 prefill 重算 0/512 不同；原生是 146–169/512。
+  evidence: REPORT_vllm_runtime_adapter.md headline (rendered from the wave B vllm_runtime.json) shows strict 0/512 at TP1, TP2 and TP4 x T=0/T=1 x LoRA on/off, which is 12 configs (REPORT.md: '12 generate configs'). Native is TP1 144, TP2 155 (T=0); TP1 157, TP2 148 (T=1); LoRA TP1 168 (T=0), 158 (T=1), so 144–168/512.
+  replacement: 严格 vLLM 在 TP1/TP2/TP4、贪心/采样、有无 LoRA 的 12 种组合里，decode 时记下的 logprob 与事后 prefill 重算 0/512 不同；原生是 144–168/512。
+--- #9
+  kind: stale
+  section: #timeline item 'TP1 训练 OOM'
+  where: data/timeline_extra.json item 6
+  text: 单次 8192 token 的打包在 80 GB 上放不下（权重就 56 GB）；默认 micro batch 改成 4096 token。
+  evidence: REPORT_megatron_strict.md:142-146 says RoPE rows now come from the canonical cached table instead of a per-packing cache that grew without bound, and 'Result: an 8192-token sequence now trains at TP1 (strict step 40.8 s, peak 68.5 GiB); in wave A it ran out of memory.' Line 115: micro_batch_tokens (default 4096) 'is a memory knob only'. The OOM was a wave A state that wave B fixed.
+  replacement: Wave A：TP1 上单次 8192 token 的打包 OOM（权重就 56 GB），默认 micro batch 先改成 4096 token；wave B 把 RoPE 改为从规范缓存表取行（原来每种打包一份、无限增长），8192 token 在 TP1 上峰值 68.5 GiB 可以训练，4096 只剩内存旋钮的作用。
+--- #10
+  kind: misleading
+  section: #timeline item '最终三方比对'
+  where: data/timeline_extra.json item 16
+  text: 参考链、vLLM TP1/2/4、Megatron TP1/2/4 共 8 份结果，加 3 份带 LoRA 的 vLLM 结果，全部来自 O7 修复之后、三个独立分支，组内 0/933 不同。
+  evidence: The list names 1+3+3 = 7 runs. The 8th base-group dump is xrt_reference_triton_repeat.json, a second run of the same reference (xrt_summary.json strict_group 'base'; REPORT.md says 'reference chain x2'). '三个独立分支' suggests independent implementations, but all three runtimes call the same rl_engine Triton strict kernels. They are independent runtime integrations, not independent numerics, and a skeptical reader will object to the word 独立.
+  replacement: 参考链（两次运行）、vLLM TP1/2/4、Megatron TP1/2/4 共 8 份结果，加 3 份带 LoRA 的 vLLM 结果，全部来自 O7 修复之后；三个运行时调用同一套严格 Triton 内核，组内 0/933 不同。
+--- #11
+  kind: misleading
+  section: #rfc F13 card + #timeline item 'Triton 把树折进了 MMA 链' + RFC_CHANGES.md F13
+  where: rfc_findings.json F13; timeline_extra.json item 8; RFC_CHANGES.md:109
+  text: K=256/512 的输出约一半偏离契约 / about half of the K=256/512 outputs deviated / 约一半输出偏离契约
+  evidence: kernels_gemm.json det_gemm_1_iters_probe.before.forward_sweep gives mismatch fractions 0.475/0.486/0.482 (K=256) and 0.656/0.665/0.667 (K=512). The headline says '48-67 % of outputs differed'.
+  replacement: K=256/512 的输出有 48–67% 偏离契约 / 48-67 % of the K=256/512 outputs deviated
+--- #12
+  kind: stale
+  section: #rfc F10 card + RFC_CHANGES.md F10
+  where: rfc_findings.json F10 body_en; RFC_CHANGES.md:85
+  text: this POC reaches 105-135 TFLOP/s with an 8-leaf K tree on A100
+  evidence: The cited bench_ws1.log is the wave-0 benchmark: M=4096 q/attn_gate/o/mlp/down = 104.6-134.6, but k/v_proj = 71. After the >=2-iteration fix, the current kernels_gemm.json benchmarks.gemm_forward at M=4096 give q 100.6, attn_gate 118.6, o 112.1, mlp_gate 121.0, up 120.9, down 131.2, lm_head 123.7, and k/v_proj 50.4/50.7 TFLOP/s, which is 0.36-0.50x cuBLAS.
+  replacement: this POC reaches 100-131 TFLOP/s on the large M=4096 Muse Glimmer GEMMs (about 50 on the 256-wide k/v projections; 36-50 % of cuBLAS) with an 8-leaf K tree on A100 (kernels_gemm.json)
+--- #13
+  kind: misleading
+  section: #rfc F7 card + RFC_CHANGES.md F7
+  where: rfc_findings.json F7; RFC_CHANGES.md:61
+  text: both runtimes compute y = bf16(acc32(W x) + sum_i B_i z_i) with z = A x
+  evidence: REPORT_megatron_strict.md:75 gives the rule as 'y = bf16(acc32(Wx) + sum_k B[:,k] * bf16(Ax)[k]) (fp32 loop over the rank, one rounding)'. REPORT_vllm_runtime_adapter.md:191 says 'with a sequential fp32 rank loop'. A bit-exact spec has to state the bf16 rounding of z and the sequential rank order, and F7 leaves both out.
+  replacement: both runtimes compute y = bf16(acc32(W x) + sum_{k<r} B[:,k] * z[k]) with z = bf16(A x), the sum taken as a sequential fp32 loop over the rank in ascending k and rounded once
+--- #14
+  kind: misleading
+  section: #rfc F16 card + #timeline item '梯度与打包方式无关' + RFC_CHANGES.md F16
+  where: rfc_findings.json F16; timeline_extra.json item 13
+  text: The first binding's LoRA gradients changed with the micro-batch packing (14,860 of 20,480 elements) / （以前 14,860/20,480 个元素不同）
+  evidence: The only source is REPORT_megatron_strict.md:194, the unit test test_lora_grads_are_packing_invariant ('3 sequences, column linear'): 14,860 / 15,034 of 20,480 grad elements for 2 / 3 micro-batches. This is a toy test, not the 30B model (the 30B has 104,792,064 LoRA grad elements). As written, readers will take it as a 30B measurement.
+  replacement: (in a unit test with 3 sequences on one column-parallel LoRA linear, 14,860 of 20,480 gradient elements changed between 1 and 2 micro-batches)
+--- #15
+  kind: misleading
+  section: #left item 2
+  where: data/left_for_community.json item 2
+  text: batch 16 decode 时严格 paged KV 写入占一半时间
+  evidence: This comes from the single-GPU reference chain, not the vLLM rollout. REPORT_full_model_chain.md:97 and 262-265 say the cost is 'the reference's per-sequence paged-cache write (PagedKVCache.append in Python once per sequence per layer)', 204.9 ms of a 348.5 ms step (~59 %), and 'That is reference-harness overhead, not kernel cost'. Listing it under strict-path performance next to vLLM items implies the strict rollout's KV write is slow.
+  replacement: 单卡参考实现（不是 vLLM 绑定）在 batch 16 decode 时，Python 逐序列写 paged KV 占约 59% 的 wall 时间（204.9/348.5 ms）；这是参考 harness 的开销，改成每层一次 scatter 即可（未测）
+--- #16
+  kind: wrong
+  section: #left item 5
+  where: data/left_for_community.json item 5
+  text: 未在真实多进程下运行：TP8（训练侧默认关闭）、CP4/CP8、TP2×CP2 的 4 卡用例之外的组合
+  evidence: RESUME.md (16:30 update) records real 8-process runs: 'TP8 (MUSEGLIMMER_TP8=1, 8 GPUs) 9 passed' for the WS2 tree / vocab-parallel rows. REPORT_ws2_cp.md:54-55 shows 'CP4 == CP1 bitwise forward / backward PASS (pytest)' on 4 GPUs, with the v1 kernel. What actually was not run multi-process: TP8 of the vLLM/Megatron runtimes and of attention, CP4 with the v2 backward (kernels_attention.json not_run), and CP8 at all. The sentence is also garbled ('TP2×CP2 的 4 卡用例之外的组合').
+  replacement: 未在真实多进程下运行：vLLM/Megatron 运行时与注意力的 TP8（训练侧默认关闭；只有 GEMM 树和 vocab-parallel 行在 8 卡上跑过）；v2 反向内核下的 CP4（CP4 只在 v1 内核下用 4 卡 pytest 跑过）和任何 CP8；除 4 卡 TP2×CP2 前向之外的 TP×CP 组合。
+--- #17
+  kind: unsupported
+  section: #left item 3
+  where: data/left_for_community.json item 3
+  text: Megatron 绑定每层每次前向要两次 D2H 拷贝（应每个 micro-batch 构造一次 SequenceMeta）
+  evidence: No measurement or report sentence found. REPORT_megatron_strict.md and megatron_runtime.json never mention D2H or SequenceMeta. megatron_attention.py does not pass seq_meta, so the kernel's host syncs are plausible, but the 'two per layer per forward' count has no source. The second half of the item (close() ~127 s at TP2) is verified in e2e_bridge.json F7.
+  replacement: Either cite a profile that counts the syncs, or soften it to: 'Megatron 绑定没有传 SequenceMeta，注意力每层前向都会做 host 同步（应每个 micro-batch 构造一次 SequenceMeta）'
+--- #18
+  kind: unsupported
+  section: #timeline items '13 个 agent 并行' and '两波限流'
+  where: build_blog.py:811, 816 (hard-coded)
+  text: 13 个 agent 并行 … / 第二波让 43 个 review agent 死了 36 个。
+  evidence: Neither number appears anywhere in the repo. AGENT_BRIEFING.md:3 says '~10 agents' and REPORT.md:20 says '~40 agents in waves'. RESUME.md only says the wf_69e440c2-c46 review 'was running at wrap-up' (35 findings survived) and was 'dead'. 43/36 cannot be traced to any committed record. (316 tests is verified in RESUME.md.)
+  replacement: Cite the workflow journal counts in a committed file, or write '约 10 个 agent 并行' and '第二波的大部分 review agent 被限流打断（35 条发现保住了）'.
+--- #19
+  kind: stale
+  section: #rfc audit list, items B1 and B5
+  where: data/rfc_audit.json B1.corrected, B5.proposed (rendered by build_blog.py sec_rfc)
+  text: B1: The semantics source is `transformers==5.19.0` `modeling_muse_glimmer.py` (commit `c4c4605f…`); line numbers (`L`) refer to it … (L311 …) / B5: The reference cast points (transformers 5.19.0, BF16 weights and activations) are: …
+  evidence: The manifest (museglimmer_manifest.json semantics_source), F9, and audit items A4/C10/C13/E6/E8 (corrected) all pin 5.17.0 @ 856157a2. B1 and B5 still paste 5.19.0 @ c4c4605f into the RFC, and B1's line numbers are 5.19 line numbers: gate_proj is L311 in 5.19.0 but L321 in 5.17.0 (checked against the upstream files). The page calls these texts paste-ready.
+  replacement: B1: 'The semantics source is the transformers release in museglimmer_manifest.json semantics_source, currently 5.17.0 @ 856157a2 (modeling_file_sha256 e69eb21d…); line numbers refer to that file' (renumber, e.g. gate_proj L321). B5: '(transformers 5.17.0 semantics source, BF16 weights and activations)'.
+--- #20
+  kind: stale
+  section: #rfc audit list, item D5
+  where: data/rfc_audit.json D5.proposed
+  text: Replicated KV ownership map … imposed on both runtimes — native in vLLM, replaces Megatron's QKV all-gather on the training side
+  evidence: In the POC the training side still all-gathers at TP4/8. REPORT_megatron_strict.md:83-90 shows the k/v projection stays column-split (64 / 32 cols per rank) and 'GatherKVHead (TP4/8 only) all-gathers the k/v column shards (rank-ordered data movement) and keeps the 128 columns of the rank's KV head'.
+  replacement: ... imposed on both runtimes: native in vLLM; on the training side the K/V projection stays column-split at TP4/8 and each rank assembles its replicated KV head with a rank-ordered all-gather whose backward returns only the rank's own columns (no double counting); K/V gradient rule: replica nodes folded in the canonical tree.
+--- #21
+  kind: misleading
+  section: #rfc audit list (section headings) + caption
+  where: rfc_audit.json items[].section rendered by build_blog.py:866 (details summary); caption build_blog.py:875
+  text: WS1 work items table + … Evidence paths: `hf/...` = /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-…/scratchpad/hf/...; `rl_engine/...` = /home/ubuntu/RL-Kernel/.claude/worktrees/swift-oak-hsv7/...; … `audit_c/issue_NNN.md` = gh issue bodies saved in the scratchpad.（13 条） / 每条都给出原文、问题、建议文本和证据（文件:行号）
+  evidence: The rendered <summary> of one RFC-section block shows a private machine path, including the session id and home directory, and points readers at scratchpad files that are not in the repo (13 audit items cite /tmp or scratchpad, 44 cite hf/...). The caption also says every item gives evidence (file:line), but the page's list items render only rfc / problem / proposed and no evidence.
+  replacement: Section heading: 'WS1 work items table + Foundation row + Suggested order + Operator-PR acceptance（13 条）', with the path legend moved to RFC_CHANGES.md and the hf/ and issue files committed or replaced by URLs. Caption: '…每条都给出原文、问题和建议文本（证据见 RFC_CHANGES.md，文件:行号）…'.
+--- #22
+  kind: unsupported
+  section: #rfc F17 evidence + RFC_CHANGES.md F17
+  where: rfc_findings.json F17.evidence; RFC_CHANGES.md:143
+  text: wave B vLLM verify NEW-1
+  evidence: 'NEW-1' appears only in rfc_findings.json and RFC_CHANGES.md, so a reader cannot resolve it. The fix it refers to is commit 7d60df9 ('_bind_model raises unless vLLM's V2 model runner is active').
+  replacement: commit 7d60df9 (runtime/vllm_strict.py _bind_model fails closed unless the V2 model runner is active); review_wave_a2.json megatron_runtime:R1
+--- #23
+  kind: unsupported
+  section: #rfc F9 evidence + RFC_CHANGES.md F9
+  where: rfc_findings.json F9.evidence; RFC_CHANGES.md:79
+  text: ~/envs/megatron/SETUP_REPORT.md
+  evidence: This is a home-directory file on the POC machine. The in-repo copy is reports/muse_glimmer_poc/ENV_MEGATRON_SETUP.md, and the version constraints come from the vLLM 0.31.0 wheel metadata and Megatron-Bridge pyproject.toml:74.
+  replacement: reports/muse_glimmer_poc/ENV_MEGATRON_SETUP.md; vllm-0.31.0 Requires-Dist transformers<5.18.0,>=5.10.4; Megatron-Bridge@d86a5c09 pyproject.toml transformers>=5.15,<5.18
+--- #24
+  kind: misleading
+  section: RFC_CHANGES.md Part 1 vs docs/contracts (F1, F2, F6, F12, F15)
+  where: RFC_CHANGES.md:9-55, 97-127
+  text: F1 'Replace … with …', F2 'State that …', F6 'make it part of the contract', F12 'State that …', F15 'Keep O4's … and add …'
+  evidence: docs/contracts/muse-glimmer-30b-strict-contract.md already contains F1 (O5 dK/dV query-chunk rule, 'replaces accumulated over query blocks in ascending order'), F2 (O5 head geometry (32,2)/(16,1)/(8,1)/(4,1)), F6 (O5 m_safe guard), F12 (O7 'No FP contraction (added after the POC)') and F15's 'built once by a fixed fp32 torch-CUDA function, cached'. Only F15's SHA-256 provenance check is new. These findings target the upstream RFC text, not the repo contract, and without saying so a reader may think the repo contract is still missing them. The naming also differs: F8 proposes 'post_norm_residual_pre_norm', while the contract and code use 'fused_post_norm_residual_pre_norm' and contract O2 still says '(row: fused_add_rmsnorm)'.
+  replacement: Add one line to Part 1: 'F1, F2, F6 and F12 are already in docs/contracts/muse-glimmer-30b-strict-contract.md (O5, O7); paste that text into the RFC.' Make F8's name match the code (fused_post_norm_residual_pre_norm) or rename the code, and update contract O2's row tag.

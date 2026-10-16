@@ -1,0 +1,114 @@
+[gpu-lease] using GPUs [4, 5]
+WARNING 10-15 23:05:14 [RL-Kernel]: Core binary extension (_C) unavailable: cannot import name '_C' from 'rl_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/rl_engine/__init__.py). Falling back to native code.
+WARNING 10-15 23:05:14 [RL-Kernel]: MUSA availability check failed: No module named 'torch_musa'
+INFO 10-15 23:05:14 [RL-Kernel]: RL-Engine initialized with NVIDIA CUDA backend (Version: 13.0)
+INFO 10-15 23:05:14 [RL-Kernel]: KernelRegistry initialized for cuda
+(MainProcess pid=501691) INFO 10-15 23:05:15 [api_utils.py:286] non-default args: {'dtype': 'bfloat16', 'max_model_len': 4096, 'tensor_parallel_size': 2, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.9, 'max_num_seqs': 64, 'disable_log_stats': True, 'enforce_eager': True, 'limit_mm_per_prompt': {'image': 0, 'video': 0}, 'attention_config': AttentionConfig(backend=<AttentionBackendEnum.FLASH_ATTN: 'vllm.v1.attention.backends.flash_attn.FlashAttentionBackend'>, minimax_m3_msa_decode_backend='triton', backend_per_kind={}, flash_attn_version=None, flash_attn_max_num_splits_for_cuda_graph=32, tq_max_kv_splits_for_cuda_graph=32, use_trtllm_attention=None, disable_flashinfer_q_quantization=False, mla_prefill_backend=None, use_prefill_query_quantization=False, indexer_kv_dtype='auto', indexer_sparse_logits=False, hisparse_config=None, use_non_causal=False, sparse_mla_force_mqa=False, flex_attn_block_m=None, flex_attn_block_n=None, flex_attn_q_block_size=None, flex_attn_kv_block_size=None), 'model': '/home/ubuntu/models/Muse-Glimmer-30B'}
+(MainProcess pid=501691) INFO 10-15 23:05:15 [model.py:699] Resolved architecture: MuseGlimmerForConditionalGeneration
+(MainProcess pid=501691) INFO 10-15 23:05:15 [model.py:2109] Using max model len 4096
+(MainProcess pid=501691) WARNING 10-15 23:05:15 [model.py:1069] Model does not support mm_device_do_normalize, forcing mm_device_do_normalize = False.
+(MainProcess pid=501691) INFO 10-15 23:05:19 [model.py:917] All limits of multimodal modalities supported by the model are set to 0, running in text-only mode.
+(MainProcess pid=501691) INFO 10-15 23:05:19 [model.py:974] Disabled mm_prefix attention mode because multimodal inputs are configuration-disabled. Attention backends without mm_prefix support may now be selected.
+(MainProcess pid=501691) INFO 10-15 23:05:19 [scheduler.py:308] Chunked prefill is enabled with max_num_batched_tokens=8192.
+(MainProcess pid=501691) WARNING 10-15 23:05:19 [vllm.py:1706] Enforce eager set, disabling torch.compile, CUDAGraphs, and JIT kernel warmup. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none and --kernel_config.enable_jit_warmup=False
+(MainProcess pid=501691) WARNING 10-15 23:05:19 [vllm.py:1750] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(MainProcess pid=501691) INFO 10-15 23:05:19 [kernel.py:408] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'], gelu_and_mul_sparse=['triton', 'native'])
+(MainProcess pid=501691) INFO 10-15 23:05:19 [vllm.py:1968] Cudagraph is disabled under eager mode
+(MainProcess pid=501691) INFO 10-15 23:05:19 [compilation.py:331] Enabled custom fusions: norm_quant, act_quant
+(MainProcess pid=501691) WARNING 10-15 23:05:23 [system_utils.py:152] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+WARNING 10-15 23:05:32 [RL-Kernel]: Core binary extension (_C) unavailable: cannot import name '_C' from 'rl_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/rl_engine/__init__.py). Falling back to native code.
+WARNING 10-15 23:05:32 [RL-Kernel]: MUSA availability check failed: No module named 'torch_musa'
+INFO 10-15 23:05:32 [RL-Kernel]: RL-Engine initialized with NVIDIA CUDA backend (Version: 13.0)
+INFO 10-15 23:05:32 [RL-Kernel]: KernelRegistry initialized for cuda
+(EngineCore pid=502596) INFO 10-15 23:05:34 [core.py:129] Initializing a V1 LLM engine (v0.31.0) with config: model='/home/ubuntu/models/Muse-Glimmer-30B', speculative_config=None, tokenizer='/home/ubuntu/models/Muse-Glimmer-30B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=2, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=True, aux_output_config=AuxOutputConfig(enable_return_routed_experts=False, max_bytes=None), kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, per_request_spec_decode_metrics='none', kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False, jit_monitor_mode='warn', jit_monitor_verbose=False), seed=0, served_model_name=/home/ubuntu/models/Muse-Glimmer-30B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'enable_qk_norm_rope_fusion': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False, 'fuse_qk_norm_rope_kvcache': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'], gelu_and_mul_sparse=['triton', 'native']), enable_flashinfer_autotune=True, enable_cutedsl_warmup=True, enable_jit_warmup=False, moe_backend='auto', sparse_indexer_topk_backend='auto', linear_backend='auto', linear_backend_per_quant=None)
+(EngineCore pid=502596) INFO 10-15 23:05:34 [multiproc_executor.py:153] DP group leader: node_rank=0, node_rank_within_dp=0, master_addr=127.0.0.1, mq_connect_ip=10.19.139.151 (local), world_size=2, local_world_size=2
+WARNING 10-15 23:05:43 [RL-Kernel]: Core binary extension (_C) unavailable: cannot import name '_C' from 'rl_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/rl_engine/__init__.py). Falling back to native code.
+WARNING 10-15 23:05:43 [RL-Kernel]: Core binary extension (_C) unavailable: cannot import name '_C' from 'rl_engine' (/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-2/rl_engine/__init__.py). Falling back to native code.
+WARNING 10-15 23:05:43 [RL-Kernel]: MUSA availability check failed: No module named 'torch_musa'
+INFO 10-15 23:05:43 [RL-Kernel]: RL-Engine initialized with NVIDIA CUDA backend (Version: 13.0)
+INFO 10-15 23:05:43 [RL-Kernel]: KernelRegistry initialized for cuda
+WARNING 10-15 23:05:43 [RL-Kernel]: MUSA availability check failed: No module named 'torch_musa'
+INFO 10-15 23:05:43 [RL-Kernel]: RL-Engine initialized with NVIDIA CUDA backend (Version: 13.0)
+INFO 10-15 23:05:43 [RL-Kernel]: KernelRegistry initialized for cuda
+(Worker pid=503052) INFO 10-15 23:05:45 [parallel_state.py:1825] world_size=2 rank=0 local_rank=0 distributed_init_method=file:///tmp/vllm_dist_84c30e5ccfc84743af053871a1aca6e0 backend=nccl
+(Worker pid=503053) INFO 10-15 23:05:45 [parallel_state.py:1825] world_size=2 rank=1 local_rank=1 distributed_init_method=file:///tmp/vllm_dist_84c30e5ccfc84743af053871a1aca6e0 backend=nccl
+(Worker pid=503052) INFO 10-15 23:05:47 [pynccl.py:148] vLLM is using nccl==2.29.7
+(Worker pid=503053) WARNING 10-15 23:05:48 [symm_mem.py:67] SymmMemCommunicator: Device capability 8.0 not supported, communicator is not available.
+(Worker pid=503052) WARNING 10-15 23:05:48 [symm_mem.py:67] SymmMemCommunicator: Device capability 8.0 not supported, communicator is not available.
+(Worker pid=503053) WARNING 10-15 23:05:48 [flashinfer_all_reduce.py:394] FlashInfer All Reduce is disabled because it is not supported for world_size=2.
+(Worker pid=503052) WARNING 10-15 23:05:48 [flashinfer_all_reduce.py:394] FlashInfer All Reduce is disabled because it is not supported for world_size=2.
+(Worker pid=503052) INFO 10-15 23:05:48 [cuda_communicator.py:326] Using ['CUSTOM', 'PYNCCL'] all-reduce backends (in dispatch order) for group 'tp:0' out of potential backends: ['FLASHINFER_PCIE_IPC', 'FLASHINFER', 'NCCL_SYMM_MEM', 'QUICK_REDUCE', 'AITER_CUSTOM', 'CUSTOM', 'SYMM_MEM', 'PYNCCL'].
+(Worker pid=503052) INFO 10-15 23:05:48 [parallel_state.py:2269] rank 0 in world size 2 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, ETP rank 0, EP rank N/A, EPLB rank N/A
+(Worker pid=503052) INFO 10-15 23:05:48 [gpu_worker.py:479] Using V2 Model Runner
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [model_runner.py:375] Loading model from scratch...
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [cuda.py:466] Using AttentionBackendEnum.FLASH_ATTN backend.
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [flash_attn.py:1167] Using FlashAttention version 2
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [cuda.py:466] Using AttentionBackendEnum.FLASH_ATTN backend.
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [cuda.py:585] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [mm_encoder_attention.py:372] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(Worker_TP0 pid=503052) INFO 10-15 23:05:49 [interfaces.py:255] Contains out of vocabulary multimodal tokens? False
+(Worker_TP1 pid=503053) INFO 10-15 23:05:49 [cuda.py:466] Using AttentionBackendEnum.FLASH_ATTN backend.
+(Worker_TP1 pid=503053) INFO 10-15 23:05:49 [cuda.py:466] Using AttentionBackendEnum.FLASH_ATTN backend.
+(Worker_TP1 pid=503053) INFO 10-15 23:05:49 [interfaces.py:255] Contains out of vocabulary multimodal tokens? False
+(Worker_TP0 pid=503052) INFO 10-15 23:05:50 [weight_utils.py:1063] Filesystem type for checkpoints: EXT4. Checkpoint size: 55.46 GiB. Available RAM: 1741.07 GiB.
+(Worker_TP0 pid=503052) INFO 10-15 23:05:50 [weight_utils.py:1086] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre). If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:05<00:05,  5.11s/it]
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.21s/it]
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.50s/it]
+
+(Worker_TP0 pid=503052) INFO 10-15 23:05:57 [default_loader.py:484] Loading weights took 7.30 seconds
+(Worker_TP0 pid=503052) INFO 10-15 23:05:58 [model_runner.py:407] Model loading took 26.12 GiB memory and 9.803731 seconds
+(Worker_TP0 pid=503052) INFO 10-15 23:05:58 [topk_topp_sampler.py:124] Using FlashInfer for top-p & top-k sampling.
+(Worker_TP0 pid=503052) INFO 10-15 23:05:58 [torch_utils.py:286] Reducing Torch threads from 120 to 1 for serving. Set OMP_NUM_THREADS in the external environment to override.
+(Worker_TP1 pid=503053) INFO 10-15 23:05:59 [model_runner.py:407] Model loading took 26.12 GiB memory and 10.339915 seconds
+(EngineCore pid=502596) INFO 10-15 23:05:59 [torch_utils.py:286] Reducing Torch threads from 120 to 1 for serving. Set OMP_NUM_THREADS in the external environment to override.
+(EngineCore pid=502596) INFO 10-15 23:05:59 [utils.py:343] Using LBNHC KV cache layout.
+/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+(Worker_TP0 pid=503052) INFO 10-15 23:06:03 [gpu_worker.py:692] Available KV cache memory: 42.79 GiB
+(EngineCore pid=502596) INFO 10-15 23:06:03 [kv_cache_utils.py:2464] GPU KV cache size: 1,720,535 tokens, Maximum concurrency for 4,096 tokens per request: 420.05x
+(Worker_TP1 pid=503053) INFO 10-15 23:06:03 [gpu_worker.py:955] Free memory on device (78.11/79.25 GiB) on startup. Desired GPU memory utilization is (0.9, 71.33 GiB). Actual usage is 26.66 GiB for consumed memory (weights + non-torch), 1.88 GiB for peak activation, and 0.0 GiB for CUDAGraph memory. Replace gpu_memory_utilization config with `--kv-cache-memory=45784469914` (42.64 GiB) to fit into requested memory, or `--kv-cache-memory=53070395392` (49.43 GiB) to fully utilize gpu memory. Current kv cache memory in use is 42.79 GiB.
+(Worker_TP0 pid=503052) INFO 10-15 23:06:03 [gpu_worker.py:955] Free memory on device (78.11/79.25 GiB) on startup. Desired GPU memory utilization is (0.9, 71.33 GiB). Actual usage is 26.66 GiB for consumed memory (weights + non-torch), 1.88 GiB for peak activation, and 0.0 GiB for CUDAGraph memory. Replace gpu_memory_utilization config with `--kv-cache-memory=45784469914` (42.64 GiB) to fit into requested memory, or `--kv-cache-memory=53070395392` (49.43 GiB) to fully utilize gpu memory. Current kv cache memory in use is 42.79 GiB.
+(EngineCore pid=502596) INFO 10-15 23:06:04 [core.py:380] init engine (profile, create kv cache, warmup model) took 4.99 s
+(EngineCore pid=502596) INFO 10-15 23:06:06 [kv_cache_utils.py:772] kv cache group sizes [16, 16, 16, 16]
+(EngineCore pid=502596) INFO 10-15 23:06:06 [kv_cache_utils.py:773] kv lcm block sizes 16
+(EngineCore pid=502596) WARNING 10-15 23:06:08 [serial_utils.py:78] Allowing insecure serialization using pickle due to VLLM_ALLOW_INSECURE_SERIALIZATION=1
+(EngineCore pid=502596) WARNING 10-15 23:06:08 [vllm.py:1706] Enforce eager set, disabling torch.compile, CUDAGraphs, and JIT kernel warmup. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none and --kernel_config.enable_jit_warmup=False
+(EngineCore pid=502596) WARNING 10-15 23:06:08 [vllm.py:1750] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(EngineCore pid=502596) INFO 10-15 23:06:08 [kernel.py:408] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'], gelu_and_mul_sparse=['triton', 'native'])
+(EngineCore pid=502596) INFO 10-15 23:06:08 [vllm.py:1968] Cudagraph is disabled under eager mode
+(EngineCore pid=502596) INFO 10-15 23:06:08 [compilation.py:331] Enabled custom fusions: norm_quant, act_quant
+(MainProcess pid=501691) WARNING 10-15 23:06:08 [serial_utils.py:78] Allowing insecure serialization using pickle due to VLLM_ALLOW_INSECURE_SERIALIZATION=1
+(MainProcess pid=501691) INFO 10-15 23:06:10 [hf.py:646] Detected the chat template content format to be 'openai'. You can set `--chat-template-content-format` to override this.
+USDT:2026-10-15 23:19:47 503053:503053 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 23:19:47 503052:503052 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 23:19:48 503053:503053 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 23:19:48 503052:503052 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 23:19:53 503053:503053 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 23:19:53 503052:503052 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 23:19:53 503053:503053 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-15 23:19:53 503052:503052 SyncActivityProfilerHandler.cpp:59] profiler_stop
+(MainProcess pid=501691) INFO 10-15 23:19:56 [utils.py:638] [shutdown] Process manager: send sigterm to process EngineCore
+(EngineCore pid=502596) INFO 10-15 23:19:56 [core.py:1409] [shutdown] EngineCore: trigger received signal=SIGTERM
+(EngineCore pid=502596) INFO 10-15 23:19:56 [core.py:1558] [shutdown] EngineCore: start mode=abort timeout=0s
+(EngineCore pid=502596) INFO 10-15 23:19:56 [core.py:1589] [shutdown] EngineCore: request processing complete; starting resource teardown
+(EngineCore pid=502596) INFO 10-15 23:19:56 [core.py:1422] [shutdown] EngineCore: exiting busy loop
+(EngineCore pid=502596) INFO 10-15 23:19:56 [multiproc_executor.py:474] [shutdown] Executor: waiting for worker exit count=2
+(Worker_TP0 pid=503052) INFO 10-15 23:19:56 [multiproc_executor.py:838] Parent process exited, terminating worker queues
+(MainProcess pid=501691) WARNING 10-15 23:20:01 [utils.py:658] [shutdown] Process manager: force killing remaining processes count=1
+(MainProcess pid=501691) WARNING 10-15 23:20:01 [utils.py:663] [shutdown] Process manager: force killing remaining process EngineCore pid 502596
+(EngineCore pid=502596) WARNING 10-15 23:20:01 [multiproc_executor.py:486] [shutdown] Executor: workers still running after grace period; sending SIGTERM count=0
+{
+  "mode": "strict",
+  "tp": 2,
+  "status": "completed",
+  "generate": [],
+  "lora_zero_equal": null,
+  "lora_random_identity": null,
+  "contract_shapes": [],
+  "bench_tokens_per_s": 175.9046290259401
+}
+exit=0

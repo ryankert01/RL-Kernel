@@ -1,0 +1,332 @@
+{
+  "schema": "muse_glimmer_top_ops_v1",
+  "label": "trainer_server.step",
+  "sort_by": "self_cpu_us",
+  "device_activity": false,
+  "num_distinct_ops": 81,
+  "total_self_cpu_us": 70078.60200000022,
+  "total_self_device_us": 0.0,
+  "rows": [
+    {
+      "name": "aten::mul",
+      "count": 1717,
+      "self_cpu_us": 13555.779000000102,
+      "cpu_total_us": 13615.229000000088,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::add_",
+      "count": 2354,
+      "self_cpu_us": 7331.371000000245,
+      "cpu_total_us": 7460.772000000272,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::sum",
+      "count": 1675,
+      "self_cpu_us": 6017.649000000232,
+      "cpu_total_us": 6892.819000000121,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: MulBackward0",
+      "count": 1152,
+      "self_cpu_us": 4943.877000000177,
+      "cpu_total_us": 27349.633000000147,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: AddBackward0",
+      "count": 1650,
+      "self_cpu_us": 3524.162999999861,
+      "cpu_total_us": 4206.405999999785,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::fill_",
+      "count": 1938,
+      "self_cpu_us": 3495.886999999883,
+      "cpu_total_us": 3495.886999999883,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::copy_",
+      "count": 2396,
+      "self_cpu_us": 3063.3040000001206,
+      "cpu_total_us": 3063.3040000001206,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::zero_",
+      "count": 2188,
+      "self_cpu_us": 2841.5309999998576,
+      "cpu_total_us": 5476.275999999863,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: SliceBackward0",
+      "count": 1384,
+      "self_cpu_us": 2778.1309999999307,
+      "cpu_total_us": 24619.601000000042,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::slice_backward",
+      "count": 1384,
+      "self_cpu_us": 2715.412000000025,
+      "cpu_total_us": 14638.07699999983,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::zeros",
+      "count": 2187,
+      "self_cpu_us": 2420.6699999999214,
+      "cpu_total_us": 9885.150000000034,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::empty",
+      "count": 2188,
+      "self_cpu_us": 2093.8460000002497,
+      "cpu_total_us": 2093.8460000002497,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "MulBackward0",
+      "count": 1152,
+      "self_cpu_us": 1792.580999999885,
+      "cpu_total_us": 14922.58099999997,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: SelectBackward0",
+      "count": 802,
+      "self_cpu_us": 1655.4020000003266,
+      "cpu_total_us": 8321.490000000156,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "SliceBackward0",
+      "count": 1384,
+      "self_cpu_us": 1313.1120000001242,
+      "cpu_total_us": 15951.188999999955,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::select_backward",
+      "count": 802,
+      "self_cpu_us": 1295.842999999691,
+      "cpu_total_us": 5019.143000000089,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::as_strided",
+      "count": 2418,
+      "self_cpu_us": 1166.2080000001629,
+      "cpu_total_us": 1166.2080000001629,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::slice",
+      "count": 1384,
+      "self_cpu_us": 1101.8539999998488,
+      "cpu_total_us": 1813.5269999999878,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::select",
+      "count": 960,
+      "self_cpu_us": 897.700000000028,
+      "cpu_total_us": 1328.7560000000813,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "Optimizer.step#CPUSafeAdam.step",
+      "count": 1,
+      "self_cpu_us": 785.4079999997921,
+      "cpu_total_us": 1631.2249999999913,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::view",
+      "count": 640,
+      "self_cpu_us": 741.2799999999152,
+      "cpu_total_us": 741.2799999999152,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "AddBackward0",
+      "count": 1650,
+      "self_cpu_us": 682.2429999999245,
+      "cpu_total_us": 682.2429999999245,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "SelectBackward0",
+      "count": 802,
+      "self_cpu_us": 594.7709999997901,
+      "cpu_total_us": 5613.913999999879,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: DivBackward0",
+      "count": 162,
+      "self_cpu_us": 511.659999999858,
+      "cpu_total_us": 1172.6599999999708,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::div",
+      "count": 199,
+      "self_cpu_us": 428.9879999999466,
+      "cpu_total_us": 510.03099999992264,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::neg",
+      "count": 18,
+      "self_cpu_us": 221.22699999998713,
+      "cpu_total_us": 221.22699999998713,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::_to_copy",
+      "count": 210,
+      "self_cpu_us": 199.37700000006953,
+      "cpu_total_us": 479.6189999999915,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::pow",
+      "count": 32,
+      "self_cpu_us": 164.67999999999302,
+      "cpu_total_us": 172.09199999998964,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "DivBackward0",
+      "count": 162,
+      "self_cpu_us": 149.85400000017762,
+      "cpu_total_us": 489.75300000007337,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::empty_strided",
+      "count": 211,
+      "self_cpu_us": 123.94899999992072,
+      "cpu_total_us": 123.94899999992072,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::sqrt",
+      "count": 33,
+      "self_cpu_us": 103.88900000001013,
+      "cpu_total_us": 103.88900000001013,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: StackBackward0",
+      "count": 2,
+      "self_cpu_us": 103.49299999999494,
+      "cpu_total_us": 341.5179999999891,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "autograd::engine::evaluate_function: ToCopyBackward0",
+      "count": 64,
+      "self_cpu_us": 98.67900000006921,
+      "cpu_total_us": 370.0480000000607,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "_StrictExpBackward",
+      "count": 7,
+      "self_cpu_us": 96.88099999996302,
+      "cpu_total_us": 315.55599999997685,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "Optimizer.zero_grad#CPUSafeAdam.zero_grad",
+      "count": 1,
+      "self_cpu_us": 89.452,
+      "cpu_total_us": 89.452,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::to",
+      "count": 248,
+      "self_cpu_us": 87.54700000000344,
+      "cpu_total_us": 567.1659999999949,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::mul_",
+      "count": 32,
+      "self_cpu_us": 70.04400000000896,
+      "cpu_total_us": 133.68500000002678,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "StackBackward0",
+      "count": 2,
+      "self_cpu_us": 68.97799999997369,
+      "cpu_total_us": 238.02499999999418,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::addcmul_",
+      "count": 32,
+      "self_cpu_us": 60.40399999995134,
+      "cpu_total_us": 60.40399999995134,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::lerp_",
+      "count": 32,
+      "self_cpu_us": 58.74899999999616,
+      "cpu_total_us": 58.74899999999616,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    }
+  ],
+  "wall_s": 0.20388936699964688
+}

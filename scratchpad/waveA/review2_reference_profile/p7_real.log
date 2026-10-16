@@ -1,0 +1,29 @@
+[gpu-lease] using GPUs [6]
+INFO 10-15 20:43:59 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[20:43:59] loaded 10.8s; golden nodes []
+[20:44:07] xrt rescore: 933/933 equal to committed; checks True
+[20:44:48] prefilled 256 seqs in 40.5s
+[20:44:50] B=256 step 2.42s
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [0,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [1,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [2,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [3,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [4,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [5,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [6,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [7,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [8,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_reference_profile/p7_real.py", line 111, in <module>
+    model.decode_batch(cache, list(range(B)), toks, tgts, commit=True)
+  File "/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_5e0d8071-7a1-8/rl_engine/models/muse_glimmer/reference/strict_model.py", line 426, in decode_batch
+    lens_host = [int(x) for x in cache.seq_lens.tolist()]
+                                 ^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+

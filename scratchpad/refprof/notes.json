@@ -1,0 +1,21 @@
+{
+  "measured_commits": {
+    "chain_triton_512_hf_pre_change": "307fcf2 (POC branch HEAD, before this row's changes)",
+    "chain_triton_512_hf": "69b4409 (strict_model/chain_harness/ops identical to HEAD)",
+    "chain_triton_2100_hf": "69b4409",
+    "chain_golden_2100": "86d1087",
+    "xrt_reference_triton": "f7d3723 (clean; the file's own commit field)",
+    "xrt_reference_triton_first": "69b4409 (file says dirty: uncommitted profiler-only edits, not imported by run_chain)",
+    "xrt_reference_golden": "69b4409; the file's commit field says 86d1087 because the sha was captured when the file was written (bug fixed in f7d3723)",
+    "xrt_reference_hf_bf16": "86d1087",
+    "profile_strict": "7401fc9",
+    "profile_hf": "86d1087",
+    "pytest_full_model_chain_triton": "7401fc9",
+    "pytest_tiny_and_fingerprint": "4d400e9"
+  },
+  "strict_code_unchanged_since": "69b4409: strict_model.py, chain_harness.py core, golden_ops.py, paged_kv.py, weights.py, backend.py and every rl_engine/models/muse_glimmer/ops|triton file are identical from 69b4409 to the final HEAD; later commits only touch profiling/scoring/collection tooling",
+  "hf_anchor_attention": "chain runs: HF eager attention (as in the original row report); xrt_reference_hf_bf16 and the HF profile: sdpa",
+  "profile_views": "wall = CUDA-event exclusive time per region (median of 3 prefill / 5 decode repeats, instrumented run; includes CPU launch gaps); gpu = torch.profiler kernel time charged to the innermost region open at launch (one call); clean_total_ms = CUDA events around the whole call without regions",
+  "decode_setup": "strict: 16 sequences of 2048 random tokens prefilled through the paged cache, then batched decode steps (commit=True, context 2048..2060); HF: DynamicCache from one batched prefill of B x 2048 tokens, then decode steps with full-vocab logits + fp32 log_softmax",
+  "prefill_setup": "prefill_train = training forward over T tokens with the selected-token logp of every position (strict varlen attention; HF forward with use_cache=False, full logits, fp32 log_softmax + gather); prefill_paged (strict only) = one-shot paged prefill of T tokens with logp of every position"
+}

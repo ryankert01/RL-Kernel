@@ -1,0 +1,40 @@
+[gpu-lease] using GPUs [7]
+[16:51:00] loading 541 text tensors from model-00001-of-00002.safetensors
+[16:51:08] loading 86 text tensors from model-00002-of-00002.safetensors
+INFO 10-15 16:51:12 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[16:51:12] strict weights 51.89 GiB loaded in 11.7s
+[16:51:12] [strict] train forward T=512
+USDT:2026-10-15 16:51:17 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:51:17 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:51:18]   total 293.8 ms (clean 269.8) peak 52.10 GiB
+[16:51:18] [strict] paged prefill T=512
+USDT:2026-10-15 16:51:20 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:51:21 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:51:23]   total 328.5 ms (clean 308.0)
+[16:51:23] [strict] train forward T=2048
+USDT:2026-10-15 16:51:30 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:51:31 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:51:32]   total 977.2 ms (clean 972.8) peak 52.44 GiB
+[16:51:32] [strict] paged prefill T=2048
+USDT:2026-10-15 16:51:39 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:51:40 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:51:42]   total 1018.7 ms (clean 1011.5)
+[16:51:42] [strict] train forward T=4096
+USDT:2026-10-15 16:51:56 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:51:58 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:51:59]   total 1943.0 ms (clean 1938.3) peak 52.91 GiB
+[16:51:59] [strict] paged prefill T=4096
+USDT:2026-10-15 16:52:13 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:52:15 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:52:17]   total 1988.9 ms (clean 1980.4)
+[16:52:33] [strict] filled 16 sequences x 2048 tokens in 15.7s
+[16:52:36] [strict] decode batch invariance: batch1 == batch16: 16/16, permuted batch-4: 4/4
+[16:52:36] [strict] decode batch 1 context 2048
+USDT:2026-10-15 16:52:38 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:52:38 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:52:39]   step 170.07 ms (clean 132.02) peak 53.63 GiB
+[16:52:39] [strict] decode batch 16 context 2048
+USDT:2026-10-15 16:52:43 273502:273502 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:52:43 273502:273502 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:52:48]   step 317.13 ms (clean 281.91) peak 53.63 GiB
+[16:52:49] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/profile_strict.json

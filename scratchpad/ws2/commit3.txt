@@ -1,0 +1,9 @@
+poc(muse_glimmer): REPORT_ws2_tp.md for the WS2 TP rows
+
+Equality matrix (TP2/TP4 == TP1 bitwise on real shapes, sibling kernels and fallbacks), the
+canonical chunk -> rank and KV ownership tables, NCCL all_reduce negative control (equal at TP2,
+31-50 mismatches at TP4), all_gather + tree vs NCCL all_reduce timings, contract deviations,
+integration requests, open issues and RFC feedback for the three rows and open question 2.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

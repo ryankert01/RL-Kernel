@@ -1,0 +1,182 @@
+[
+ {
+  "id": "gated_attention_fwd:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "line": 74,
+  "claim": "The forward wrappers never check cu_seqlens_q / cu_seqlens_k against Tq / Tk. They also skip cu[0]==0 and monotonicity. A bad offset table makes the kernel read q/gate/k/v out of bounds and write y/o/lse out of bounds, which corrupts memory. When cu_seqlens_q[-1] < Tq, the trailing rows of the torch.empty outputs are returned uninitialized and nothing is raised.",
+  "evidence": "Probes in scratchpad/waveA/review2_fwd_norms/probe_attn_failopen.py. (1) p8w, Tq=16 with cu_seqlens_q[-1]=64, run under compute-sanitizer with PYTORCH_NO_CUDA_MEMORY_CACHING=1: 2000+ 'Invalid __global__ write of size 16 bytes' at gated_attention_fwd.py:255 (the o store); the wrapper accepted the input. (2) p8: 880 invalid reads at gated_attention_fwd.py:187 (the q load). (3) p3: k/v have 64 rows and cu_seqlens_k[-1]=128. Editing memory outside v changed y (max|dy|=7.24) with no error. (4) p2: cu=[0,80] with Tq=100 returned garbage lse for rows 80..99 (-1.59, 1.98, -0.077). The sibling backward already has a complete validator, triton/gated_attention_bwd.py::prepare_sequence_meta (start at 0, non-decreasing, cu_q[-1]==Tq, cu_k[-1]==Tk). The forward never calls it. GatedAttentionFn.forward with seq_meta=None runs the forward unvalidated and validates only later, in backward.",
+  "suggested_fix": "In the varlen wrapper, run the prepare_sequence_meta checks whenever max_seqlen_q is None (that path already does a host sync), and accept a validated SequenceMeta otherwise. Without a sync, use torch._assert_async as normalized_embedding does. Allocate y/o/lse with NaN (torch.full) instead of torch.empty, so any row the kernel never writes is visible instead of silently returned."
+ },
+ {
+  "id": "gated_attention_fwd:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "line": 104,
+  "claim": "The grid is sized from the caller's max_seqlen_q without checking it against the real per-sequence lengths. If it is under-reported, query rows are never computed, and the torch.empty outputs are returned as if valid.",
+  "evidence": "probe p1: one sequence of 40 queries with max_seqlen_q=1. 39 of 40 rows of y differ from the reference in each of 3 trials, and row 0 is correct; no error. probe p1b: paged path, len_q=4 with max_seqlen_q=2: 2 of 4 lse rows are garbage. The vLLM adapter passes max_seqlen_q=int(attn_metadata.max_query_len) (runtime/vllm_attention_backend.py:189). The bench passes max_seqlen_q explicitly. The wrapper only checks max_seqlen_q >= 1.",
+  "suggested_fix": "Make coverage independent of the grid. Either loop over query tiles inside the program until len_q is reached, or add tl.device_assert(len_q <= grid_rows) in the kernel. In addition, NaN-initialise the outputs (see R1)."
+ },
+ {
+  "id": "gated_attention_fwd:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_fwd.py",
+  "line": 213,
+  "claim": "Three unvalidated cache inputs on the paged path fail open. (a) A block_table entry < 0 is silently treated as masked keys even inside the visible range, on global and local layers. The REPORT presents this as a feature: 'a block-table entry < 0 is also masked (and never dereferenced)'. (b) seq_lens > max_pages*16 indexes past the block-table row, so keys are taken from the next sequence's pages. (c) Page ids >= num_pages read k_cache/v_cache out of bounds.",
+  "evidence": "(a) probe p5: on a 200-token sequence, setting block_table[0,3]=-1 (keys 48..63, well inside the window) gives finite y, lse != full lse and max|dy|=2.02, with no error, for both window=None and 2048. (b) probe p6: seq 0 has 4 pages and seq_lens=96. Keys 64..95 resolve through block_table[1] = seq 1's pages [4,5,6,7]; the output is finite and no error is raised. (c) probe p7 under compute-sanitizer: page id 1000 of 4 gives 194 invalid 16-byte reads at gated_attention_fwd.py:222, 5.5 MB past the allocation. Every key that passes the tile mask (key_ok, which lies in (p_min-W, p_max]) is needed by some row of the tile. A negative page there is therefore always a cache-manager bug and never a legal eviction. The vLLM adapter maps the null block 0 to -1 (vllm_attention_backend.py:81-85), so an early eviction by vLLM would also be silently masked.",
+  "suggested_fix": "For key_ok keys, a page < 0 should poison the scores (NaN) or trigger tl.device_assert instead of masking. Add torch._assert_async checks for seq_lens <= block_table.shape[1]*16 and seq_lens >= len_q. Clamp page ids >= num_pages and poison them. Correct the Design paragraph of the REPORT and the docstring of strict_gated_attention_fwd_paged. Evicted pages remain unread because they are never key_ok, so this fix stays compatible with eviction."
+ },
+ {
+  "id": "gated_attention_fwd:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "line": 240,
+  "claim": "q_pos is checked only for dtype and shape. A query with q_pos >= len_k silently attends to a truncated key set and returns finite, plausible output. Negative q_pos gives -inf lse and NaN o. The forward therefore accepts packings that the backward rejects (0 <= q_pos < len_k, contiguous ascending). On the paged path, seq_lens < len_q produces negative derived positions in the same way.",
+  "evidence": "probe p4: q_pos = 1000..1063 with 64 keys gives finite y that is bitwise equal to attending all 64 keys; no error. q_pos = -5..58 gives 5 rows with lse=-inf. prepare_sequence_meta in gated_attention_bwd.py raises on both cases ('query positions ... must lie inside its N keys').",
+  "suggested_fix": "Reuse the backward validator from R1 on the varlen path. In the paged path, assert seq_lens >= len_q. Optionally, in the kernel, poison rows whose pos is outside [0, len_k) instead of clamping them through last_blk = min(p_max, len_k-1)."
+ },
+ {
+  "id": "norms:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/norms.py",
+  "line": 86,
+  "claim": "The norms golden computes ms = ss / float(H). On CUDA this takes ATen's fast path for a CPU-scalar divisor, a * (1/b), which is not IEEE division, so the golden does not perform the same IEEE-RN operations as the kernel's div_rn(ss, H). The golden also gives different results on CPU and CUDA. This refutes three statements: 'everything after ss is a sequence of IEEE-RN ops on both sides' in the docstring and REPORT, 'golden does ... (same two IEEE-RN ops)', and the RFC-feedback claim that any torch CPU/CUDA implementation of this form reproduces it bitwise.",
+  "evidence": "probe_norm_golden_div.py, 65536 rows at H=6656. Golden ms differs from true division (tensor divisor) in 30206/65536 rows, and golden-on-CUDA differs from golden-on-CPU in the same 30206 rows. 10126 inv values change from the division form alone. Kernel-vs-golden inv mismatches drop from 14812 to 7113 when the golden uses true division; the remaining mismatches come from the ss tree. Bf16 outputs move in 1191 of 4.4e8 elements. The golden is a tolerance reference only, so no gate fails. However, the REPORT recommends this form to other agents (O4 qk-norm) as bitwise-reproducible in torch.",
+  "suggested_fix": "Divide by a 0-dim device tensor, e.g. ss / torch.full((), H, dtype=torch.float32, device=ss.device), or use torch.div with a tensor divisor so the golden matches div_rn on both devices. Correct the docstring and the RFC feedback: in torch CUDA, '/ python_scalar' is a multiply by the reciprocal."
+ },
+ {
+  "id": "gated_attention_fwd:R5",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "line": 390,
+  "claim": "The arithmetic recorded in trace(), the golden docstring ('Reduction order: identical to the kernel ... same online-softmax update order') and REPORT deviation 4 ('div_rn makes the golden's torch division the same operation') does not match the compiled kernel. The kernel uses FTZ divisions, a contracted FMA for l, a PV MMA that accumulates into acc*alpha, and ex2.approx for tl.exp.",
+  "evidence": "probe_ir.py on the compiled TOKEN variant. PTX contains div.rn.ftz.f32 x128: libdevice.div_rn is built with Triton's nvvm-reflect FTZ, so o=acc/l and sigmoid_rn flush subnormals. It contains fma.rn.f32 x8 (enable_fp_fusion defaults to True; consistent with l*alpha+rowsum being single-rounded) and ex2.approx.f32 for tl.exp. TTGIR shows '%acc_176 = tt.dot %p_bf16, %v, %acc_171', i.e. the PV products accumulate inside the MMA into acc*alpha, not dot-then-add as written in the contract and golden. The HEAD variant has the same structure, so kernel-vs-kernel parity is unaffected. By contrast, the norms kernels pass enable_fp_fusion=False and their PTX has plain div.rn.f32/sqrt.rn.f32 and no fma.",
+  "suggested_fix": "Record FTZ, FMA contraction, MMA-accumulate and exp=ex2.approx(x*log2e) in trace() and in the REPORT, or launch with enable_fp_fusion=False and use tl.div_rn (non-FTZ) as the norms do. Add these to the RFC note on R2 (no fast-math / no exp2 tricks): tl.exp is the exp2 trick."
+ },
+ {
+  "id": "gated_attention_fwd:R6",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md",
+  "line": 220,
+  "claim": "The REPORT misattributes the cost of paged decode. Most of it is the host-bound paged_query_positions (about 0.19 ms per call, recomputed in every layer), not the 4x16-token page gather or SM occupancy. The proposed next optimization (64-token pages) therefore targets the wrong cost.",
+  "evidence": "probe_decode_overhead.py at ctx 4096. Full wrapper vs kernel-only (_launch with precomputed q_pos), in ms: B=1 global 0.321 vs 0.167; B=1 local 0.316 vs 0.086; B=64 global 0.323 vs 0.253; B=64 local 0.320 vs 0.136. paged_query_positions alone takes 0.19 ms, and the full call is about 0.32 ms whatever the window or batch. Without CUDA graphs that is about 10 ms per decode step over 52 layers. bench_fwd.json reproduces the REPORT table: decode B=64 global 0.332, local 0.377.",
+  "suggested_fix": "Derive q_pos inside the kernel in paged mode (seq_lens[b] - len_q + t - q_start; the kernel already loads both), or compute it once per step. Then update the decode analysis in the REPORT."
+ },
+ {
+  "id": "gated_attention_fwd:R7",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "line": 99,
+  "claim": "The window is not pinned. Any positive int is accepted, while trace() hardcodes window=2048. A caller passing 2047 or 2049 (a different vLLM sliding_window convention), or a config value, runs silently with different semantics.",
+  "evidence": "_validate_common only checks int(window) > 0. The vLLM adapter computes window = sliding_window[0] + 1 (vllm_attention_backend.py:179).",
+  "suggested_fix": "Accept only window in (None, SLIDING_WINDOW) on the strict path."
+ },
+ {
+  "id": "gated_attention_fwd:R8",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md",
+  "line": 74,
+  "claim": "The test counts in the REPORT are stale: '63 tests, 33 s' and the pytest tail '63 passed'. The Wave A update added 13 TP/geometry tests without updating them.",
+  "evidence": "pytest --collect-only collects 76 tests in test_gated_attention_fwd.py (119 together with test_norms.py). All 119 passed in 37.9 s on GPU 4 at e13ea68.",
+  "suggested_fix": "Re-run the tests and update the pytest tail and the counts."
+ },
+ {
+  "id": "norms:R2",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_norms.py",
+  "line": 100,
+  "claim": "Fail-closed behaviour of the norms is implemented but not tested. The embedding kernel itself masks out-of-range ids to a zero row, so rejection relies only on the wrapper's torch._assert_async, and no test pins that. fused_post_norm_residual_pre_norm checks each tensor against its own weight's device, but never checks resid.device against branch.device.",
+  "evidence": "probe embedding_oob: normalized_embedding(table V=100, ids=[3,100]) triggers the device-side assert 'token_ids must be in [0, 100)', so the behaviour is correct. test_strict_rejects_non_bf16 covers only dtype and pre_form. ops/norms.py:386-392 validates (branch, w_post) and (resid, w_pre) separately.",
+  "suggested_fix": "Add a subprocess test for out-of-range ids (the device assert poisons the CUDA context) and a same-device check in the fused wrapper."
+ },
+ {
+  "id": "kernels_attention:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
+  "line": 234,
+  "claim": "The local-layer SDPA baselines cannot be compared with the strict numbers, but the JSON stores their ratio fields as if they could be plotted. The local forward baseline is SDPA with a dense bool mask: strict/SDPA = 0.02-0.04 for prefill and 0.006 for decode at B=256. The local backward ratio compares a windowed strict backward with a full-causal SDPA backward. The headline quotes that ratio as '2.08x (local) at T=4096', which understates the real gap.",
+  "evidence": "kernels_attention.json benchmarks.prefill_forward local T=8192: sdpa_ms 121.9 vs 3.94 global; decode_forward local B=256: sdpa_ms 71.7. backward rows: sdpa_causal_bwd_ms is the same for global and local (8.38 vs 8.41 ms at 8192). The description string discloses this, but the per-row 'ratio' fields carry no caveat.",
+  "suggested_fix": "Add a windowed flash baseline, e.g. flash_attn_varlen_func with window_size=(2047, 0) from the vLLM env, for the local forward and backward. Otherwise set the local 'ratio' fields to null with a 'baseline_not_comparable' reason, and drop the local number from the headline."
+ },
+ {
+  "id": "kernels_attention:R4",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_gated_attention_bwd.py",
+  "line": 283,
+  "claim": "The 'CP1 vs one-shot' checks are equal by construction. At cp_world=1, cp_gated_attention_backward runs the same preprocess -> strict_gated_attention_bwd_partials -> combine_kv_partials calls as strict_gated_attention_bwd. So test_one_shot_equals_cp1_path, the parity driver's cp=1 rows and check_cp_parity's 'CP1 vs one-shot' column can only catch plumbing errors. Headline (b) still lists 'cp_attention at CP1' as evidence of CP invariance.",
+  "evidence": "runtime/cp_attention.py:578-592 vs triton/gated_attention_bwd.py:774-779. With cp_world==1 the all_gather branch is skipped, so the arithmetic is identical. The real evidence is simulated CP2/4/8 (test_one_shot_equals_simulated_cp_ranks) and real CP2. I re-ran real CP2 myself: all 0.",
+  "suggested_fix": "Label the CP1 checks as plumbing checks. Add a single-GPU test that drives the real cp_gated_attention_backward at CP4/CP8 with a two-pass replay collective. My probe (probe_cp_plumbing.py) gives 0 mismatches at CP4 and CP8, global and local, T in {2048, 2100, 4096, 8192}. That covers _compact_groups -> all_gather -> rank tree -> _expand_groups without 4 GPUs."
+ },
+ {
+  "id": "kernels_attention:R5",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention_autograd.py",
+  "line": 168,
+  "claim": "Integration side effect that no report mentions. c88607f's strict_kernels.resolve_ops picks the sibling autograd op whenever trace()['forward_is_fallback'] is False. This branch hard-codes False, so after merging, the Megatron binding switches silently from _ComposedStrictAttention to GatedAttentionFn. The binding passes no seq_meta, so every layer's backward still pays the validating host syncs.",
+  "evidence": "c88607f:rl_engine/models/muse_glimmer/runtime/strict_kernels.py ~L740-766 (use_sibling_attention = auto and sibling_fwd_strict). On my merged tree, test_megatron_strict_binding passes, so the numerics are equal. torch.profiler on one autograd fwd+bwd: with meta, only the profiler's own cudaDeviceSynchronize; without meta, 31 aten::item, 5 cudaStreamSynchronize and 4 DtoH copies.",
+  "suggested_fix": "Add to requests_to_integrator: the Megatron binding now resolves to GatedAttentionFn; build one SequenceMeta per micro-batch with prepare_sequence_meta and pass it to gated_attention(..., seq_meta)."
+ },
+ {
+  "id": "kernels_attention:R6",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md",
+  "line": 46,
+  "claim": "The forward timing is not stable enough for the headline '1.31x SDPA at T=4096'. The same TP1 global call measured 1.70 ms in one series and 2.06 ms in another, in the same run, which would give 1.08x vs 1.31x. Forward bench rows store only means; only the bwd-ab rows keep per-round samples.",
+  "evidence": "REPORT_fwd lines 45-48 disclose the gap ('measurement-position effect, not investigated'). benchmarks.prefill_forward T=4096 strict_ms 2.058 vs tp_shard_forward TP1 1.700.",
+  "suggested_fix": "Time forward strict/SDPA in alternating rounds as bwd-ab does, store the raw per-round samples, and report median and range in the headline."
+ },
+ {
+  "id": "kernels_attention:R7",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "line": 465,
+  "claim": "SequenceMeta is bound to its tensors only by object identity and autograd _version counters. Some writes leave _version unchanged: a persistent cu_seqlens/q_pos buffer refilled by a Triton/CUDA kernel, an NCCL broadcast into it, or `.data` writes. A stale meta (qpos0, max_k_blocks / max_q_blocks, max_seqlen_q grid) is then accepted and gives wrong grid bounds without any error. The docstring promises 'rejected for any other tensors (fail closed)'.",
+  "evidence": "_resolve_meta compares `seq_meta.versions` with the tensors' `_version` (lines 446, 465-470). Nothing compares contents.",
+  "suggested_fix": "State the precondition in the docstring (meta is valid only while the tensors are written through PyTorch ops). Or keep device copies of cu_seqlens/q_pos in the meta and add an async device-side equality check that raises at the next sync."
+ },
+ {
+  "id": "kernels_attention:R8",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_gated_attention_bwd.py",
+  "line": 367,
+  "claim": "In test_tp_head_shards_equal_tp1_slices, the final TP-tree assertions follow from the per-rank partial-equality assertions before them. They repeat the same fp32 adds on bitwise-equal operands, plus +0.0 leaves at the other KV head, so they can only fail on a signed-zero edge case. This is the pattern finding bwd:5 flagged. The test is not vacuous overall, because the per-rank partial comparison is real.",
+  "evidence": "Lines 341-360 assert dkp_r == dkp[groups, :, kvh] bitwise. kv_partials_subtree and tp_tree then add those same tensors in the same association as TP1's kv_partials_subtree. My probe found 0 negative-zero leaves in 33.5M elements.",
+  "suggested_fix": "Keep the tree check as documentation, but say in the docstring that the partial equality carries the evidence. Optionally add an association control (left fold over ranks) that is expected to differ."
+ },
+ {
+  "id": "kernels_attention:R9",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_gated_attention_fwd.py",
+  "line": 219,
+  "claim": "test_tile_layouts_share_warp_split only checks the variants compiled inside that test, which are TP1 (32/2) TOKEN and HEAD tiles. The new HEAD-tile variants with group 8/4 and masked rows (TP4/TP8) are never layout-checked. The O5 replacement text nevertheless says 'the compiled MMA layout (warpsPerCTA) is checked by the tests'.",
+  "evidence": "The test compiles via _one_shot(..) on 32/2 only. The TP shard tests are defined later (line 404). TP4/TP8 HEAD tiles are covered only by end-to-end bitwise comparisons. My B=256 paged-decode probe gives 0 mismatches at TP2/4/8, global and local.",
+  "suggested_fix": "Compile the hq in {16, 8, 4} variants (token and head tiles) inside that test before scanning the TTGIR cache."
+ },
+ {
+  "id": "kernels_attention:R10",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/kernels_attention.json",
+  "line": 6532,
+  "claim": "The results JSON points its raw evidence (logs, parity.json, cp2_torchrun.json, bwd_diff.json) at an ephemeral /tmp scratch directory instead of committed files. 'commit' is d0cc564, not the head e13ea68.",
+  "evidence": "tests.final_single_gpu_files.log, commands.scratch and the digest/bwd_ab paths all live under /tmp/claude-1000/.../scratchpad/attn. Most matrices are embedded, so the plot data itself is complete: tp_raw_per_rank, cp_simulated, cp2_two_gpu_torchrun, backward_before_after raw rounds and backward_diff for 15 lengths.",
+  "suggested_fix": "Copy the logs and raw JSONs into reports/muse_glimmer_poc/data/kernels_attention_raw/ and reference them relatively. Record the head commit, or keep d0cc564 with a 'json_commit' field."
+ },
+ {
+  "id": "kernels_attention:R11",
+  "severity": "nit",
+  "file": "benchmarks/models/muse_glimmer/bench_gated_attention_bwd.py",
+  "line": 66,
+  "claim": "The old backward bench still builds o/lse with golden_forward_fixed_order. That function is now an adapter over the slow fp32 golden. So the bench times the backward on o/lse the kernel never produces, and its 'fwd' column times the golden. Separately, the new 779-line measurement driver sits in the production package (rl_engine/models/muse_glimmer/ops/gated_attention_bench.py).",
+  "evidence": "bench_gated_attention_bwd.py:66 `gold.golden_forward_fixed_order(...)`. gated_attention_bench.py is only used for measurement and imports torch.nn.functional for SDPA baselines.",
+  "suggested_fix": "Switch the old bench to strict_gated_attention_fwd_varlen, or delete it in favour of the new driver. Move gated_attention_bench.py under benchmarks/models/muse_glimmer/."
+ },
+ {
+  "id": "kernels_attention:R12",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/cp_attention.py",
+  "line": 572,
+  "claim": "CPGatedAttentionFn.forward accepts TP4/TP8 head shards (8/1, 4/1) and runs the whole forward. The rejection comes only in backward ('needs whole KV-head groups per call'). It fails closed, but late: after the forward of every layer has run.",
+  "evidence": "_cp_forward_core validates only that the wrapper accepts the geometry. cp_gated_attention_backward raises at line 572-575 when hq // hkv != 16.",
+  "suggested_fix": "In CPGatedAttentionFn.forward, raise immediately when any input requires grad and q_heads // kv_heads != 16."
+ }
+]

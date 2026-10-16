@@ -1,0 +1,14 @@
+[gpu-lease] using GPUs [4]
+................ss...................................................... [ 84%]
+.............                                                            [100%]
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_gated_attention_bwd.py::test_seq_meta_removes_host_sync[global]
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/__init__.py:1333: UserWarning: Synchronization debug mode is a prototype feature and does not yet detect all synchronizing operations (Triggered internally at /__w/pytorch/pytorch/torch/csrc/cuda/Module.cpp:1028.)
+    torch._C._cuda_set_sync_debug_mode(debug_mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:618: needs 2 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:638: set RL_KERNEL_MUSEGLIMMER_E2E=1
+83 passed, 2 skipped, 1 warning in 26.26s
+rc=0

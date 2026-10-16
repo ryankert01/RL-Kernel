@@ -1,0 +1,51 @@
+{
+ "python": "/home/ubuntu/envs/vllm/bin/python",
+ "torch": "2.13.0+cu130",
+ "gpu": "NVIDIA A100-SXM4-80GB",
+ "module": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/old_f91e8b6/rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+ "r1_layer_kind": {
+  "env_unset": {
+   "raised": false,
+   "q_hat_elements_differing_from_rope_path": 15994827,
+   "elements": 16777216,
+   "warnings": []
+  },
+  "env_1": {
+   "raised": false,
+   "q_hat_elements_differing_from_rope_path": 15994827,
+   "elements": 16777216,
+   "warnings": []
+  }
+ },
+ "r2_builders": {
+  "ops.qknorm_rope.rope_table(cpu)": "raised RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme",
+  "reference.golden_ops.rope_table(cpu)": "accepted",
+  "rope_table_reads_the_canonical_cache": false
+ },
+ "r3_in_place": {
+  "in_place_change_detected": false,
+  "verify_after_data_write_raised": false,
+  "logged_digest_equals_pinned_after_write": true,
+  "actual_digest_equals_pinned_after_write": false,
+  "restored_digest_equals_pinned": true
+ },
+ "r4_capture": {
+  "first_build_in_capture_raised": false,
+  "cached_table_correct_before_replay": false,
+  "eager_rows_after_capture_wrong_elements": 16384,
+  "cached_after": true
+ },
+ "inference_mode_build": {
+  "table_is_inference_tensor": true
+ },
+ "ref_decode_batch_duplicate_ids": {
+  "duplicate_ids_raised": false,
+  "row0_equals_batch1": false,
+  "row0_abs_diff": 0.017895221710205078
+ },
+ "ref_xrt_checks": {
+  "minus_zero_vs_plus_zero_counted_equal": true,
+  "no_checks_reported_as_pass": true
+ },
+ "wall_s": 3.3
+}

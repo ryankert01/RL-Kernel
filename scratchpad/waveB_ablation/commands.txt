@@ -1,0 +1,8 @@
+# All run from the worktree root WT=/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-6 at commit d74733b; S=<session scratchpad>/waveB_ablation
+~/bin/gpu-lease -n 1 --pool 3,7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --out $S/parts/part_strict.json
+~/bin/gpu-lease -n 1 --pool 3,7 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --out $S/parts/part_hf.json
+~/bin/gpu-lease -n 1 --pool 7 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_baseline_gpu7.json
+~/bin/gpu-lease -n 1 --pool 3,7 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-layers --out $S/parts/part_hf_layers.json
+~/bin/gpu-lease -n 1 --pool 7 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --settings repeat_immediate --out $S/parts/part_strict_gpu7.json
+~/bin/gpu-lease -n 1 --pool 3 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_baseline_gpu3.json   # at b71de7a
+PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py merge --parts $S/parts/part_*.json --tokenizer ~/models/Muse-Glimmer-30B/tokenizer.json --previous $S/round1/waveA_ablation.json $S/round1/parts/part_hf.json --commands-file $S/commands.txt --out reports/muse_glimmer_poc/data/ablation.json   # merge at b71de7a

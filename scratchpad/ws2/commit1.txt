@@ -1,0 +1,25 @@
+poc(muse_glimmer): tp_canonical_tree, vocab_parallel_softcap_logp, kv_head_replication (WS2 TP rows)
+
+Implements the RFC #501 WS2 tensor-parallel rows for the Muse-Glimmer-30B strict POC:
+
+- runtime/tp_layout.py: TPLayout(tp, canonical_tp=8) with per-rank Q heads, replicated KV head
+  (floor(2r/tp)), canonical K-chunks of o_proj (512) / down (2496), vocab tiles (25344),
+  kv_ownership_map() provenance and fail_closed_if_undeclared().
+- runtime/tp_canonical_tree.py: row_parallel_tree_gemm — fp32 chunk partials, local sub-tree
+  fold, deterministic rank-ordered all-gather of the fp32 roots, the same
+  ((0+1)+(2+3))+((4+5)+(6+7)) tree over ranks, one bf16 rounding; TP1 path; NCCL all_reduce
+  negative control; timing helper; make_collective() falls back to the torch.distributed
+  transport when rl_engine._C is absent.
+- runtime/vocab_parallel_softcap_logp.py: padded 202752 LM head, fp32 tile logits, soft cap
+  before the per-tile (max, sumexp, target logit, owner) statistics, all_gather_many, merge tree.
+- runtime/kv_replication.py: per-rank replicated-KV gated attention and the single-device proof
+  that every TP in {1,2,4,8} equals TP1 (forward half).
+- runtime/check_tp_parity.py: torchrun --standalone --nproc_per_node={2,4,8} parity script.
+- tests/models/muse_glimmer/distributed/: single-device gates plus spawn-based NCCL tests
+  (TP2, TP4, TP2==TP4, TP8 opt-in via MUSEGLIMMER_TP8=1).
+
+Sibling strict ops are imported when present and replaced by labelled fixed-order fp32
+fallbacks otherwise.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

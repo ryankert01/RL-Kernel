@@ -1,0 +1,11 @@
+START Thu Oct 15 13:31:20 UTC 2026
+Using Python 3.12.15 environment at: /home/ubuntu/envs/megatron
+   Updating https://github.com/Dao-AILab/fast-hadamard-transform.git (v1.1.0)
+    Updated https://github.com/Dao-AILab/fast-hadamard-transform.git (1cc807efbd6cc001df359822d60bf6052dd66859)
+Resolved 32 packages in 6.90s
+   Building fast-hadamard-transform @ git+https://github.com/Dao-AILab/fast-hadamard-transform.git@1cc807efbd6cc001df359822d60bf6052dd66859
+      Built fast-hadamard-transform @ git+https://github.com/Dao-AILab/fast-hadamard-transform.git@1cc807efbd6cc001df359822d60bf6052dd66859
+Prepared 1 package in 3m 30s
+Installed 1 package in 0.90ms
+ + fast-hadamard-transform==1.1.0 (from git+https://github.com/Dao-AILab/fast-hadamard-transform.git@1cc807efbd6cc001df359822d60bf6052dd66859)
+exit=0 Thu Oct 15 13:34:57 UTC 2026

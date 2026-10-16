@@ -1,0 +1,18 @@
+{
+  "protocol": "muse_glimmer_trainer_bridge_v1",
+  "factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+  "factory_kwargs": {
+    "device": "cpu"
+  },
+  "model_path": "/home/ubuntu/models/Muse-Glimmer-30B",
+  "tensor_parallel_size": 2,
+  "num_visible_gpus": 0,
+  "lora_rank": 4,
+  "lr": 0.001,
+  "strict": true,
+  "seed": 1234,
+  "launcher": "process",
+  "dist_init": "after_build",
+  "handshake_path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/trainer_server/handshake.json",
+  "tcp_nodelay": true
+}

@@ -1,0 +1,11 @@
+[gpu-lease] using GPUs [4]
+== digest new
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/digest_new.json in 68.6s
+rc=0
+== bwd-diff
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/bwd_diff.json in 25.2s
+rc=0
+== parity
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/parity.json in 25.0s
+rc=0
+== done

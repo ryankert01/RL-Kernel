@@ -1,0 +1,21 @@
+=== 22:01:16 hf (pool 7)
+=== 22:05:20 hf rc=0
+[22:05:09] repeat_after_all_factors (restore + repeat null control) ...
+[22:05:14]   0 tokens differ
+[22:05:14] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf.json
+=== 22:05:20 hf_baseline_gpu3 (pool 3)
+=== 22:09:10 hf_baseline_gpu3 rc=0
+[22:09:04] setting repeat_immediate (repeat_null) ...
+[22:09:06]   0/933 tokens differ, max|d| 0.000e+00, mean|d| 0.000e+00, k3 0.000e+00, KL 0.000e+00, argmax flips 0 (unique 0, at ties 0), 1797 ms, peak 53.9 GiB
+[22:09:06] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf_baseline_gpu3.json
+=== 22:09:10 hf_baseline_gpu7 (pool 7)
+=== 22:10:34 hf_baseline_gpu7 rc=0
+[22:10:29] setting repeat_immediate (repeat_null) ...
+[22:10:31]   0/933 tokens differ, max|d| 0.000e+00, mean|d| 0.000e+00, k3 0.000e+00, KL 0.000e+00, argmax flips 0 (unique 0, at ties 0), 1815 ms, peak 53.9 GiB
+[22:10:31] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf_baseline_gpu7.json
+=== 22:10:34 hf_layers (pool 7)
+=== 22:18:06 hf_layers rc=0
+[22:17:51] gsm8k_long_window rope_inv_freq_cuda: first diff at rope_cos; final_norm frac 0.882 mean|d| 7.468e-02
+[22:18:02] gsm8k_long_window bf16_reduced_reduction_off: first diff at layer_0.self_attn.k_proj; final_norm frac 0.938 mean|d| 8.411e-02
+[22:18:02] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_hf_layers.json
+=== 22:18:06 strict (pool 3)

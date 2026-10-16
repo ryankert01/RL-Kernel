@@ -1,0 +1,16 @@
+[gpu-lease] using GPUs [2]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 29776626688
+step {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 2.8992154619991197, 'grad_norm': 333.3540954589844, 'lr': 0.0001, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.19280132300264086, 'num_lora_params_local': 104792064, 'loss': 118.03243255615234}
+step2 {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 2.1185761239976273, 'grad_norm': 0.56671142578125, 'lr': 0.0001, 'step': 2, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.09465720599837368, 'num_lora_params_local': 104792064, 'loss': -0.6763907670974731}
+.
+1 passed, 17 deselected in 90.04s (0:01:30)

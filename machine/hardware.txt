@@ -1,0 +1,15 @@
+name, driver_version, memory.total [MiB]
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+NVIDIA A100-SXM4-80GB, 580.105.08, 81920 MiB
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+Linux 170-9-247-33 6.8.0-1046-nvidia #49~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Jan 28 22:29:18 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+240
+               total        used        free      shared  buff/cache   available
+Mem:            1771          15        1643           0         112        1747

@@ -1,0 +1,16 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 17:09:08] start pid=303577 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 17:09:08] client connected
+[trainer_server rank0 17:09:08] trainer construction failed:
+Traceback (most recent call last):
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-3/rl_engine/models/muse_glimmer/e2e/trainer_server.py", line 442, in main
+    trainer = build_trainer(spec, rank=rank, world=world, local_rank=local_rank)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-3/rl_engine/models/muse_glimmer/e2e/trainer_server.py", line 92, in build_trainer
+    return trainer_cls(spec["model_path"], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-3/rl_engine/models/muse_glimmer/e2e/mocks.py", line 767, in __init__
+    raise RuntimeError("injected fault: trainer construction failed")
+RuntimeError: injected fault: trainer construction failed
+

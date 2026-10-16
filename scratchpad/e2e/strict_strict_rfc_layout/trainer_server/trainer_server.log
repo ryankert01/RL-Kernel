@@ -1,0 +1,71 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 01:22:13] start pid=614195 world=1 launcher=process CUDA_VISIBLE_DEVICES='2,3,4,5' tcp_nodelay=True
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+[trainer_server rank0 01:23:24] client connected
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 8886584320
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (2, 0, 0): 8886584320
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (3, 0, 0): 8886584320
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 8886584320
+[trainer_server rank0 01:24:52] trainer StrictTrainer built in 158.7 s
+[trainer_server rank0 01:24:54] export_lora id=1 ok=True compute=1057.6 ms
+[trainer_server rank0 01:24:56] provenance id=2 ok=True compute=0.3 ms
+[trainer_server rank0 01:27:09] token_logprobs id=3 ok=True compute=19454.6 ms
+[trainer_server rank0 01:27:53] step id=4 ok=True compute=33834.5 ms
+[trainer_server rank0 01:27:55] export_lora id=5 ok=True compute=880.8 ms
+[trainer_server rank0 01:29:47] token_logprobs id=6 ok=True compute=7046.2 ms
+[trainer_server rank0 01:30:21] step id=7 ok=True compute=25593.6 ms
+[trainer_server rank0 01:30:23] export_lora id=8 ok=True compute=736.3 ms
+[trainer_server rank0 01:30:24] profile_arm id=9 ok=True compute=0.2 ms
+USDT:2026-10-16 01:32:18 614195:614195 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-16 01:32:26 614195:614195 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 01:33:14] token_logprobs id=10 ok=True compute=56778.4 ms
+USDT:2026-10-16 01:33:24 614195:614195 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-16 01:33:56 614195:614195 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 01:38:13] step id=11 ok=True compute=289536.7 ms
+[trainer_server rank0 01:38:15] export_lora id=12 ok=True compute=682.9 ms
+[trainer_server rank0 01:40:06] token_logprobs id=13 ok=True compute=6771.5 ms
+[trainer_server rank0 01:40:39] step id=14 ok=True compute=24883.1 ms
+[trainer_server rank0 01:40:40] export_lora id=15 ok=True compute=667.9 ms
+[trainer_server rank0 01:42:33] token_logprobs id=16 ok=True compute=6988.7 ms
+[trainer_server rank0 01:43:08] step id=17 ok=True compute=26735.1 ms
+[trainer_server rank0 01:43:10] export_lora id=18 ok=True compute=674.3 ms
+[trainer_server rank0 01:45:03] token_logprobs id=19 ok=True compute=6763.8 ms
+[trainer_server rank0 01:45:36] step id=20 ok=True compute=24566.3 ms
+[trainer_server rank0 01:45:37] export_lora id=21 ok=True compute=668.3 ms
+[trainer_server rank0 01:47:29] token_logprobs id=22 ok=True compute=7069.5 ms
+[trainer_server rank0 01:48:03] step id=23 ok=True compute=25682.9 ms
+[trainer_server rank0 01:48:05] export_lora id=24 ok=True compute=666.2 ms
+[trainer_server rank0 01:50:07] token_logprobs id=25 ok=True compute=7856.8 ms
+[trainer_server rank0 01:50:46] step id=26 ok=True compute=28766.7 ms
+[trainer_server rank0 01:50:47] export_lora id=27 ok=True compute=662.9 ms
+[trainer_server rank0 01:50:48] provenance id=28 ok=True compute=0.3 ms

@@ -1,0 +1,16 @@
+[22:14:23] loading strict weights from /home/ubuntu/models/Muse-Glimmer-30B (layout for backend triton)
+[22:14:23] loading 541 text tensors from model-00001-of-00002.safetensors
+[22:14:32] loading 86 text tensors from model-00002-of-00002.safetensors
+[22:14:34] weights ready in 11.2s: 51.9 GiB on cuda:0; checkpoint a4e59da52a7bc87ae7251dd5545c0dd437c44b68
+INFO 10-15 22:14:35 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[22:14:35] ops: golden=[] sibling=['attention_paged', 'attention_varlen', 'centered_rmsnorm', 'fused_post_norm_residual_pre_norm', 'gemm', 'lm_head_softcap_logprob', 'normalized_embedding', 'pad_lm_head_weight', 'qknorm_scaled_rope', 'rope_table', 'swiglu_ffn', 'weighted_rmsnorm']
+[22:14:45] [score] gsm8k_test_0: 55 tokens, sum logp -98.9550, train 1.18s; prefill: 55/55 (0.4s), decode: 55/55 (8.3s)
+[22:14:51] [score] gsm8k_test_1: 47 tokens, sum logp -87.4959, train 0.15s; prefill: 47/47 (0.2s), decode: 47/47 (6.3s)
+[22:15:10] [score] gsm8k_test_2: 129 tokens, sum logp -128.4830, train 0.17s; prefill: 129/129 (0.2s), decode: 129/129 (18.0s)
+[22:15:15] [score] gsm8k_test_3: 39 tokens, sum logp -88.7494, train 0.16s; prefill: 39/39 (0.2s), decode: 39/39 (5.2s)
+[22:15:30] [score] gsm8k_test_4: 92 tokens, sum logp -123.1554, train 0.21s; prefill: 92/92 (0.2s), decode: 92/92 (14.2s)
+[22:15:49] [score] gsm8k_test_5: 149 tokens, sum logp -175.0335, train 0.21s; prefill: 149/149 (0.2s), decode: 149/149 (18.5s)
+[22:15:59] [score] gsm8k_test_6: 88 tokens, sum logp -102.1781, train 0.16s; prefill: 88/88 (0.2s), decode: 88/88 (9.5s)
+[22:16:17] [score] gsm8k_test_7: 156 tokens, sum logp -170.1770, train 0.19s; prefill: 156/156 (0.2s), decode: 156/156 (18.2s)
+[22:16:41] [score] gsm8k_long_window: 178 tokens, sum logp -133.6431, train 1.13s; prefill: 178/178 (1.2s), decode: 178/178 (21.0s)
+[22:16:41] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/wb/runs/xrt_reference_triton_repeat.json: 933 tokens; 18 (mode, sequence) checks of ['prefill', 'decode']; byte-equal to train: True

@@ -1,0 +1,43 @@
+[gpu-lease] using GPUs [5]
+{
+ "forward_impl": "rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+ "forward_is_fallback": false,
+ "window=None": {
+  "autograd_forward_ms": 1.131296157836914,
+  "strict_kernel_forward_ms": 1.3561248779296875,
+  "autograd_y_vs_kernel_y_mismatch": 0,
+  "golden_lse_vs_kernel_lse_mismatch": 60190,
+  "golden_o_vs_kernel_o_mismatch": 11487,
+  "max_abs_lse_diff": 7.62939453125e-06,
+  "dq_kernel_olse_vs_golden_olse_mismatch": 65411,
+  "dq_max_abs_diff": 0.0078125,
+  "dk_kernel_olse_vs_golden_olse_mismatch": 19625,
+  "dk_max_abs_diff": 0.0625,
+  "dv_kernel_olse_vs_golden_olse_mismatch": 2028,
+  "dv_max_abs_diff": 0.03125,
+  "dgate_kernel_olse_vs_golden_olse_mismatch": 10359,
+  "dgate_max_abs_diff": 0.0078125,
+  "bwd_golden_vs_fwd_golden_lse_mismatch": 0,
+  "bwd_golden_vs_fwd_golden_max_lse_diff": 0.0,
+  "bwd_golden_o_vs_bf16(fwd_golden_o)_mismatch": 0
+ },
+ "window=2048": {
+  "autograd_forward_ms": 0.8172988891601562,
+  "strict_kernel_forward_ms": 0.7598400115966797,
+  "autograd_y_vs_kernel_y_mismatch": 0,
+  "golden_lse_vs_kernel_lse_mismatch": 60167,
+  "golden_o_vs_kernel_o_mismatch": 11529,
+  "max_abs_lse_diff": 7.62939453125e-06,
+  "dq_kernel_olse_vs_golden_olse_mismatch": 66741,
+  "dq_max_abs_diff": 0.0078125,
+  "dk_kernel_olse_vs_golden_olse_mismatch": 20022,
+  "dk_max_abs_diff": 0.125,
+  "dv_kernel_olse_vs_golden_olse_mismatch": 2142,
+  "dv_max_abs_diff": 0.03125,
+  "dgate_kernel_olse_vs_golden_olse_mismatch": 10409,
+  "dgate_max_abs_diff": 0.0078125,
+  "bwd_golden_vs_fwd_golden_lse_mismatch": 0,
+  "bwd_golden_vs_fwd_golden_max_lse_diff": 0.0,
+  "bwd_golden_o_vs_bf16(fwd_golden_o)_mismatch": 0
+ }
+}

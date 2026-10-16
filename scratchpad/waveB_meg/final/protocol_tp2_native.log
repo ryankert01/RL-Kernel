@@ -1,0 +1,120 @@
+[gpu-lease] using GPUs [0, 1]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 15849931776
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 15849931776
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2] fx graph cache unable to load compiled graph
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2] Traceback (most recent call last):
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2]   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/_inductor/codecache.py", line 1714, in iterate_over_candidates
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2]     yield pickle.loads(content), content, True
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2]           ^^^^^^^^^^^^^^^^^^^^^
+[rank1]:W1015 22:40:56.672000 478112 torch/_inductor/codecache.py:1716] [0/2] AttributeError: Can't get attribute 'torch.contiguous_format' on <module '__main__' (<class '_frozen_importlib.BuiltinImporter'>)>
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+step {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 3.257278999000846, 'grad_norm': 335.1124267578125, 'lr': 0.0001, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.3250718620038242, 'num_lora_params_local': 74547200, 'loss': 116.96968078613281}
+step2 {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 231, 'micro_batches': 3, 'fwd_bwd_s': 2.271214129999862, 'grad_norm': 0.5680627226829529, 'lr': 0.0001, 'step': 2, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.17403297500277404, 'num_lora_params_local': 74547200, 'loss': -0.6766951680183411}
+.
+=============================== warnings summary ===============================
+../../../../envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+    import pynvml  # type: ignore[import]
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/dist_checkpointing/strategies/torch.py:70: DeprecationWarning: transformer_engine.pytorch.float8_tensor is deprecated and will be removed in a future release. Float8Tensor should be imported directly through `from transformer_engine.pytorch import Float8Tensor`
+    from transformer_engine.pytorch.float8_tensor import Float8Tensor
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py: 14 warnings
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/fused_moe/cute_dsl/blackwell/blockscaled_contiguous_gather_grouped_gemm_act_fusion.py:3446: DeprecationWarning: cutlass.utils.LayoutEnum is deprecated; use cutlass.tensor_utils.LayoutEnum instead. It will be removed in a future release.
+    c_layout: utils.LayoutEnum,
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/fused_moe/cute_dsl/blackwell/moe_w4a16_kernel.py:2326: DeprecationWarning: cutlass.utils.LayoutEnum is deprecated; use cutlass.tensor_utils.LayoutEnum instead. It will be removed in a future release.
+    c_layout: utils.LayoutEnum,
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gemm/kernels/grouped_gemm_masked_blackwell.py:427: DeprecationWarning: cutlass.utils.LayoutEnum is deprecated; use cutlass.tensor_utils.LayoutEnum instead. It will be removed in a future release.
+    epi_layout: utils.LayoutEnum,
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gemm/kernels/grouped_gemm_masked_blackwell.py:2391: DeprecationWarning: cutlass.utils.LayoutEnum is deprecated; use cutlass.tensor_utils.LayoutEnum instead. It will be removed in a future release.
+    c_layout: utils.LayoutEnum,
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gemm/kernels/grouped_gemm_masked_rubin.py:215: DeprecationWarning: cutlass.utils.LayoutEnum is deprecated; use cutlass.tensor_utils.LayoutEnum instead. It will be removed in a future release.
+    c_layout: utils.LayoutEnum,
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gdn_kernels/blackwell/gated_delta_net_chunked.py:95: DeprecationWarning: cutlass.utils.TensorMapUpdateMode is deprecated; use cutlass.tensor_utils.TensorMapUpdateMode instead. It will be removed in a future release.
+    from cutlass.utils import TensorMapManager, TensorMapUpdateMode
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gdn_kernels/delta_rule_dsl/collective_store_tma.py:6: DeprecationWarning: cutlass.utils.tensormap_manager.TensorMapUpdateMode is deprecated; use cutlass.tensor_utils.TensorMapUpdateMode instead. It will be removed in a future release.
+    from cutlass.utils.tensormap_manager import TensorMapManager, TensorMapUpdateMode
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/gdn_kernels/blackwell/gated_delta_net_cp_prefill.py:55: DeprecationWarning: cutlass.utils.TensorMapUpdateMode is deprecated; use cutlass.tensor_utils.TensorMapUpdateMode instead. It will be removed in a future release.
+    from cutlass.utils import TensorMapManager, TensorMapUpdateMode
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/flashinfer/cute_dsl/availability.py:135: DeprecationWarning: Arch from arch.py is deprecated. Use Arch from enums.py instead.
+    from cutlass.base_dsl.arch import Arch
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/tensor_parallel/random.py:92: DeprecationWarning: Using deprecated internal API from Transformer Engine. transformer_engine.pytorch.fp8 will be removed in a future release.
+    from transformer_engine.pytorch.fp8 import FP8GlobalStateManager, fp8_autocast
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/inference/contexts/__init__.py:9: DeprecationWarning: The following imports from `dynamic_context.py` will be removed in this file in `megatron-core` 0.14. The imports here result in a cyclic import issue that causes rotary embeddings to import from Apex rather than Transformer Engine.
+    warnings.warn(
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+    _warnings.warn(
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+    class MimoModelConfig:
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+    warnings.warn(
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py: 1872 warnings
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/tensor_parallel/mappings.py:498: DeprecationWarning: Warning: tp_group is None, using default tp group. Passing tp_group will be mandatory soon
+    group = get_tensor_model_parallel_group_if_none(group)
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py: 1872 warnings
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/tensor_parallel/layers.py:632: DeprecationWarning: Warning: tp_group is None, using default tp group. Passing tp_group will be mandatory soon
+    tp_group = get_tensor_model_parallel_group_if_none(tp_group)
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py: 1872 warnings
+  /home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/tensor_parallel/mappings.py:504: DeprecationWarning: Warning: tp_group is None, using default tp group. Passing tp_group will be mandatory soon
+    group = get_tensor_model_parallel_group_if_none(group)
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_strict_trainer_protocol_real_checkpoint
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+    return func(*args, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 47 deselected, 5650 warnings in 286.94s (0:04:46)
+/home/ubuntu/.local/share/uv/python/cpython-3.12.15-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

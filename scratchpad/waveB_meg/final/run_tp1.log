@@ -1,0 +1,42 @@
+[gpu-lease] using GPUs [0]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 29776626688
+[load] {'init_seconds': 141.76356734999717, 'bridge_load_seconds': 64.77177572250366, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 55.54134654998779, 'allocated_gib': 52.4999794960022, 'peak_reserved_gib': 55.900390625}]}
+[identity] 626/627 equal; mismatches=['model.language_model.norm.weight']
+[xrt] strict scored 933 tokens in 5.86s
+[repeat] mismatches 0/933
+[lora_noop] mismatches 0/933
+[native] max|d| 0.314 mean|d| 0.01602
+[grad_repeat] pass 0: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 17.721608004998416}
+[grad_repeat] pass 1: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 17.711201500998868}
+[grad_repeat] mismatching elements 0/104792064
+[packing] budget 4096: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 18.061436793999746}
+[packing] budget 512: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 6, 'fwd_bwd_s': 25.255684363997716}
+[packing] budget 8192: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 16.13698039600422}
+[packing] bitwise invariant: True
+[step] {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 19.664738774998114, 'grad_norm': 7.0176005363464355, 'lr': 1e-05, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.35958906899759313, 'num_lora_params_local': 104792064, 'loss': 0.3581377863883972} sha 04c604ff2f24 -> 69968212be47
+[bench] 512 tokens: median {'strict_forward_ms': 808.8240599972778, 'strict_train_logprobs_ms': 812.8717229992617, 'strict_recompute_fwd_bwd_ms': 3441.9091769959778, 'strict_optimizer_ms': 109.7784169978695, 'strict_step_total_ms': 4402.227569000388, 'strict_recompute_mismatches': 0, 'native_forward_ms': 152.9769189946819, 'native_fwd_bwd_forward_ms': 149.63350500329398, 'native_fwd_bwd_backward_ms': 303.9854450034909} errors {}
+[bench] 1024 tokens: median {'strict_forward_ms': 1333.318420998694, 'strict_train_logprobs_ms': 1331.986812998366, 'strict_recompute_fwd_bwd_ms': 4855.096762999892, 'strict_optimizer_ms': 99.42433000105666, 'strict_step_total_ms': 6288.634518001345, 'strict_recompute_mismatches': 0, 'native_forward_ms': 305.16427000111435, 'native_fwd_bwd_forward_ms': 300.38377600430977, 'native_fwd_bwd_backward_ms': 637.0057690000976} errors {}
+[bench] 2048 tokens: median {'strict_forward_ms': 2534.5058820021222, 'strict_train_logprobs_ms': 2536.3730090030003, 'strict_recompute_fwd_bwd_ms': 8277.494119000039, 'strict_optimizer_ms': 109.42271999374498, 'strict_step_total_ms': 10921.79500900238, 'strict_recompute_mismatches': 0, 'native_forward_ms': 682.9072179971263, 'native_fwd_bwd_forward_ms': 675.1549649998196, 'native_fwd_bwd_backward_ms': 1455.3445439960342} errors {}
+[rank0]:[W1015 22:29:20.921356130 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 1656750080 bytes (free: 870252544, total: 85094825984).
+[rank0]:[W1015 22:29:27.614106158 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2147483648 bytes (free: 750649344, total: 85094825984).
+[rank0]:[W1015 22:29:28.907390504 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2147483648 bytes (free: 1916665856, total: 85094825984).
+[rank0]:[W1015 22:29:28.907746310 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2147483648 bytes (free: 1916665856, total: 85094825984).
+[bench] 4096 tokens: median {'strict_forward_ms': 4939.681030002248, 'strict_train_logprobs_ms': 4939.10748000053, 'strict_recompute_fwd_bwd_ms': 15720.855847001076, 'strict_optimizer_ms': 108.80894499860005, 'strict_step_total_ms': 20774.28002999659, 'strict_recompute_mismatches': 0, 'native_forward_ms': 1706.8458610010566} errors {'native_fwd_bwd': "OutOfMemoryError('CUDA out of memory. Tried to allocate 2.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 1.79 GiB is free. Including non-PyTorch memory, this process has 77.46 GiB memory in use. Of the allocated memory 64.95 GiB is allocated by PyTorch, and 3.93 GiB is reserved by PyTorch "}
+[rank0]:[W1015 22:32:50.512433153 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 4294967296 bytes (free: 775815168, total: 85094825984).
+[rank0]:[W1015 22:32:51.899881944 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 6794641408, total: 85094825984).
+[rank0]:[W1015 22:32:51.900672276 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 6794641408, total: 85094825984).
+[rank0]:[W1015 22:32:51.923784638 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 6794641408, total: 85094825984).
+[rank0]:[W1015 22:32:51.924343513 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 6794641408, total: 85094825984).
+[bench] 8192 tokens: median {'strict_forward_ms': 9747.217967000324, 'strict_train_logprobs_ms': 9739.21509199863, 'strict_recompute_fwd_bwd_ms': 30855.09445700154, 'strict_optimizer_ms': 107.41557900473708, 'strict_step_total_ms': 40769.58814799582, 'strict_recompute_mismatches': 0} errors {'native_forward': "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 6.33 GiB is free. Including non-PyTorch memory, this process has 72.91 GiB memory in use. Of the allocated memory 62.08 GiB is allocated by PyTorch, and 2.26 GiB is reserved by PyTorch ", 'native_fwd_bwd': "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 6.33 GiB is free. Including non-PyTorch memory, this process has 72.91 GiB memory in use. Of the allocated memory 62.18 GiB is allocated by PyTorch, and 2.15 GiB is reserved by PyTorch "}
+[run] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_meg/final/run_tp1.json

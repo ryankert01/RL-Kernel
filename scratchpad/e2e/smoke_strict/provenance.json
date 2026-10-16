@@ -1,0 +1,3692 @@
+{
+  "rollout_start": {
+    "engine": "StrictRolloutEngine",
+    "runtime": "vllm 0.31.0",
+    "strict": true,
+    "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+    "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+    "lora_loads": 1,
+    "lora_mode": "strict unmerged: y = bf16(acc32(W x) + sum_k B[:,k] bf16(acc32(A x))[k])",
+    "logprob_temperature": 1.0,
+    "logprob_path": "strict O7: fp32 vocab-tile logits, softcap, 8-tile fixed tree",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [
+      4
+    ],
+    "cuda_visible_devices": "4",
+    "max_model_len": 4096,
+    "seed": 1234,
+    "generate_calls": 0,
+    "vllm_version": "0.31.0",
+    "model_runner": "v2",
+    "engine_kwargs": {
+      "tensor_parallel_size": "1",
+      "dtype": "bfloat16",
+      "max_model_len": "4096",
+      "seed": "1234",
+      "enforce_eager": "True",
+      "gpu_memory_utilization": "0.9",
+      "enable_prefix_caching": "False",
+      "limit_mm_per_prompt": "{'image': 0, 'video': 0}",
+      "disable_log_stats": "True",
+      "max_num_seqs": "64",
+      "trust_remote_code": "False",
+      "attention_config": "{'backend': 'FLASH_ATTN'}"
+    },
+    "attention_backend_requested": "FLASH_ATTN(strict override)",
+    "native_lora_dir": null,
+    "lora_replies": [
+      {
+        "rank": 0,
+        "layers": 52,
+        "slots": 416,
+        "sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "rehash_ms": 171.50764599864488,
+        "install_ms": 259.46753099924535,
+        "file_read_ms": 134.13335099903634
+      }
+    ],
+    "readback_dir": "/tmp/museglimmer-vllm-readback-d7t52_r7",
+    "timing": {
+      "load_seconds": 41.195112466812134,
+      "generate_seconds": 0.0,
+      "generated_tokens": 0,
+      "prompt_tokens": 0,
+      "logprobs_seconds": 0.0,
+      "logprobs_tokens": 0,
+      "lora_seconds": 1.5011014938354492,
+      "history": [
+        {
+          "op": "load_lora",
+          "seconds": 1.5011107921600342,
+          "sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+          "num_tensors": 832,
+          "num_modules": 416,
+          "layers": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51
+          ],
+          "ranks": [
+            16
+          ],
+          "num_elements": 104792064
+        }
+      ]
+    },
+    "workers": [
+      {
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "role": "worker",
+        "pid": 371177,
+        "strict": true,
+        "vllm_version": "0.31.0",
+        "model_class": "MuseGlimmerForCausalLM",
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.norm.forward (instance)"
+        ],
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "op_impls": {
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats"
+        },
+        "fallbacks": [],
+        "demotions": [],
+        "all_ops_strict": true,
+        "backend_ids": {
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "collective": "none (TP1)"
+        },
+        "call_counts": {
+          "lm_head.padded_init": 1,
+          "embed_input_ids": 1,
+          "attention_forward": 52,
+          "mlp_forward": 52,
+          "decoder_layer": 52,
+          "final_norm": 1,
+          "compute_logits.native_for_sampling": 1,
+          "load_lora": 1
+        },
+        "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "lora_slots": {
+          "0": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "1": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "2": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "3": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "4": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "5": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "6": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "7": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "8": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "9": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "10": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "11": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "12": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "13": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "14": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "15": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "16": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "17": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "18": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "19": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "20": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "21": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "22": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "23": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "24": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "25": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "26": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "27": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "28": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "29": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "30": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "31": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "32": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "33": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "34": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "35": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "36": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "37": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "38": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "39": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "40": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "41": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "42": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "43": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "44": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "45": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "46": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "47": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "48": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "49": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "50": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "51": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        },
+        "tp": 1,
+        "tp_rank": 0,
+        "canonical_tp": 8,
+        "kv_ownership": {
+          "q_heads": [
+            0,
+            32
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "attention": "TP1",
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ],
+          "chunk_widths": {
+            "o_proj": 512,
+            "down_proj": 2496
+          }
+        },
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "config_pins": {
+          "max_model_len": 4096,
+          "num_hidden_layers": 52,
+          "hidden_size": 6656,
+          "intermediate_size": 19968,
+          "num_attention_heads": 32,
+          "num_key_value_heads": 2,
+          "head_dim": 128,
+          "sliding_window": 2048,
+          "vocab_size": 202048,
+          "rms_norm_eps": 1e-05,
+          "post_norm_eps": 1e-08,
+          "qk_scale_factor": 3.87,
+          "output_multiplier": 0.19611613513818404,
+          "final_logit_softcapping": 20.0,
+          "rope_theta": 500000.0,
+          "max_position_embeddings": 131072,
+          "rope_table_positions": 4096,
+          "window_keys_incl_self": 2048,
+          "sampling": "native"
+        },
+        "checks": {
+          "check_runtime_binding": "passed",
+          "config_pins": "passed",
+          "eager": "passed",
+          "kv_cache_dtype": "auto",
+          "all_ops_strict": "passed"
+        },
+        "notes": []
+      }
+    ],
+    "readback_files": [
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {},
+        "canonical_tp": 8,
+        "checks": {},
+        "config_pins": {},
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": null,
+        "lora_slots": {},
+        "model_class": null,
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 370708,
+        "role": "engine",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      },
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {},
+        "canonical_tp": 8,
+        "checks": {},
+        "config_pins": {},
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": null,
+        "lora_slots": {},
+        "model_class": null,
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 371177,
+        "role": "engine",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      },
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {
+          "attention_forward": 52,
+          "compute_logits.native_for_sampling": 1,
+          "decoder_layer": 52,
+          "embed_input_ids": 1,
+          "final_norm": 1,
+          "lm_head.padded_init": 1,
+          "load_lora": 1,
+          "mlp_forward": 52
+        },
+        "canonical_tp": 8,
+        "checks": {
+          "all_ops_strict": "passed",
+          "check_runtime_binding": "passed",
+          "config_pins": "passed",
+          "eager": "passed",
+          "kv_cache_dtype": "auto"
+        },
+        "config_pins": {
+          "final_logit_softcapping": 20.0,
+          "head_dim": 128,
+          "hidden_size": 6656,
+          "intermediate_size": 19968,
+          "max_model_len": 4096,
+          "max_position_embeddings": 131072,
+          "num_attention_heads": 32,
+          "num_hidden_layers": 52,
+          "num_key_value_heads": 2,
+          "output_multiplier": 0.19611613513818404,
+          "post_norm_eps": 1e-08,
+          "qk_scale_factor": 3.87,
+          "rms_norm_eps": 1e-05,
+          "rope_table_positions": 4096,
+          "rope_theta": 500000.0,
+          "sampling": "native",
+          "sliding_window": 2048,
+          "vocab_size": 202048,
+          "window_keys_incl_self": 2048
+        },
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.norm.forward (instance)"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "lora_slots": {
+          "0": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "1": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "10": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "11": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "12": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "13": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "14": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "15": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "16": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "17": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "18": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "19": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "2": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "20": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "21": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "22": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "23": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "24": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "25": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "26": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "27": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "28": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "29": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "3": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "30": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "31": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "32": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "33": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "34": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "35": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "36": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "37": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "38": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "39": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "4": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "40": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "41": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "42": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "43": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "44": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "45": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "46": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "47": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "48": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "49": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "5": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "50": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "51": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "6": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "7": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "8": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "9": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        },
+        "model_class": "MuseGlimmerForCausalLM",
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 371177,
+        "role": "worker",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      }
+    ]
+  },
+  "trainer_start": {
+    "engine": "StrictTrainer",
+    "runtime": "megatron-bridge",
+    "strict": true,
+    "tp": 2,
+    "load_seconds": 59.033326148986816,
+    "step_count": 0,
+    "lr": 1e-05,
+    "micro_batch_tokens": 4096,
+    "torch_flags": {
+      "allow_tf32": false,
+      "cudnn_deterministic": true,
+      "cublas_workspace_config": ":4096:8",
+      "fp32_matmul_precision": "highest"
+    },
+    "binding": "megatron_bridge_native_hybridmodel_strict",
+    "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+    "tp_collective": "nccl_all_gather_data_movement",
+    "ops": {
+      "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen+gated_attention_bwd.strict_gated_attention_bwd (composed in the binding)",
+      "normalized_embedding": "strict:norms.normalized_embedding",
+      "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+      "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+      "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+      "rope_table": "strict:qknorm_rope.rope_table",
+      "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+      "silu_mul": "strict:swiglu_ffn.swiglu",
+      "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+      "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+      "all_strict": true
+    },
+    "lora": {
+      "rank": 16,
+      "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+      "enabled": true,
+      "seed": 1234
+    },
+    "checkpoint_layers": true,
+    "canonical_chunks": 8,
+    "vocab_tiles": {
+      "rows": 25344,
+      "local": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "padded_vocab": 202752
+    },
+    "final_norm_roundtrip_mismatches": 1120,
+    "memory_gib": {
+      "bound_start": 29.586276054382324,
+      "after_vision_drop": 29.586276054382324,
+      "after_weight_views": 34.60581970214844,
+      "model_params": 25.943081855773926
+    },
+    "notes": [
+      "dropped vision_tower (text-only trainer)",
+      "dropped vision_adapter (text-only trainer)",
+      "dropped vision_projection (text-only trainer)",
+      "embedding table gathered on every rank (TP>1)",
+      "lm_head redistributed to canonical tiles [0, 1, 2, 3] on this rank",
+      "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+    ],
+    "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+    "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+    "gpu_ids": [
+      0,
+      1
+    ],
+    "init_seconds": 163.63744568824768,
+    "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1",
+    "bridge": {
+      "protocol": "muse_glimmer_trainer_bridge_v1",
+      "client": "RemoteTrainer",
+      "launcher": "process",
+      "python": "/home/ubuntu/envs/megatron/bin/python",
+      "factory": "rl_engine.models.muse_glimmer.runtime.strict_trainer:StrictTrainer",
+      "factory_kwargs": {},
+      "command": [
+        "/home/ubuntu/envs/megatron/bin/python",
+        "-m",
+        "rl_engine.models.muse_glimmer.e2e.trainer_server",
+        "--spec",
+        "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/smoke_strict/trainer_server/spec.json"
+      ],
+      "server_pid": 370836,
+      "gpu_ids_physical": [
+        5,
+        6
+      ],
+      "server_cuda_visible_devices": "5,6",
+      "hello": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "pid": 370836,
+        "world": 1,
+        "launcher": "process",
+        "trainer_class": "rl_engine.models.muse_glimmer.runtime.strict_trainer.StrictTrainer",
+        "build_s": 163.74629627899776,
+        "versions": {
+          "python": "3.12.15",
+          "executable": "/home/ubuntu/envs/megatron/bin/python",
+          "torch": "2.13.0+cu129",
+          "torch_cuda": "12.9",
+          "triton": "3.7.1",
+          "megatron-core": "0.20.0+913159367",
+          "megatron-bridge": "0.7.0+d86a5c09b",
+          "transformer_engine": "2.20.2",
+          "transformers": "5.17.0",
+          "vllm": null
+        },
+        "devices": {
+          "cuda_visible_devices": "5,6",
+          "devices": [
+            {
+              "index": 0,
+              "name": "NVIDIA A100-SXM4-80GB",
+              "uuid": "713b4618-fb55-60a6-c431-6c9fb26e6359",
+              "total_memory_gib": 79.250732421875,
+              "pci_bus_id": 11
+            },
+            {
+              "index": 1,
+              "name": "NVIDIA A100-SXM4-80GB",
+              "uuid": "eb5bd0bc-3b35-df22-224d-fbb7ecfc6a6d",
+              "total_memory_gib": 79.250732421875,
+              "pci_bus_id": 12
+            }
+          ],
+          "device_count": 2
+        },
+        "memory": {
+          "allocated_gib": 34.88352966308594,
+          "peak_allocated_gib": 39.616610527038574,
+          "reserved_gib": 35.162109375
+        },
+        "startup_s": 209.57958616400356
+      },
+      "calls": 2,
+      "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/smoke_strict/trainer_server/trainer_server.log"
+    }
+  },
+  "rollout_end": {
+    "engine": "StrictRolloutEngine",
+    "runtime": "vllm 0.31.0",
+    "strict": true,
+    "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+    "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+    "lora_loads": 2,
+    "lora_mode": "strict unmerged: y = bf16(acc32(W x) + sum_k B[:,k] bf16(acc32(A x))[k])",
+    "logprob_temperature": 1.0,
+    "logprob_path": "strict O7: fp32 vocab-tile logits, softcap, 8-tile fixed tree",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [
+      4
+    ],
+    "cuda_visible_devices": "4",
+    "max_model_len": 4096,
+    "seed": 1234,
+    "generate_calls": 1,
+    "vllm_version": "0.31.0",
+    "model_runner": "v2",
+    "engine_kwargs": {
+      "tensor_parallel_size": "1",
+      "dtype": "bfloat16",
+      "max_model_len": "4096",
+      "seed": "1234",
+      "enforce_eager": "True",
+      "gpu_memory_utilization": "0.9",
+      "enable_prefix_caching": "False",
+      "limit_mm_per_prompt": "{'image': 0, 'video': 0}",
+      "disable_log_stats": "True",
+      "max_num_seqs": "64",
+      "trust_remote_code": "False",
+      "attention_config": "{'backend': 'FLASH_ATTN'}"
+    },
+    "attention_backend_requested": "FLASH_ATTN(strict override)",
+    "native_lora_dir": null,
+    "lora_replies": [
+      {
+        "rank": 0,
+        "layers": 52,
+        "slots": 416,
+        "sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "rehash_ms": 157.97785600079806,
+        "install_ms": 238.3250989987573,
+        "file_read_ms": 187.70041300012963
+      }
+    ],
+    "readback_dir": "/tmp/museglimmer-vllm-readback-d7t52_r7",
+    "timing": {
+      "load_seconds": 41.195112466812134,
+      "generate_seconds": 21.037460803985596,
+      "generated_tokens": 128,
+      "prompt_tokens": 288,
+      "logprobs_seconds": 1.029451847076416,
+      "logprobs_tokens": 128,
+      "lora_seconds": 2.533066749572754,
+      "history": [
+        {
+          "op": "load_lora",
+          "seconds": 1.5011107921600342,
+          "sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+          "num_tensors": 832,
+          "num_modules": 416,
+          "layers": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51
+          ],
+          "ranks": [
+            16
+          ],
+          "num_elements": 104792064
+        },
+        {
+          "op": "generate",
+          "seconds": 21.037460803985596,
+          "prompts": 2,
+          "n": 2,
+          "max_tokens": 32,
+          "temperature": 1.0,
+          "generated_tokens": 128,
+          "prompt_tokens": 288,
+          "tokens_per_s": 6.084384479316539,
+          "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840"
+        },
+        {
+          "op": "logprobs",
+          "seconds": 1.029451847076416,
+          "sequences": 4,
+          "scored_tokens": 128,
+          "sequence_tokens": 704,
+          "tokens_per_s": 683.8590867550721,
+          "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840"
+        },
+        {
+          "op": "load_lora",
+          "seconds": 1.0319786071777344,
+          "sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+          "num_tensors": 832,
+          "num_modules": 416,
+          "layers": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51
+          ],
+          "ranks": [
+            16
+          ],
+          "num_elements": 104792064
+        }
+      ]
+    },
+    "workers": [
+      {
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "role": "worker",
+        "pid": 371177,
+        "strict": true,
+        "vllm_version": "0.31.0",
+        "model_class": "MuseGlimmerForCausalLM",
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.norm.forward (instance)"
+        ],
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "op_impls": {
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats"
+        },
+        "fallbacks": [],
+        "demotions": [],
+        "all_ops_strict": true,
+        "backend_ids": {
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "collective": "none (TP1)"
+        },
+        "call_counts": {
+          "lm_head.padded_init": 1,
+          "embed_input_ids": 35,
+          "attention_forward": 1820,
+          "mlp_forward": 1820,
+          "decoder_layer": 1820,
+          "final_norm": 35,
+          "compute_logits.native_for_sampling": 36,
+          "load_lora": 2,
+          "lora.column": 10608,
+          "lora.row": 3536,
+          "sampler.strict_logp_calls": 34,
+          "sampler.strict_logp_rows": 132,
+          "prompt_logprobs.strict_logp_calls": 1,
+          "prompt_logprobs.strict_logp_rows": 704,
+          "kv_cache_write": 1768,
+          "attention.local": 1326,
+          "attention.global": 442
+        },
+        "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "lora_slots": {
+          "0": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "1": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "2": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "3": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "4": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "5": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "6": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "7": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "8": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "9": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "10": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "11": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "12": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "13": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "14": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "15": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "16": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "17": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "18": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "19": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "20": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "21": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "22": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "23": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "24": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "25": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "26": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "27": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "28": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "29": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "30": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "31": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "32": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "33": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "34": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "35": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "36": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "37": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "38": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "39": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "40": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "41": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "42": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "43": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "44": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "45": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "46": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "47": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "48": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "49": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "50": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "51": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        },
+        "tp": 1,
+        "tp_rank": 0,
+        "canonical_tp": 8,
+        "kv_ownership": {
+          "q_heads": [
+            0,
+            32
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "attention": "TP1",
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ],
+          "chunk_widths": {
+            "o_proj": 512,
+            "down_proj": 2496
+          }
+        },
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "config_pins": {
+          "max_model_len": 4096,
+          "num_hidden_layers": 52,
+          "hidden_size": 6656,
+          "intermediate_size": 19968,
+          "num_attention_heads": 32,
+          "num_key_value_heads": 2,
+          "head_dim": 128,
+          "sliding_window": 2048,
+          "vocab_size": 202048,
+          "rms_norm_eps": 1e-05,
+          "post_norm_eps": 1e-08,
+          "qk_scale_factor": 3.87,
+          "output_multiplier": 0.19611613513818404,
+          "final_logit_softcapping": 20.0,
+          "rope_theta": 500000.0,
+          "max_position_embeddings": 131072,
+          "rope_table_positions": 4096,
+          "window_keys_incl_self": 2048,
+          "sampling": "native"
+        },
+        "checks": {
+          "check_runtime_binding": "passed",
+          "config_pins": "passed",
+          "eager": "passed",
+          "kv_cache_dtype": "auto",
+          "all_ops_strict": "passed"
+        },
+        "notes": []
+      }
+    ],
+    "readback_files": [
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {},
+        "canonical_tp": 8,
+        "checks": {},
+        "config_pins": {},
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": null,
+        "lora_slots": {},
+        "model_class": null,
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 370708,
+        "role": "engine",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      },
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {},
+        "canonical_tp": 8,
+        "checks": {},
+        "config_pins": {},
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": null,
+        "lora_slots": {},
+        "model_class": null,
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 371177,
+        "role": "engine",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      },
+      {
+        "all_ops_strict": true,
+        "attention_backend": "rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+        "backend_ids": {
+          "attention": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "collective": "none (TP1)",
+          "gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "logp": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats"
+        },
+        "call_counts": {
+          "attention.global": 442,
+          "attention.local": 1326,
+          "attention_forward": 1820,
+          "compute_logits.native_for_sampling": 36,
+          "decoder_layer": 1820,
+          "embed_input_ids": 35,
+          "final_norm": 35,
+          "kv_cache_write": 1768,
+          "lm_head.padded_init": 1,
+          "load_lora": 2,
+          "lora.column": 10608,
+          "lora.row": 3536,
+          "mlp_forward": 1820,
+          "prompt_logprobs.strict_logp_calls": 1,
+          "prompt_logprobs.strict_logp_rows": 704,
+          "sampler.strict_logp_calls": 34,
+          "sampler.strict_logp_rows": 132
+        },
+        "canonical_tp": 8,
+        "checks": {
+          "all_ops_strict": "passed",
+          "check_runtime_binding": "passed",
+          "config_pins": "passed",
+          "eager": "passed",
+          "kv_cache_dtype": "auto"
+        },
+        "config_pins": {
+          "final_logit_softcapping": 20.0,
+          "head_dim": 128,
+          "hidden_size": 6656,
+          "intermediate_size": 19968,
+          "max_model_len": 4096,
+          "max_position_embeddings": 131072,
+          "num_attention_heads": 32,
+          "num_hidden_layers": 52,
+          "num_key_value_heads": 2,
+          "output_multiplier": 0.19611613513818404,
+          "post_norm_eps": 1e-08,
+          "qk_scale_factor": 3.87,
+          "rms_norm_eps": 1e-05,
+          "rope_table_positions": 4096,
+          "rope_theta": 500000.0,
+          "sampling": "native",
+          "sliding_window": 2048,
+          "vocab_size": 202048,
+          "window_keys_incl_self": 2048
+        },
+        "demotions": [],
+        "fallbacks": [],
+        "hooks": [
+          "vllm.v1.attention.backends.registry.FLASH_ATTN->rl_engine.models.muse_glimmer.runtime.vllm_attention_backend.MuseGlimmerStrictAttentionBackend",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.__init__",
+          "vllm.model_executor.layers.vocab_parallel_embedding.ParallelLMHead.weight_loader",
+          "vllm.model_executor.models.muse_glimmer.Attention (KV-replicated factory)",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.__init__",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerForCausalLM.compute_logits",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.embed_input_ids",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerDecoderLayer.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerAttention.forward",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerMLP.forward",
+          "vllm.v1.worker.gpu.sample.sampler.Sampler.__call__",
+          "vllm.v1.worker.gpu.sample.prompt_logprob.compute_prompt_logprobs_with_chunking",
+          "vllm.model_executor.models.muse_glimmer.MuseGlimmerModel.norm.forward (instance)"
+        ],
+        "kv_ownership": {
+          "attention": "TP1",
+          "chunk_widths": {
+            "down_proj": 2496,
+            "o_proj": 512
+          },
+          "down_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "kv_heads_cached": [
+            0,
+            2
+          ],
+          "kv_heads_projected": [
+            0,
+            2
+          ],
+          "kv_heads_replicated": true,
+          "o_proj_chunks": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "q_heads": [
+            0,
+            32
+          ],
+          "vocab_tiles": [
+            0,
+            8
+          ]
+        },
+        "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+        "lora_slots": {
+          "0": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "1": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "10": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "11": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "12": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "13": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "14": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "15": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "16": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "17": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "18": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "19": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "2": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "20": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "21": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "22": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "23": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "24": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "25": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "26": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "27": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "28": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "29": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "3": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "30": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "31": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "32": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "33": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "34": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "35": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "36": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "37": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "38": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "39": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "4": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "40": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "41": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "42": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "43": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "44": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "45": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "46": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "47": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "48": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "49": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "5": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "50": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "51": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "6": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "7": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "8": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ],
+          "9": [
+            "gate_proj",
+            "k_proj",
+            "mlp.down_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "o_proj",
+            "q_proj",
+            "v_proj"
+          ]
+        },
+        "model_class": "MuseGlimmerForCausalLM",
+        "notes": [],
+        "op_impls": {
+          "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+          "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats",
+          "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+          "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+          "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+          "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+          "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+          "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+          "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+          "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+          "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+          "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+          "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+          "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm"
+        },
+        "pid": 371177,
+        "role": "worker",
+        "sampling": "token selection uses vLLM's native bf16 soft-capped logits (cuBLAS lm_head); only the selected-token logprob values are recomputed strictly; selected_token_ranks and extra top-k logprob columns stay native",
+        "schema": "rlkernel.museglimmer.vllm_strict.v1",
+        "strict": true,
+        "tp": 1,
+        "tp_rank": 0,
+        "vllm_version": "0.31.0"
+      }
+    ]
+  },
+  "trainer_end": {
+    "engine": "StrictTrainer",
+    "runtime": "megatron-bridge",
+    "strict": true,
+    "tp": 2,
+    "load_seconds": 59.033326148986816,
+    "step_count": 1,
+    "lr": 1e-05,
+    "micro_batch_tokens": 4096,
+    "torch_flags": {
+      "allow_tf32": false,
+      "cudnn_deterministic": true,
+      "cublas_workspace_config": ":4096:8",
+      "fp32_matmul_precision": "highest"
+    },
+    "binding": "megatron_bridge_native_hybridmodel_strict",
+    "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+    "tp_collective": "nccl_all_gather_data_movement",
+    "ops": {
+      "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen+gated_attention_bwd.strict_gated_attention_bwd (composed in the binding)",
+      "normalized_embedding": "strict:norms.normalized_embedding",
+      "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+      "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+      "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+      "rope_table": "strict:qknorm_rope.rope_table",
+      "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+      "silu_mul": "strict:swiglu_ffn.swiglu",
+      "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+      "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+      "all_strict": true
+    },
+    "lora": {
+      "rank": 16,
+      "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+      "enabled": true,
+      "seed": 1234
+    },
+    "checkpoint_layers": true,
+    "canonical_chunks": 8,
+    "vocab_tiles": {
+      "rows": 25344,
+      "local": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "padded_vocab": 202752
+    },
+    "final_norm_roundtrip_mismatches": 1120,
+    "memory_gib": {
+      "bound_start": 29.586276054382324,
+      "after_vision_drop": 29.586276054382324,
+      "after_weight_views": 34.60581970214844,
+      "model_params": 25.943081855773926
+    },
+    "notes": [
+      "dropped vision_tower (text-only trainer)",
+      "dropped vision_adapter (text-only trainer)",
+      "dropped vision_projection (text-only trainer)",
+      "embedding table gathered on every rank (TP>1)",
+      "lm_head redistributed to canonical tiles [0, 1, 2, 3] on this rank",
+      "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+    ],
+    "lora_sha256": "997af582a33ba3e91569cfb615e645b1df00cfdd21327a015cee4845d4438840",
+    "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+    "gpu_ids": [
+      0,
+      1
+    ],
+    "init_seconds": 163.63744568824768,
+    "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1",
+    "bridge": {
+      "protocol": "muse_glimmer_trainer_bridge_v1",
+      "client": "RemoteTrainer",
+      "launcher": "process",
+      "python": "/home/ubuntu/envs/megatron/bin/python",
+      "factory": "rl_engine.models.muse_glimmer.runtime.strict_trainer:StrictTrainer",
+      "factory_kwargs": {},
+      "command": [
+        "/home/ubuntu/envs/megatron/bin/python",
+        "-m",
+        "rl_engine.models.muse_glimmer.e2e.trainer_server",
+        "--spec",
+        "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/smoke_strict/trainer_server/spec.json"
+      ],
+      "server_pid": 370836,
+      "gpu_ids_physical": [
+        5,
+        6
+      ],
+      "server_cuda_visible_devices": "5,6",
+      "hello": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "pid": 370836,
+        "world": 1,
+        "launcher": "process",
+        "trainer_class": "rl_engine.models.muse_glimmer.runtime.strict_trainer.StrictTrainer",
+        "build_s": 163.74629627899776,
+        "versions": {
+          "python": "3.12.15",
+          "executable": "/home/ubuntu/envs/megatron/bin/python",
+          "torch": "2.13.0+cu129",
+          "torch_cuda": "12.9",
+          "triton": "3.7.1",
+          "megatron-core": "0.20.0+913159367",
+          "megatron-bridge": "0.7.0+d86a5c09b",
+          "transformer_engine": "2.20.2",
+          "transformers": "5.17.0",
+          "vllm": null
+        },
+        "devices": {
+          "cuda_visible_devices": "5,6",
+          "devices": [
+            {
+              "index": 0,
+              "name": "NVIDIA A100-SXM4-80GB",
+              "uuid": "713b4618-fb55-60a6-c431-6c9fb26e6359",
+              "total_memory_gib": 79.250732421875,
+              "pci_bus_id": 11
+            },
+            {
+              "index": 1,
+              "name": "NVIDIA A100-SXM4-80GB",
+              "uuid": "eb5bd0bc-3b35-df22-224d-fbb7ecfc6a6d",
+              "total_memory_gib": 79.250732421875,
+              "pci_bus_id": 12
+            }
+          ],
+          "device_count": 2
+        },
+        "memory": {
+          "allocated_gib": 34.88352966308594,
+          "peak_allocated_gib": 39.616610527038574,
+          "reserved_gib": 35.162109375
+        },
+        "startup_s": 209.57958616400356
+      },
+      "calls": 6,
+      "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/smoke_strict/trainer_server/trainer_server.log"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+ "unit_tests": [
+  {"command": "~/bin/gpu-lease -n 1 --pool 2-3 -- env PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -q (before the fix, HEAD 6a61f6e)", "outcome": "1 failed (test_lm_head_tiles_tp2_equals_tp1_and_reference: dh mismatch), 8 passed"},
+  {"command": "same, after the TP-simulator fix (1fd94a9), megatron env", "outcome": "9 passed"},
+  {"command": "same, after the fix, vllm env (~/envs/vllm/bin/python)", "outcome": "9 passed"},
+  {"command": "~/bin/gpu-lease -n 2 --pool 2-3 --contiguous -- env PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -q -rs (HEAD a104f2c-equivalent test file)", "outcome": "17 passed, 1 skipped (opt-in 30B protocol test); includes real 2-process NCCL TP2==TP1 (LM head, column, row with LoRA) and simulated TP2/4/8 == TP1 attention block, LM head, column and row linears"}
+ ],
+ "protocol_tests_30b": [
+  {"command": "~/bin/gpu-lease -n 1 --pool 2-3 -- env RL_KERNEL_MUSEGLIMMER_E2E=1 MUSEGLIMMER_TRAIN_TP=1 MUSEGLIMMER_TRAIN_STRICT=1 PYTHONPATH=$WT ~/envs/megatron/bin/python -m pytest tests/models/muse_glimmer/test_megatron_strict_binding.py -k protocol -s", "outcome": "1 passed in 123.8 s", "steps": [{"loss": 117.54168701171875, "grad_norm": 423.26861572265625, "recompute_logp_mismatches": 0, "fwd_bwd_s": 3.885}, {"loss": -0.6852792501449585, "grad_norm": 0.5607410669326782, "recompute_logp_mismatches": 0, "fwd_bwd_s": 3.781}]},
+  {"command": "same with MUSEGLIMMER_TRAIN_TP=2 (gpu-lease -n 2 --contiguous)", "outcome": "1 passed in 271.7 s", "steps": [{"loss": 117.54168701171875, "grad_norm": 423.26861572265625, "recompute_logp_mismatches": 0, "fwd_bwd_s": 3.607}, {"loss": -0.6852792501449585, "grad_norm": 0.5607410669326782, "recompute_logp_mismatches": 0, "fwd_bwd_s": 3.046}], "note": "losses and grad norms of both steps identical to TP1 (two-step trajectory, lr 1e-4)"},
+  {"command": "same with MUSEGLIMMER_TRAIN_TP=1 MUSEGLIMMER_TRAIN_STRICT=0 (native trainer)", "outcome": "first attempt FAILED (no grad_fn: MCore reentrant recompute with a frozen embedding); after 40dcf7c: 1 passed in 90.0 s", "steps": [{"loss": 118.03243255615234, "grad_norm": 333.3540954589844, "recompute_logp_mismatches": 0, "fwd_bwd_s": 2.899}, {"loss": -0.6763907670974731, "grad_norm": 0.56671142578125, "recompute_logp_mismatches": 0, "fwd_bwd_s": 2.119}]}
+ ],
+ "process_determinism": {
+  "xrt_strict_tp1_two_processes_bit_mismatches": 0,
+  "xrt_native_tp1_two_processes_bit_mismatches": 0,
+  "tokens": 933,
+  "note": "run1 = run_tp1 (commit a362599), run2 = bench follow-up (commit 17dafef, native logprobs in 1024-row chunks)"
+ },
+ "observed_failures": [
+  {"what": "TP1 bench, strict training step at 8192 tokens in ONE micro-batch", "result": "CUDA OOM (69.8 GiB allocated) in the recompute forward; default micro_batch_tokens lowered to 4096", "log": "scratchpad/meg/run_tp1_bench.log"},
+  {"what": "TP1 bench first attempt, native forward at 4096 tokens", "result": "CUDA OOM on the full (T, V) fp32 log_softmax; fixed by 1024-row chunked log-softmax (bit-identical)"}
+ ]
+}

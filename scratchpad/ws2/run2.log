@@ -1,0 +1,56 @@
+[gpu-lease] using GPUs [0, 1]
+### GPUS=0,1
+.sss..ssssss.s.sss                                                       [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_kv_replication.py:197: needs 4 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_kv_replication.py:201: needs 4 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_kv_replication.py:207: needs 8 CUDA devices (one rank per device)
+SKIPPED [2] tests/models/muse_glimmer/distributed/test_tp_canonical_tree.py:245: needs 4 CUDA devices (one rank per device)
+SKIPPED [2] tests/models/muse_glimmer/distributed/test_tp_canonical_tree.py:250: needs 4 CUDA devices (one rank per device)
+SKIPPED [2] tests/models/muse_glimmer/distributed/test_tp_canonical_tree.py:257: needs 8 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_tp_canonical_tree.py:269: needs 4 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_vocab_parallel_softcap_logp.py:228: needs 4 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_vocab_parallel_softcap_logp.py:232: needs 4 CUDA devices (one rank per device)
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_vocab_parallel_softcap_logp.py:238: needs 8 CUDA devices (one rank per device)
+5 passed, 13 skipped, 48 deselected in 34.75s
+### torchrun nproc=2
+
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: FutureWarning: `torch.distributed.all_gather_into_tensor` is deprecated. Please use `torch.distributed.all_gather_single` instead.
+  return func(*args, **kwargs)
+/home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/distributed/c10d_logger.py:83: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  return func(*args, **kwargs)
+# Muse-Glimmer WS2 TP parity  tp=2  collective=torch_distributed_balanced_tree
+# gemm=fallback:rl_engine.backends.shared.triton.gemm.det_gemm._det_gemm_fp32_kernel
+# tree=fallback:private_pairwise_fold
+# softcap=fallback:pure_torch_fp32_fixed_tree
+# attention=fallback:pure_torch_fp32_blockwise_online_softmax
+
+## Equality matrix (TP2 vs TP1, per rank)
+row                                shape                                        r0 r1  rerun
+tp_canonical_tree(o_proj)          M=256 K=4096 N=6656                          == ==  ok
+tp_canonical_tree(down)            M=256 K=19968 N=6656                         == ==  ok
+vocab_parallel_softcap_logp        T=64 H=6656 V=202048/202752                  == ==  ok
+kv_head_replication(forward)       T=512 seqs=[160, 352] window=None            == ==  ok
+
+## Negative control: NCCL all_reduce(SUM) of the fp32 sub-tree roots -> bf16
+tp_canonical_tree(o_proj)          equals TP1: True  mismatches: 0/1703936
+tp_canonical_tree(down)            equals TP1: True  mismatches: 0/1703936
+
+## Timing per call (ms), rank 0
+tp_canonical_tree(o_proj)          all_gather_plus_tree_ms=0.342, nccl_all_reduce_ms=0.379, collective_all_reduce_ms=0.444
+tp_canonical_tree(down)            all_gather_plus_tree_ms=0.183, nccl_all_reduce_ms=0.141, collective_all_reduce_ms=0.204
+
+## Canonical chunk / tile -> rank
+{"0": 0, "1": 0, "2": 0, "3": 0, "4": 1, "5": 1, "6": 1, "7": 1}
+
+## KV ownership map (declared)
+rank 0: q heads [0, 16]  kv heads [0]  o_proj K [0, 2048]  down K [0, 9984]  vocab tiles [0, 4]
+rank 1: q heads [16, 32]  kv heads [1]  o_proj K [2048, 4096]  down K [9984, 19968]  vocab tiles [4, 8]
+
+RESULT: PASS
+EXIT 0

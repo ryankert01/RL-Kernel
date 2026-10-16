@@ -1,0 +1,24 @@
+[gpu-lease] using GPUs [7]
+.........................ss....................s........................ [ 24%]
+........................................................................ [ 48%]
+...................................................s.................... [ 73%]
+........................................................................ [ 97%]
+s.....                                                                   [100%]
+=============================== warnings summary ===============================
+../../../../envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+    import pynvml  # type: ignore[import]
+
+tests/models/muse_glimmer/test_megatron_strict_binding.py::test_attention_block_per_rank_heads_tp_equals_tp1[2-local]
+  /home/ubuntu/RL-Kernel/.claude/worktrees/swift-oak-hsv7/rl_engine/models/muse_glimmer/runtime/megatron_attention.py:208: RuntimeWarning: qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a sliding layer given no table silently runs NoPE. Pass local=True/False (set MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 to make it mandatory). Warned once; counted in runtime_provenance().
+    qh, kh = ops.qknorm_scaled_rope(q3, k3, cos, sin, eps=rms_eps, qk_scale=qk_scale, local=local)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 2 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:724: needs 4 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:1007: set RL_KERNEL_MUSEGLIMMER_E2E=1
+SKIPPED [1] tests/models/muse_glimmer/test_det_gemm.py:306: needs two visible GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_museglimmer_fingerprint.py:262: set MUSEGLIMMER_CHECKPOINT
+289 passed, 5 skipped, 2 warnings in 233.93s (0:03:53)
+exit=0

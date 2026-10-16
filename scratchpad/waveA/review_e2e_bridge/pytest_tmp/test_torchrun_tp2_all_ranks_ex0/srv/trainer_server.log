@@ -1,0 +1,21 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 17:24:24] start pid=331690 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 17:24:24] client connected
+[trainer_server rank1 17:24:24] start pid=331691 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES=''
+[trainer_server rank1 17:24:25] trainer MockTrainer built in 1.3 s
+[trainer_server rank0 17:24:25] trainer MockTrainer built in 1.4 s
+[trainer_server rank0 17:24:26] token_logprobs id=1 ok=True compute=48.0 ms
+[trainer_server rank0 17:24:26] step id=2 ok=True compute=75.6 ms
+[trainer_server rank0 17:24:26] export_lora id=3 ok=True compute=1.3 ms
+[trainer_server rank0 17:24:26] token_logprobs id=4 ok=True compute=31.7 ms
+[trainer_server rank0 17:24:26] step id=5 ok=True compute=54.5 ms
+[trainer_server rank0 17:24:26] export_lora id=6 ok=True compute=1.0 ms
+[trainer_server rank0 17:24:26] provenance id=7 ok=True compute=0.1 ms
+[trainer_server rank0 17:24:26] close id=8 ok=True compute=0.0 ms
+[trainer_server rank1 17:24:26] bye
+[trainer_server rank0 17:24:26] bye

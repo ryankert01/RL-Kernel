@@ -1,0 +1,26 @@
+[gpu-lease] using GPUs [7]
+CUDA_VISIBLE_DEVICES=7
+t_max_seqlen_short_auto rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+t_max_seqlen_short_token rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+t_max_seqlen_short_head rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+t_max_seqlen_short_paged rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_q_end_beyond_rows rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+t_k_end_beyond_rows rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+t_q_pos_beyond_keys rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_q_pos_negative rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_page_minus1_visible rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_page_out_of_range rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_seq_lens_beyond_table rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+t_seq_lens_below_len_q rc=6 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 5 errors | 
+x_mid_cu_k_nonmono rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_cu_q_mid_beyond rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_token_qpos_bad_second_tile rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_head_qpos_bad_other_seq rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_paged_neg7_visible_global rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_paged_page_eq_num_pages rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_paged_seq_lens_negative rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_paged_chunk_minus1_visible_token rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_legal_evicted_and_garbage rc=0 invalid_access_lines=0 assert_msg=0 child_ok=1 | ========= ERROR SUMMARY: 0 errors | LEGAL-BITWISE True
+x_stale_meta_cu_q rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | version unchanged: True
+x_stale_meta_q_pos rc=1 invalid_access_lines=0 assert_msg=1 child_ok=0 | ========= ERROR SUMMARY: 3 errors | 
+x_autograd_noncontig_qpos rc=0 invalid_access_lines=0 assert_msg=0 child_ok=1 | ========= ERROR SUMMARY: 0 errors | RAISED gated_attention_bwd requires contiguous ascending q_pos inside every sequence

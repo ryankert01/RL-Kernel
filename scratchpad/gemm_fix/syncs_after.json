@@ -1,0 +1,1 @@
+{"bool_any_single_check": 2, "forward_validated_warn_count": 1, "forward_validated_profiler": {"cudaStreamSynchronize": 1, "_local_scalar_dense": 1}, "forward_unvalidated_warn_count": 0, "forward_unvalidated_profiler": {"cudaStreamSynchronize": 0, "_local_scalar_dense": 0}}

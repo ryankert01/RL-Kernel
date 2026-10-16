@@ -1,0 +1,48 @@
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/strict-strict  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1774 max 0.000e+00 first - | sync f7cab7e2ee9e ok=True | 10.1s
+step   1 | reward 0.094 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1775 max 0.000e+00 first - | sync 375d9d692ca3 ok=True | 3.5s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1935 max 0.000e+00 first - | sync 1a24194ea351 ok=True | 3.2s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1501 max 0.000e+00 first - | sync e6176db75ecd ok=True | 10.3s
+step   4 | reward 0.062 | loss -0.00893 ratio 1.000000 clip 0.000 | drift bitwise 0/1679 max 0.000e+00 first - | sync 32246863d4e8 ok=True | 4.1s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1714 max 0.000e+00 first - | sync cae1ca25c1d3 ok=True | 4.1s
+step   6 | reward 0.031 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1740 max 0.000e+00 first - | sync 9bffa1307560 ok=True | 20.5s
+step   7 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/1833 max 0.000e+00 first - | sync 47ddcac784ed ok=True | 12.2s
+done: 8 steps, bitwise mismatches 0/13951, max |Δ| 0.000e+00, first drift None, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/strict-strict/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/strict-native  mode: strict/native  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss -0.00000 ratio 0.999834 clip 0.000 | drift bitwise 1774/1774 max 2.980e-02 first (0,0) | sync 53cb2d16ddac ok=True | 190.6s
+step   1 | reward 0.094 | loss +0.00003 ratio 1.000022 clip 0.000 | drift bitwise 1775/1775 max 2.923e-02 first (0,0) | sync 03a5f3a4ad10 ok=True | 1.1s
+step   2 | reward 0.000 | loss +0.00000 ratio 0.999961 clip 0.000 | drift bitwise 1920/1920 max 2.905e-02 first (0,0) | sync abb6fedcaeb1 ok=True | 0.9s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000098 clip 0.000 | drift bitwise 1509/1509 max 2.499e-02 first (0,0) | sync 2126bf8cd0a9 ok=True | 0.9s
+step   4 | reward 0.062 | loss -0.00895 ratio 1.000068 clip 0.000 | drift bitwise 1679/1679 max 2.862e-02 first (0,0) | sync be7b3be354e1 ok=True | 0.9s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000100 clip 0.000 | drift bitwise 1713/1714 max 2.517e-02 first (0,0) | sync 2a7f0cf6f8ed ok=True | 1.5s
+step   6 | reward 0.031 | loss +0.00007 ratio 1.000171 clip 0.000 | drift bitwise 1745/1746 max 2.883e-02 first (0,0) | sync a31d647bacb0 ok=True | 0.9s
+step   7 | reward 0.000 | loss +0.00000 ratio 1.000037 clip 0.000 | drift bitwise 1833/1833 max 3.911e-02 first (0,0) | sync 94241f387651 ok=True | 1.7s
+done: 8 steps, bitwise mismatches 13948/13950, max |Δ| 3.911e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.0022296905517578125}, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/strict-native/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/native-strict  mode: native/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss +0.00002 ratio 1.000069 clip 0.000 | drift bitwise 1772/1774 max 1.112e-02 first (0,0) | sync c035a8077b52 ok=True | 6.8s
+step   1 | reward 0.094 | loss -0.00002 ratio 1.000008 clip 0.000 | drift bitwise 1774/1775 max 1.102e-02 first (0,0) | sync dcf42e173589 ok=True | 3.5s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000073 clip 0.000 | drift bitwise 1935/1935 max 1.148e-02 first (0,0) | sync 3942ecd1992d ok=True | 5.4s
+step   3 | reward 0.000 | loss +0.00000 ratio 0.999979 clip 0.000 | drift bitwise 1501/1501 max 9.198e-03 first (0,0) | sync a494c1affa70 ok=True | 5.8s
+step   4 | reward 0.062 | loss -0.00894 ratio 0.999950 clip 0.000 | drift bitwise 1679/1679 max 1.006e-02 first (0,0) | sync 31142e9a4ee8 ok=True | 2.7s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000018 clip 0.000 | drift bitwise 1714/1714 max 1.390e-02 first (0,0) | sync 16d6eee4717a ok=True | 2.8s
+step   6 | reward 0.031 | loss +0.00000 ratio 0.999999 clip 0.000 | drift bitwise 1740/1740 max 1.059e-02 first (0,0) | sync 3379e2ef8619 ok=True | 2.6s
+step   7 | reward 0.000 | loss +0.00000 ratio 0.999988 clip 0.000 | drift bitwise 1833/1833 max 9.525e-03 first (0,0) | sync 8b41efda6228 ok=True | 7.1s
+done: 8 steps, bitwise mismatches 13948/13951, max |Δ| 1.390e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.000560760498046875}, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/native-strict/summary.json
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/native-native  mode: native/native  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss +0.00005 ratio 0.999881 clip 0.000 | drift bitwise 1774/1774 max 3.252e-02 first (0,0) | sync 2b362035caf7 ok=True | 0.4s
+step   1 | reward 0.094 | loss +0.00003 ratio 1.000030 clip 0.000 | drift bitwise 1775/1775 max 3.243e-02 first (0,0) | sync 2b68f01fb71b ok=True | 1.1s
+step   2 | reward 0.000 | loss +0.00000 ratio 0.999993 clip 0.000 | drift bitwise 1920/1920 max 2.640e-02 first (0,0) | sync 2c9f26e37692 ok=True | 0.6s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000054 clip 0.000 | drift bitwise 1509/1509 max 2.811e-02 first (0,0) | sync df6a6f0c9270 ok=True | 0.9s
+step   4 | reward 0.062 | loss -0.00895 ratio 0.999987 clip 0.000 | drift bitwise 1679/1679 max 2.888e-02 first (0,0) | sync 3ae687c2bc87 ok=True | 0.3s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000111 clip 0.000 | drift bitwise 1714/1714 max 3.818e-02 first (0,0) | sync 6e2963d61ee3 ok=True | 0.3s
+step   6 | reward 0.031 | loss +0.00008 ratio 1.000062 clip 0.000 | drift bitwise 1746/1746 max 2.657e-02 first (0,0) | sync 442dfd32cba7 ok=True | 0.3s
+step   7 | reward 0.000 | loss +0.00000 ratio 1.000092 clip 0.000 | drift bitwise 1833/1833 max 3.973e-02 first (0,0) | sync e77615aa142c ok=True | 0.3s
+done: 8 steps, bitwise mismatches 13950/13950, max |Δ| 3.973e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.0016689300537109375}, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/matrix/native-native/summary.json
+{"mode": "strict/strict", "exit": 0, "status": "ok", "commit": "33a86ad40a7e2d7fd3fae6277a73e4d9c5ce0d57", "dirty": true, "bitwise": 0, "tokens": 13951, "max_abs": 0.0, "mean_abs": 0.0, "k3": 0.0, "decode_vs_prefill": 0, "first_drift": null, "ratio_one_frac": 1.0, "clip_frac": 0.0, "reward_mean": 0.03125, "sync": "9/9", "transport": "memory", "step_s": 8.495579045626073, "rollout_s": 3.29902325387593, "train_logp_s": 0.8278432194983907, "train_step_s": 1.3931093836263244, "sync_s": 0.002424386123493605}
+{"mode": "strict/native", "exit": 0, "status": "ok", "commit": "33a86ad40a7e2d7fd3fae6277a73e4d9c5ce0d57", "dirty": true, "bitwise": 13948, "tokens": 13950, "max_abs": 0.03910660743713379, "mean_abs": 0.0044083989905627395, "k3": 1.6590581814883146e-05, "decode_vs_prefill": 13681, "first_drift": {"step": 0, "sample": 0, "token": 0, "abs_diff": 0.0022296905517578125}, "ratio_one_frac": 0.00014336917979983232, "clip_frac": 0.0, "reward_mean": 0.03125, "sync": "9/9", "transport": "memory", "step_s": 24.805702977000692, "rollout_s": 0.40172765287479706, "train_logp_s": 1.6778206223752932, "train_step_s": 12.294202653999491, "sync_s": 0.002512075378035661}
+{"mode": "native/strict", "exit": 0, "status": "ok", "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7", "dirty": false, "bitwise": 13948, "tokens": 13951, "max_abs": 0.013900279998779297, "mean_abs": 0.0019349223199723639, "k3": 3.056007374724039e-06, "decode_vs_prefill": 0, "first_drift": {"step": 0, "sample": 0, "token": 0, "abs_diff": 0.000560760498046875}, "ratio_one_frac": 0.00021503834511758148, "clip_frac": 0.0, "reward_mean": 0.03125, "sync": "9/9", "transport": "memory", "step_s": 4.5999125571261175, "rollout_s": 3.1212313327496304, "train_logp_s": 0.22557417387452006, "train_step_s": 0.04753190175142663, "sync_s": 0.0021937523733868147}
+{"mode": "native/native", "exit": 0, "status": "ok", "commit": "a1966a5c6731790cdce1c012a221b81ba07d3ea7", "dirty": false, "bitwise": 13950, "tokens": 13950, "max_abs": 0.03972625732421875, "mean_abs": 0.00481548646017642, "k3": 1.975461762547769e-05, "decode_vs_prefill": 13683, "first_drift": {"step": 0, "sample": 0, "token": 0, "abs_diff": 0.0016689300537109375}, "ratio_one_frac": 0.0, "clip_frac": 0.0, "reward_mean": 0.03125, "sync": "9/9", "transport": "memory", "step_s": 0.5363450242521139, "rollout_s": 0.2763868346255549, "train_logp_s": 0.02122224874983658, "train_step_s": 0.1338246639998033, "sync_s": 0.0022513747499033343}

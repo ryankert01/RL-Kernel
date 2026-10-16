@@ -1,0 +1,6 @@
+[gpu-lease] using GPUs [6]
+[17:11:08] HF text model loaded in 21.3s (51.9 GiB) on NVIDIA A100-SXM4-80GB lease=6
+[17:11:12] baseline: 3821 ms, peak 53.9 GiB
+[17:11:12] setting repeat_immediate (repeat_null) ...
+[17:11:14]   0/933 tokens differ, max|d| 0.000e+00, mean|d| 0.000e+00, k3 0.000e+00, argmax flips 0, 1909 ms, peak 53.9 GiB
+[17:11:14] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/ablation/parts/part_hf_gpu6.json

@@ -1,0 +1,294 @@
+......FF.......FFFFFF.....F......F........FF......................       [100%]
+=================================== FAILURES ===================================
+______________________ test_gpu_ids_default_to_the_lease _______________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76ae3413bbf0>
+
+    def test_gpu_ids_default_to_the_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+        """No placement flags: rollout = first rollout_tp leased ids, trainer = the next train_tp."""
+    
+>       assert bridge.default_gpu_ids(rollout_tp=2, train_tp=2, parent_visible="4,5,6,7") == (
+               ^^^^^^^^^^^^^^^^^^^^^^
+            [4, 5], [6, 7]
+        )
+E       AttributeError: module 'rl_engine.models.muse_glimmer.e2e.bridge' has no attribute 'default_gpu_ids'
+
+tests/models/muse_glimmer/test_e2e_bridge.py:224: AttributeError
+______________________ test_rank_hash_check_fails_closed _______________________
+
+    def test_rank_hash_check_fails_closed() -> None:
+        sha = "a" * 64
+>       bridge.check_rank_hashes([sha, sha], sha, world=2)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.e2e.bridge' has no attribute 'check_rank_hashes'
+
+tests/models/muse_glimmer/test_e2e_bridge.py:252: AttributeError
+__________ test_remote_exception_in_a_stateful_op_retires_the_bridge ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_remote_exception_in_a_sta0')
+
+    @requires_megatron_env
+    def test_remote_exception_in_a_stateful_op_retires_the_bridge(tmp_path: Path) -> None:
+        """A failed step/export/scoring may leave TP ranks divergent: no further calls."""
+    
+        remote = _remote(
+            tmp_path, factory=FAULTY, factory_kwargs={"fault": "raise", "fault_op": "step"}
+        )
+        pid = remote.server_pid
+        try:
+            # A failing stateless op leaves the bridge usable.
+            with pytest.raises(bridge.RemoteTrainerError, match="unknown op"):
+                remote._call("no_such_op", {})
+            assert remote.provenance()["engine"] == "MockTrainer"
+            lps = remote.token_logprobs(SEQS, STARTS)
+            loss = grpo.grpo_token_loss(lps, [t.detach() for t in lps], ADVANTAGES).loss
+            with pytest.raises(bridge.RemoteTrainerError, match="injected fault in step"):
+                remote.step(loss)
+>           with pytest.raises(bridge.RemoteTrainerError, match="unusable"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RemoteTrainerError
+
+tests/models/muse_glimmer/test_e2e_bridge.py:391: Failed
+___________ test_trainer_builds_while_the_caller_starts_the_rollout ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_trainer_builds_while_the_0')
+
+    @requires_megatron_env
+    def test_trainer_builds_while_the_caller_starts_the_rollout(tmp_path: Path) -> None:
+        """The server builds the trainer BEFORE the client connects, so a slow trainer build overlaps
+        whatever the orchestrator does between launching it and ``wait_ready`` (vLLM start-up)."""
+    
+        build_s = 4.0
+        caller_s = build_s + 6.0  # > interpreter start + build: the trainer must be ready by then
+        remote = _remote(tmp_path, factory_kwargs={"build_delay_s": build_s}, wait=False)
+        try:
+            time.sleep(caller_s)  # the orchestrator builds vLLM meanwhile
+            t0 = time.monotonic()
+            hello = remote.wait_ready()
+            blocked = time.monotonic() - t0
+        finally:
+            remote.close()
+        assert hello["build_s"] >= build_s
+>       assert blocked < 2.0, f"wait_ready blocked {blocked:.2f}s: the build did not overlap"
+E       AssertionError: wait_ready blocked 5.39s: the build did not overlap
+E       assert 5.3912465760004125 < 2.0
+
+tests/models/muse_glimmer/test_e2e_bridge.py:417: AssertionError
+_______________ test_forward_only_trainer_is_rejected_at_scoring _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_forward_only_trainer_is_r0')
+
+    @requires_megatron_env
+    def test_forward_only_trainer_is_rejected_at_scoring(tmp_path: Path) -> None:
+        """The server's requires_grad flags reach the client, so the loop's guard fires at scoring."""
+    
+        from rl_engine.models.muse_glimmer.e2e import loop
+    
+        remote = _remote(tmp_path, factory=FAULTY,
+                         factory_kwargs={"fault": "forward_only", "fault_op": "token_logprobs"})
+        try:
+            lps = remote.token_logprobs(SEQS, STARTS)
+>           assert not any(t.requires_grad for t in lps)
+E           assert not True
+E            +  where True = any(<generator object test_forward_only_trainer_is_rejected_at_scoring.<locals>.<genexpr> at 0x76ae34215f00>)
+
+tests/models/muse_glimmer/test_e2e_bridge.py:433: AssertionError
+_ test_torchrun_rank_divergence_fails_closed[diverge_lora-export_lora-WeightSyncError] _
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_torchrun_rank_divergence_0')
+fault = 'diverge_lora', op = 'export_lora'
+error = <class 'rl_engine.models.muse_glimmer.e2e.sync.WeightSyncError'>
+
+    @requires_megatron_env
+    @pytest.mark.parametrize(
+        "fault,op,error",
+        [
+            ("diverge_lora", "export_lora", WeightSyncError),
+            ("diverge_logprobs", "token_logprobs", bridge.RemoteTrainerError),
+        ],
+    )
+    def test_torchrun_rank_divergence_fails_closed(tmp_path: Path, fault, op, error) -> None:
+        """Every rank's LoRA hash (and logprob digest) is gathered; any disagreement raises."""
+    
+        remote = _remote(tmp_path, launcher="torchrun", tp=2, startup_timeout_s=180.0,
+                         factory=FAULTY, factory_kwargs={"fault": fault, "fault_op": op,
+                                                         "fault_rank": 1})
+        pid = remote.server_pid
+        try:
+>           with pytest.raises(error, match="trainer ranks"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE WeightSyncError
+
+tests/models/muse_glimmer/test_e2e_bridge.py:459: Failed
+_ test_torchrun_rank_divergence_fails_closed[diverge_logprobs-token_logprobs-RemoteTrainerError] _
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_torchrun_rank_divergence_1')
+fault = 'diverge_logprobs', op = 'token_logprobs'
+error = <class 'rl_engine.models.muse_glimmer.e2e.bridge.RemoteTrainerError'>
+
+    @requires_megatron_env
+    @pytest.mark.parametrize(
+        "fault,op,error",
+        [
+            ("diverge_lora", "export_lora", WeightSyncError),
+            ("diverge_logprobs", "token_logprobs", bridge.RemoteTrainerError),
+        ],
+    )
+    def test_torchrun_rank_divergence_fails_closed(tmp_path: Path, fault, op, error) -> None:
+        """Every rank's LoRA hash (and logprob digest) is gathered; any disagreement raises."""
+    
+        remote = _remote(tmp_path, launcher="torchrun", tp=2, startup_timeout_s=180.0,
+                         factory=FAULTY, factory_kwargs={"fault": fault, "fault_op": op,
+                                                         "fault_rank": 1})
+        pid = remote.server_pid
+        try:
+>           with pytest.raises(error, match="trainer ranks"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE RemoteTrainerError
+
+tests/models/muse_glimmer/test_e2e_bridge.py:459: Failed
+________________ test_nagle_variant_is_selectable_and_bit_exact ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_nagle_variant_is_selectab0')
+
+    @requires_megatron_env
+    def test_nagle_variant_is_selectable_and_bit_exact(tmp_path: Path) -> None:
+        """``tcp_nodelay=False`` keeps Nagle on both ends (bench comparison); bytes are unchanged."""
+    
+>       remote = _remote(tmp_path, tcp_nodelay=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/models/muse_glimmer/test_e2e_bridge.py:475: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_nagle_variant_is_selectab0')
+python = PosixPath('/home/ubuntu/envs/megatron/bin/python')
+launcher = 'process', tp = 1
+factory = 'rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer'
+factory_kwargs = None, call_timeout_s = 120.0, startup_timeout_s = 120.0
+name = 'srv', kwargs = {'tcp_nodelay': False}
+
+    def _remote(tmp_path: Path, *, python: Path | str = MEGATRON_PY, launcher: str = "process",
+                tp: int = 1, factory: str = bridge.MOCK_TRAINER_FACTORY, factory_kwargs=None,
+                call_timeout_s: float = 120.0, startup_timeout_s: float = 120.0, name: str = "srv",
+                **kwargs):
+>       return bridge.RemoteTrainer(
+            "mock", tensor_parallel_size=tp, gpu_ids=[], lora_rank=4, lr=1e-3, strict=True, seed=7,
+            python=str(python), launcher=launcher, factory=factory,
+            factory_kwargs=factory_kwargs or {}, work_dir=tmp_path / name,
+            call_timeout_s=call_timeout_s, startup_timeout_s=startup_timeout_s,
+            extra_env={"OMP_NUM_THREADS": "2"}, **kwargs,
+        )
+E       TypeError: RemoteTrainer.__init__() got an unexpected keyword argument 'tcp_nodelay'
+
+tests/models/muse_glimmer/test_e2e_bridge.py:54: TypeError
+______ test_cli_mock_through_bridge_equals_in_process_and_writes_timeline ______
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_cli_mock_through_bridge_e0')
+
+    @requires_megatron_env
+    def test_cli_mock_through_bridge_equals_in_process_and_writes_timeline(tmp_path: Path) -> None:
+        local = _cli(tmp_path / "local", "--trainer-bridge", "off")
+        remote = _cli(tmp_path / "remote", "--trainer-bridge", "on", "--profile-step", "1")
+        assert local["config"]["trainer_bridge"] is False and remote["config"]["trainer_bridge"]
+        for key in ("bitwise_mismatch_count", "token_count", "max_abs_diff"):
+            assert remote["drift_totals"][key] == local["drift_totals"][key]
+        assert remote["drift_totals"]["bitwise_mismatch_count"] == 0
+        assert remote["reward"]["trajectory"] == local["reward"]["trajectory"]
+        assert remote["weight_sync"]["final_sha256"] == local["weight_sync"]["final_sha256"]
+        assert remote["weight_sync"]["all_passed"]
+        # The LoRA crossed the bridge socket before the in-memory hop to the rollout.
+>       assert remote["weight_sync"]["transport"] == "bridge+memory"
+E       AssertionError: assert 'memory' == 'bridge+memory'
+E         
+E         - bridge+memory
+E         + memory
+
+tests/models/muse_glimmer/test_e2e_bridge.py:600: AssertionError
+----------------------------- Captured stdout call -----------------------------
+run dir: /tmp/pytest-of-ubuntu/pytest-65/test_cli_mock_through_bridge_e0/local  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.6s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.5s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+done: 3 steps, bitwise mismatches 0/96, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 4/4 -> /tmp/pytest-of-ubuntu/pytest-65/test_cli_mock_through_bridge_e0/local/summary.json
+run dir: /tmp/pytest-of-ubuntu/pytest-65/test_cli_mock_through_bridge_e0/remote  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 645e0419cc7e via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+step   1 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 10.3s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/32 max 0.000e+00 first - | sync 645e0419cc7e ok=True | 0.4s
+done: 3 steps, bitwise mismatches 0/96, max |Δ| 0.000e+00, first drift None, reward mean 0.0, weight sync 4/4 -> /tmp/pytest-of-ubuntu/pytest-65/test_cli_mock_through_bridge_e0/remote/summary.json
+----------------------------- Captured stderr call -----------------------------
+USDT:2026-10-15 21:54:09 415389:415389 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 21:54:09 415389:415389 SyncActivityProfilerHandler.cpp:59] profiler_stop
+___________________ test_sync_via_file_roundtrip_and_tamper ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_sync_via_file_roundtrip_a0')
+
+    def test_sync_via_file_roundtrip_and_tamper(tmp_path: Path) -> None:
+        cfg, summary, _ = _run(tmp_path, "strict/strict", steps=1, sync_via_file=True)
+        assert summary["weight_sync"]["transport"] == "file"
+>       assert summary["weight_sync"]["orchestrator_to_rollout"] == "file"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'orchestrator_to_rollout'
+
+tests/models/muse_glimmer/test_e2e_loop_mock.py:170: KeyError
+_________ test_rollout_hash_only_from_the_engine_level_provenance_key __________
+
+    def test_rollout_hash_only_from_the_engine_level_provenance_key() -> None:
+        """Only ``provenance()["lora_sha256"]`` counts (the rollout recomputes it on every TP rank);
+        per-worker declared values are never accepted, even when every worker agrees."""
+    
+        _, trainer = _engines("strict/strict")
+        package = sync.export_lora_verified(trainer, step=0)
+    
+        class ReportingRollout:
+            def __init__(self, prov):
+                self.prov = prov
+    
+            def load_lora(self, state_dict, sha256):
+                return None
+    
+            def provenance(self):
+                return self.prov
+    
+        agreeing_workers = [{"lora_sha256": package.sha256}] * 2
+        refused = (
+            {"engine": {}, "workers": agreeing_workers},  # per-worker only: the old fallback
+            {"lora_sha256": None, "workers": agreeing_workers},  # engine says "no identity"
+            {"lora_sha256": 123},  # not a hash string
+            {},
+        )
+        for prov in refused:
+>           assert sync.rollout_lora_sha256(prov)[0] is None
+E           AssertionError: assert '39f8e421604f9eb02c7c9c022784192dc8ae816e3693b7913f6fb723556f95a1' is None
+
+tests/models/muse_glimmer/test_e2e_loop_mock.py:383: AssertionError
+_______________________ test_sync_record_names_both_hops _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-ubuntu/pytest-65/test_sync_record_names_both_ho0')
+
+    def test_sync_record_names_both_hops(tmp_path: Path) -> None:
+        """In process the LoRA never crosses a socket: transport is the rollout hop only."""
+    
+        _, summary, records = _run(tmp_path, "strict/strict", steps=1)
+        assert summary["weight_sync"]["transport"] == "memory"
+>       assert summary["weight_sync"]["trainer_to_orchestrator"] == "in_process"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'trainer_to_orchestrator'
+
+tests/models/muse_glimmer/test_e2e_loop_mock.py:397: KeyError
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_gpu_ids_default_to_the_lease
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_rank_hash_check_fails_closed
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_remote_exception_in_a_stateful_op_retires_the_bridge
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_trainer_builds_while_the_caller_starts_the_rollout
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_forward_only_trainer_is_rejected_at_scoring
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_lora-export_lora-WeightSyncError]
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_torchrun_rank_divergence_fails_closed[diverge_logprobs-token_logprobs-RemoteTrainerError]
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_nagle_variant_is_selectable_and_bit_exact
+FAILED tests/models/muse_glimmer/test_e2e_bridge.py::test_cli_mock_through_bridge_equals_in_process_and_writes_timeline
+FAILED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_sync_via_file_roundtrip_and_tamper
+FAILED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_rollout_hash_only_from_the_engine_level_provenance_key
+FAILED tests/models/muse_glimmer/test_e2e_loop_mock.py::test_sync_record_names_both_hops
+12 failed, 54 passed in 124.57s (0:02:04)

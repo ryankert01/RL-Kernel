@@ -1,0 +1,330 @@
+{
+ "tokens": 37,
+ "seed": 0,
+ "lora_rank": 16,
+ "op_impls": {
+  "det_gemm": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm",
+  "det_gemm_partial": "strict:rl_engine.models.muse_glimmer.ops.det_gemm.fast_det_gemm_partial",
+  "combine_tree": "strict:rl_engine.models.muse_glimmer.ops.canonical_tree.combine_tree",
+  "normalized_embedding": "strict:rl_engine.models.muse_glimmer.ops.norms.normalized_embedding",
+  "centered_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.centered_rmsnorm",
+  "weighted_rmsnorm": "strict:rl_engine.models.muse_glimmer.ops.norms.weighted_rmsnorm",
+  "fused_post_norm_residual_pre_norm": "strict:rl_engine.models.muse_glimmer.ops.norms.fused_post_norm_residual_pre_norm",
+  "rope_table": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+  "qknorm_scaled_rope": "strict:rl_engine.models.muse_glimmer.ops.qknorm_rope.qknorm_scaled_rope",
+  "gated_attention_paged": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_paged",
+  "gated_attention_varlen": "strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attention_fwd_varlen",
+  "swiglu": "strict:rl_engine.models.muse_glimmer.ops.swiglu_ffn.swiglu",
+  "softcap_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.softcap_tile_stats",
+  "combine_tile_stats": "strict:rl_engine.models.muse_glimmer.ops.lm_head_softcap_logprob.combine_tile_stats"
+ },
+ "results": [
+  {
+   "tp": 2,
+   "lora": false,
+   "seconds": 0.0346086829995329,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": false,
+   "seconds": 0.04843507499936095,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": false,
+   "seconds": 0.3177758420006285,
+   "all_gathers": 7,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 2,
+   "lora": true,
+   "seconds": 0.037009986999692046,
+   "all_gathers": 9,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 4,
+   "lora": true,
+   "seconds": 0.2282748369998444,
+   "all_gathers": 9,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  },
+  {
+   "tp": 8,
+   "lora": true,
+   "seconds": 0.37847980499827827,
+   "all_gathers": 9,
+   "errors": [],
+   "equal_to_tp1": {
+    "q": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "k": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "attn_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "mlp_out": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "hidden": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "logp": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   },
+   "all_equal": true,
+   "logp_max_abs_vs_tp1": 0.0
+  }
+ ],
+ "all_equal": true
+}

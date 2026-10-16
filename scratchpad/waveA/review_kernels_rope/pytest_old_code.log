@@ -1,0 +1,260 @@
+[gpu-lease] using GPUs [5]
+.......................................FFFFFFFFFF..............FFFFFFF.. [ 92%]
+......                                                                   [100%]
+=================================== FAILURES ===================================
+_______ TestF1RopeTableIdentity.test_rope_table_rejects_non_cuda_device ________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d587f110>
+
+    def test_rope_table_rejects_non_cuda_device(self):
+>       with pytest.raises(RuntimeError, match="torch-CUDA"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE RuntimeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:531: Failed
+___ TestF1RopeTableIdentity.test_canonical_table_is_cached_identical_object ____
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d587d280>
+
+    def test_canonical_table_is_cached_identical_object(self):
+>       c1, s1 = op.canonical_rope_table(DEV)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'canonical_rope_table'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:540: AttributeError
+______ TestF1RopeTableIdentity.test_canonical_table_fingerprint_is_pinned ______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d58a5250>
+
+    def test_canonical_table_fingerprint_is_pinned(self):
+        """Cross-runtime identity: both envs (cu130 vLLM, cu129 Megatron) must produce these
+        bits; a torch/CUDA math-library change that alters cos/sin/pow is caught here."""
+>       assert op.CANONICAL_ROPE_TABLE_SHA256 == CANONICAL_SHA256
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'CANONICAL_ROPE_TABLE_SHA256'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:553: AttributeError
+______ TestF1RopeTableIdentity.test_rope_rows_gathers_the_canonical_table ______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d58a4a10>
+
+    def test_rope_rows_gathers_the_canonical_table(self):
+        pos = torch.tensor([0, 1, 2047, 2048, 4095, 777, ROPE_POSITIONS - 1], device=DEV)
+        rc, rs = rope_table(pos, device=DEV)
+        for p in (pos, pos.to(torch.int32), pos.cpu()):
+            for check in (True, False):
+>               c, s = op.rope_rows(p, check_range=check)
+                       ^^^^^^^^^^^^
+E               AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'rope_rows'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:565: AttributeError
+____ TestF1RopeTableIdentity.test_rope_rows_rejects_out_of_range_positions _____
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d58a44a0>
+
+    def test_rope_rows_rejects_out_of_range_positions(self):
+        for bad in ([ROPE_POSITIONS], [-1], [3, ROPE_POSITIONS + 5]):
+            with pytest.raises(ValueError, match="position"):
+>               op.rope_rows(torch.tensor(bad, device=DEV))
+                ^^^^^^^^^^^^
+E               AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'rope_rows'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:572: AttributeError
+_ TestF1RopeTableIdentity.test_other_repo_table_builders_are_bitwise_identical_on_cuda _
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d58a57c0>
+
+    def test_other_repo_table_builders_are_bitwise_identical_on_cuda(self):
+        """Every table builder in the repo (reference golden, runtime fallback) must produce the
+        canonical bits on CUDA, so whichever runtime builds the table, it is the same."""
+        from rl_engine.models.muse_glimmer.reference import golden_ops
+        from rl_engine.models.muse_glimmer.runtime import fallback_ops
+    
+        pos = torch.arange(ROPE_POSITIONS, device=DEV)
+>       cc, sc = op.canonical_rope_table(DEV)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'canonical_rope_table'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:583: AttributeError
+_________ TestF1RopeTableIdentity.test_trace_records_table_provenance __________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF1RopeTableIdentity object at 0x72c2d58a5ac0>
+
+    def test_trace_records_table_provenance(self):
+>       tab = trace()["rope_table"]
+              ^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'rope_table'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:589: KeyError
+___________ TestF2DtypeFailClosed.test_rejects_non_bf16_inputs[dt0] ____________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF2DtypeFailClosed object at 0x72c2d58a5eb0>
+dt = torch.float32
+
+    @pytest.mark.parametrize("dt", [torch.float32, torch.float16])
+    def test_rejects_non_bf16_inputs(self, dt):
+        q, k = _make_qk(4, seed=2)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+        for qq, kk in ((q.to(dt), k.to(dt)), (q.to(dt), k), (q, k.to(dt))):
+>           with pytest.raises(TypeError, match="bf16"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE TypeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:605: Failed
+___________ TestF2DtypeFailClosed.test_rejects_non_bf16_inputs[dt1] ____________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF2DtypeFailClosed object at 0x72c2d58a6060>
+dt = torch.float16
+
+    @pytest.mark.parametrize("dt", [torch.float32, torch.float16])
+    def test_rejects_non_bf16_inputs(self, dt):
+        q, k = _make_qk(4, seed=2)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+        for qq, kk in ((q.to(dt), k.to(dt)), (q.to(dt), k), (q, k.to(dt))):
+>           with pytest.raises(TypeError, match="bf16"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE TypeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:605: Failed
+_____ TestF2DtypeFailClosed.test_backward_launcher_rejects_non_bf16_grads ______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF2DtypeFailClosed object at 0x72c2d58a6330>
+
+    def test_backward_launcher_rejects_non_bf16_grads(self):
+        from rl_engine.models.muse_glimmer.triton.qknorm_rope import qknorm_rope_backward_triton
+    
+        q, k = _make_qk(4, seed=3)
+        cos, sin = _tables(torch.arange(4, device=DEV))
+>       with pytest.raises(TypeError, match="bf16"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TypeError
+
+tests/models/muse_glimmer/test_qknorm_rope.py:615: Failed
+______ TestF4ExplicitLayerSelection.test_layer_schedule_matches_manifest _______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a5bb0>
+
+    def test_layer_schedule_matches_manifest(self):
+        from pathlib import Path
+    
+        manifest = Path(op.__file__).resolve().parents[1] / "museglimmer_manifest.json"
+        text_cfg = json.loads(manifest.read_text())["model_identity"]["config_fingerprint"][
+            "text_config"
+        ]
+        types = text_cfg["layer_types"]
+        assert len(types) == N_LAYERS
+>       got = [op.layer_is_local(i) for i in range(N_LAYERS)]
+               ^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'layer_is_local'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:690: AttributeError
+______ TestF4ExplicitLayerSelection.test_explicit_local_flag_fails_closed ______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a4410>
+
+    def test_explicit_local_flag_fails_closed(self):
+        q, k = _make_qk(8, seed=70)
+        cos, sin = _tables(torch.arange(8, device=DEV))
+        with pytest.raises(ValueError, match="local"):
+>           qknorm_scaled_rope(q, k, None, None, local=True)
+E           TypeError: qknorm_scaled_rope() got an unexpected keyword argument 'local'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:701: TypeError
+______ TestF4ExplicitLayerSelection.test_explicit_flag_gives_legacy_bits _______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a4ce0>
+
+    def test_explicit_flag_gives_legacy_bits(self):
+        q, k = _make_qk(T_REAL, seed=71, scale=2.0)
+        cos, sin = _tables(torch.arange(T_REAL, device=DEV))
+        for c, s, local in ((cos, sin, True), (None, None, False)):
+            a = qknorm_scaled_rope(q, k, c, s)
+>           b = qknorm_scaled_rope(q, k, c, s, local=local)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: qknorm_scaled_rope() got an unexpected keyword argument 'local'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:710: TypeError
+______ TestF4ExplicitLayerSelection.test_positions_api_contract_signature ______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a52b0>
+
+    def test_positions_api_contract_signature(self):
+        """`qknorm_scaled_rope_at(q, k, pos, local=...)` (the contract's assembly signature)
+        gathers the canonical table itself; layer selection is mandatory and explicit."""
+        T = 300
+        q, k = _make_qk(T, seed=72, scale=2.0)
+        pos = torch.randint(0, ROPE_POSITIONS, (T,), device=DEV)
+        ref_l = qknorm_scaled_rope(q, k, *rope_table(pos, device=DEV))
+        ref_g = qknorm_scaled_rope(q, k, None, None)
+        for kw, ref in (
+            ({"local": True}, ref_l),
+            ({"local": False}, ref_g),
+            ({"layer_idx": 0}, ref_l),
+            ({"layer_idx": 3}, ref_g),
+            ({"layer_idx": 51}, ref_g),
+            ({"layer_idx": 50}, ref_l),
+        ):
+>           got = op.qknorm_scaled_rope_at(q, k, pos, **kw)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'qknorm_scaled_rope_at'. Did you mean: 'qknorm_scaled_rope'?
+
+tests/models/muse_glimmer/test_qknorm_rope.py:731: AttributeError
+_______ TestF4ExplicitLayerSelection.test_positions_api_backward_matches _______
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a7320>
+
+    def test_positions_api_backward_matches(self):
+        T = 64
+        q, k = _make_qk(T, seed=73, scale=2.0)
+        pos = torch.arange(T, device=DEV) + 4000
+        gen = torch.Generator(device=DEV).manual_seed(74)
+        dyq = torch.randn(q.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        dyk = torch.randn(k.shape, device=DEV, generator=gen).to(torch.bfloat16)
+        ref = _grads(q, k, *rope_table(pos, device=DEV), dyq, dyk)
+        qg, kg = q.clone().requires_grad_(True), k.clone().requires_grad_(True)
+        got = torch.autograd.grad(
+>           op.qknorm_scaled_rope_at(qg, kg, pos, local=True), (qg, kg), (dyq, dyk)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+        )
+E       AttributeError: module 'rl_engine.models.muse_glimmer.ops.qknorm_rope' has no attribute 'qknorm_scaled_rope_at'. Did you mean: 'qknorm_scaled_rope'?
+
+tests/models/muse_glimmer/test_qknorm_rope.py:757: AttributeError
+_______ TestF4ExplicitLayerSelection.test_trace_records_layer_selection ________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF4ExplicitLayerSelection object at 0x72c2d58a7620>
+
+    def test_trace_records_layer_selection(self):
+>       sel = trace()["layer_selection"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'layer_selection'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:762: KeyError
+___________ TestF5LargeTokenCounts.test_trace_records_int64_offsets ____________
+
+self = <tests.models.muse_glimmer.test_qknorm_rope.TestF5LargeTokenCounts object at 0x72c2d58a7c50>
+
+    def test_trace_records_int64_offsets(self):
+>       assert trace()["tile_config"]["offsets"] == "int64"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'offsets'
+
+tests/models/muse_glimmer/test_qknorm_rope.py:802: KeyError
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_table_rejects_non_cuda_device
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_canonical_table_is_cached_identical_object
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_canonical_table_fingerprint_is_pinned
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_rows_gathers_the_canonical_table
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_rope_rows_rejects_out_of_range_positions
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_trace_records_table_provenance
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt0]
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_rejects_non_bf16_inputs[dt1]
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF2DtypeFailClosed::test_backward_launcher_rejects_non_bf16_grads
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_layer_schedule_matches_manifest
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_explicit_local_flag_fails_closed
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_explicit_flag_gives_legacy_bits
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_positions_api_contract_signature
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_positions_api_backward_matches
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF4ExplicitLayerSelection::test_trace_records_layer_selection
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF5LargeTokenCounts::test_trace_records_int64_offsets
+17 failed, 61 passed, 1 deselected in 5.39s

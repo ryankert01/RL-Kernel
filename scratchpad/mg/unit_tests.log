@@ -1,0 +1,3 @@
+[gpu-lease] using GPUs [6]
+/home/ubuntu/envs/megatron/bin/python: No module named pytest
+exit 1

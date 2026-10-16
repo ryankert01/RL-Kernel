@@ -1,0 +1,153 @@
+[gpu-lease] using GPUs [2]
+....................................FFFF...                              [100%]
+=================================== FAILURES ===================================
+_________________ test_g4_fused_backward[rnew_only-centered-1] _________________
+
+rows = 1, pre_form = 'centered', which = 'rnew_only'
+
+    @_cuda
+    @pytest.mark.parametrize("rows", [1, 4096])
+    @pytest.mark.parametrize("pre_form", ["centered", "weighted"])
+    @pytest.mark.parametrize("which", ["both", "pre_only", "rnew_only"])
+    def test_g4_fused_backward(rows, pre_form, which):
+        b = _bf16((rows, H), seed=90 + rows)
+        r = _bf16((rows, H), seed=91 + rows, scale=3.0)
+        w_post = _bf16((H,), seed=92, scale=0.1)
+        w_pre = _bf16((H,), seed=93, scale=0.1, shift=1.0 if pre_form == "weighted" else 0.0)
+        d_rnew = _bf16((rows, H), seed=94 + rows) if which != "pre_only" else None
+        d_pre = _bf16((rows, H), seed=95 + rows) if which != "rnew_only" else None
+        g1 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        g2 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, g2, strict=True):
+            assert torch.equal(a, c)
+            assert a.dtype == torch.bfloat16
+        ref = _grads_fused_fp32(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, ref, strict=True):
+>           _close(a, c, _TOL_NORM)
+
+tests/models/muse_glimmer/test_norms.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = tensor([0., -0., 0.,  ..., 0., 0., 0.], device='cuda:0', dtype=torch.bfloat16)
+b = None, tol = {'atol': 0.05, 'rtol': 0.02}
+
+    def _close(a, b, tol) -> None:
+>       torch.testing.assert_close(a.float(), b.float(), atol=tol["atol"], rtol=tol["rtol"])
+                                              ^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'float'
+
+tests/models/muse_glimmer/test_norms.py:57: AttributeError
+_______________ test_g4_fused_backward[rnew_only-centered-4096] ________________
+
+rows = 4096, pre_form = 'centered', which = 'rnew_only'
+
+    @_cuda
+    @pytest.mark.parametrize("rows", [1, 4096])
+    @pytest.mark.parametrize("pre_form", ["centered", "weighted"])
+    @pytest.mark.parametrize("which", ["both", "pre_only", "rnew_only"])
+    def test_g4_fused_backward(rows, pre_form, which):
+        b = _bf16((rows, H), seed=90 + rows)
+        r = _bf16((rows, H), seed=91 + rows, scale=3.0)
+        w_post = _bf16((H,), seed=92, scale=0.1)
+        w_pre = _bf16((H,), seed=93, scale=0.1, shift=1.0 if pre_form == "weighted" else 0.0)
+        d_rnew = _bf16((rows, H), seed=94 + rows) if which != "pre_only" else None
+        d_pre = _bf16((rows, H), seed=95 + rows) if which != "rnew_only" else None
+        g1 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        g2 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, g2, strict=True):
+            assert torch.equal(a, c)
+            assert a.dtype == torch.bfloat16
+        ref = _grads_fused_fp32(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, ref, strict=True):
+>           _close(a, c, _TOL_NORM)
+
+tests/models/muse_glimmer/test_norms.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0', dtype=torch.bfloat16)
+b = None, tol = {'atol': 0.05, 'rtol': 0.02}
+
+    def _close(a, b, tol) -> None:
+>       torch.testing.assert_close(a.float(), b.float(), atol=tol["atol"], rtol=tol["rtol"])
+                                              ^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'float'
+
+tests/models/muse_glimmer/test_norms.py:57: AttributeError
+_________________ test_g4_fused_backward[rnew_only-weighted-1] _________________
+
+rows = 1, pre_form = 'weighted', which = 'rnew_only'
+
+    @_cuda
+    @pytest.mark.parametrize("rows", [1, 4096])
+    @pytest.mark.parametrize("pre_form", ["centered", "weighted"])
+    @pytest.mark.parametrize("which", ["both", "pre_only", "rnew_only"])
+    def test_g4_fused_backward(rows, pre_form, which):
+        b = _bf16((rows, H), seed=90 + rows)
+        r = _bf16((rows, H), seed=91 + rows, scale=3.0)
+        w_post = _bf16((H,), seed=92, scale=0.1)
+        w_pre = _bf16((H,), seed=93, scale=0.1, shift=1.0 if pre_form == "weighted" else 0.0)
+        d_rnew = _bf16((rows, H), seed=94 + rows) if which != "pre_only" else None
+        d_pre = _bf16((rows, H), seed=95 + rows) if which != "rnew_only" else None
+        g1 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        g2 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, g2, strict=True):
+            assert torch.equal(a, c)
+            assert a.dtype == torch.bfloat16
+        ref = _grads_fused_fp32(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, ref, strict=True):
+>           _close(a, c, _TOL_NORM)
+
+tests/models/muse_glimmer/test_norms.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = tensor([0., -0., 0.,  ..., 0., 0., 0.], device='cuda:0', dtype=torch.bfloat16)
+b = None, tol = {'atol': 0.05, 'rtol': 0.02}
+
+    def _close(a, b, tol) -> None:
+>       torch.testing.assert_close(a.float(), b.float(), atol=tol["atol"], rtol=tol["rtol"])
+                                              ^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'float'
+
+tests/models/muse_glimmer/test_norms.py:57: AttributeError
+_______________ test_g4_fused_backward[rnew_only-weighted-4096] ________________
+
+rows = 4096, pre_form = 'weighted', which = 'rnew_only'
+
+    @_cuda
+    @pytest.mark.parametrize("rows", [1, 4096])
+    @pytest.mark.parametrize("pre_form", ["centered", "weighted"])
+    @pytest.mark.parametrize("which", ["both", "pre_only", "rnew_only"])
+    def test_g4_fused_backward(rows, pre_form, which):
+        b = _bf16((rows, H), seed=90 + rows)
+        r = _bf16((rows, H), seed=91 + rows, scale=3.0)
+        w_post = _bf16((H,), seed=92, scale=0.1)
+        w_pre = _bf16((H,), seed=93, scale=0.1, shift=1.0 if pre_form == "weighted" else 0.0)
+        d_rnew = _bf16((rows, H), seed=94 + rows) if which != "pre_only" else None
+        d_pre = _bf16((rows, H), seed=95 + rows) if which != "rnew_only" else None
+        g1 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        g2 = _grads_fused(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, g2, strict=True):
+            assert torch.equal(a, c)
+            assert a.dtype == torch.bfloat16
+        ref = _grads_fused_fp32(b, r, w_post, w_pre, pre_form, d_rnew, d_pre)
+        for a, c in zip(g1, ref, strict=True):
+>           _close(a, c, _TOL_NORM)
+
+tests/models/muse_glimmer/test_norms.py:352: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = tensor([0., 0., 0.,  ..., 0., 0., 0.], device='cuda:0', dtype=torch.bfloat16)
+b = None, tol = {'atol': 0.05, 'rtol': 0.02}
+
+    def _close(a, b, tol) -> None:
+>       torch.testing.assert_close(a.float(), b.float(), atol=tol["atol"], rtol=tol["rtol"])
+                                              ^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'float'
+
+tests/models/muse_glimmer/test_norms.py:57: AttributeError
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_norms.py::test_g4_fused_backward[rnew_only-centered-1]
+FAILED tests/models/muse_glimmer/test_norms.py::test_g4_fused_backward[rnew_only-centered-4096]
+FAILED tests/models/muse_glimmer/test_norms.py::test_g4_fused_backward[rnew_only-weighted-1]
+FAILED tests/models/muse_glimmer/test_norms.py::test_g4_fused_backward[rnew_only-weighted-4096]
+4 failed, 39 passed in 10.15s

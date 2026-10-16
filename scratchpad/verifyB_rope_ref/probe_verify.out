@@ -1,0 +1,127 @@
+[gpu-lease] using GPUs [7]
+INFO 10-15 23:10:30 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+{
+ "R1_env_unset": {
+  "raised": false,
+  "q_hat_diff": 15992816,
+  "n": 16777216,
+  "warnings": [
+   "qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a"
+  ],
+  "counts": {
+   "explicit_local": 1,
+   "explicit_global": 0,
+   "implicit_local": 0,
+   "implicit_global": 1
+  }
+ },
+ "R1_env_1_none": {
+  "raised": true,
+  "err": "ValueError: qknorm_scaled_rope: the layer kind must be explicit (local=True for a sliding-window RoPE layer, local=False for a global NoPE layer); local=None is rejected be"
+ },
+ "R1_env_1_cos": {
+  "raised": true,
+  "err": "ValueError: qknorm_scaled_rope: the layer kind must be explicit (local=True for a sliding-window RoPE layer, local=False for a global NoPE layer); local=None is rejected be"
+ },
+ "R1_env_true": true,
+ "R1_env_' 0 '": false,
+ "R1_env_off_required": true,
+ "R1_golden_env_1_none": {
+  "raised": false,
+  "ret": null
+ },
+ "R2_cpu_ops.rope_table": {
+  "raised": true,
+  "err": "RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme"
+ },
+ "R2_cpu_golden_ops.rope_table": {
+  "raised": true,
+  "err": "RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin eleme"
+ },
+ "R2_cpu_fallback_ops.rope_table": {
+  "raised": false,
+  "ret": "accepted; cos elems != cuda: 97294"
+ },
+ "R2_cpu_strict_kernels._fb_rope_table": {
+  "raised": false,
+  "ret": "accepted; cos elems != cuda: 97294"
+ },
+ "R2_ref_triton_rope_table": "rl_engine.models.muse_glimmer.ops.qknorm_rope.rope_table",
+ "R2_rope_table_returns_copy": true,
+ "R3_view_mul_detected": {
+  "raised": true,
+  "err": "RuntimeError: the canonical RoPE table on cuda:0 (theta=500000.0, dim=128) was modified in place after it was built (tensor version counter changed); its rows no longer follo"
+ },
+ "R3_detach_write_detected": {
+  "raised": true,
+  "err": "RuntimeError: the canonical RoPE table on cuda:0 (theta=500000.0, dim=128) was modified in place after it was built (tensor version counter changed); its rows no longer follo"
+ },
+ "R3_data_write_cheap_check": {
+  "raised": false,
+  "ret": null
+ },
+ "R3_data_write_verify": {
+  "raised": true,
+  "err": "RuntimeError: canonical RoPE table sha256 e6d3f01684b882c195238895d87a72b4620803cedf32e29113cf09569986d492 != pinned 088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3"
+ },
+ "R3_sha_after_write_eq_pinned": false,
+ "R3_runtime_prov_after_write": {
+  "cuda:0": false
+ },
+ "R3_verify_after_restore": {
+  "raised": false,
+  "ret": null
+ },
+ "R3_sha256_memo_after_data_write_no_verify_eq_pinned": true,
+ "R3_runtime_prov_memo_after_data_write": {
+  "cuda:0": true
+ },
+ "R4_rope_table_first_build_in_capture": {
+  "raised": true,
+  "err": "RuntimeError: the canonical RoPE table must be built before CUDA-graph capture: call canonical_rope_table(device, verify=True) once at",
+  "cached_after": false
+ },
+ "R4_inference_table_is_inference": false,
+ "range_neg": {
+  "raised": true,
+  "err": "ValueError: position out of range: [-1, -1] not inside [0, 131072) (max_position_embeddings)"
+ },
+ "range_big": {
+  "raised": true,
+  "err": "ValueError: position out of range: [131072, 131072] not inside [0, 131072) (max_position_embeddings)"
+ },
+ "R11_trace_keys": [
+  "builder",
+  "cache",
+  "device_type",
+  "formula",
+  "positions",
+  "rows",
+  "sha256_built",
+  "sha256_pinned"
+ ],
+ "R11_prov": {
+  "op": "qknorm_scaled_rope",
+  "rope_table_sha256_pinned": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+  "rope_table_sha256_built": {
+   "cuda:0": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c"
+  },
+  "rope_table_equals_pinned": {
+   "cuda:0": true
+  },
+  "other_tables_built": [
+   {
+    "cuda": 0,
+    "theta": 10000.0,
+    "dim": 16
+   }
+  ],
+  "layer_kind_calls": {
+   "explicit_local": 1,
+   "explicit_global": 0,
+   "implicit_local": 0,
+   "implicit_global": 1
+  },
+  "layer_kind_required": false
+ }
+}

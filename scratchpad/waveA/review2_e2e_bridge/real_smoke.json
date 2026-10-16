@@ -1,0 +1,218 @@
+{
+ "row": "final_e2e_lora (cross-environment trainer bridge + timeline instrumentation)",
+ "commit": "3c04c8ffb33fc210f85bf18572820a76778b8664",
+ "env": {
+  "client_gpu_run": {
+   "python": "3.12.15",
+   "executable": "/home/ubuntu/envs/vllm/bin/python",
+   "torch": "2.13.0+cu130",
+   "torch_cuda": "13.0",
+   "cuda_visible_devices": "7",
+   "gpu_lease": "7",
+   "cpu_count": 240,
+   "triton": "3.7.1",
+   "vllm": "0.31.0",
+   "transformers": "5.17.0"
+  }
+ },
+ "commands": [
+  "PYTHONPATH=<worktree> /home/ubuntu/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --real-trainer-smoke --train-tp 1 --out /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_e2e_bridge/real_smoke.json --work-dir /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_e2e_bridge/real_work"
+ ],
+ "real_trainer_smoke_tp1": {
+  "status": "ran",
+  "tp": 1,
+  "launcher": "process",
+  "gpus": [
+   7
+  ],
+  "sequences": [
+   "gsm8k_test_0",
+   "gsm8k_test_1"
+  ],
+  "scored_tokens": 102,
+  "startup_s": 84.06526597699849,
+  "server_build_s": 82.27546674099722,
+  "server_versions": {
+   "python": "3.12.15",
+   "executable": "/home/ubuntu/envs/megatron/bin/python",
+   "torch": "2.13.0+cu129",
+   "torch_cuda": "12.9",
+   "triton": "3.7.1",
+   "megatron-core": "0.20.0+913159367",
+   "megatron-bridge": "0.7.0+d86a5c09b",
+   "transformer_engine": "2.20.2",
+   "transformers": "5.17.0",
+   "vllm": null
+  },
+  "server_devices": {
+   "cuda_visible_devices": "7",
+   "devices": [
+    {
+     "index": 0,
+     "name": "NVIDIA A100-SXM4-80GB",
+     "uuid": "84da0196-9f73-c3bb-ae88-fa92c419a341",
+     "total_memory_gib": 79.250732421875,
+     "pci_bus_id": 13
+    }
+   ],
+   "device_count": 1
+  },
+  "server_memory_after_build": {
+   "allocated_gib": 56.008766174316406,
+   "peak_allocated_gib": 58.05501842498779,
+   "reserved_gib": 58.62890625
+  },
+  "token_logprobs_s": 2.8506899570020323,
+  "logprobs_finite": true,
+  "logprobs_first8_hex": [
+   [
+    "c2081336",
+    "bc004800",
+    "c1149473",
+    "c087581c",
+    "be115b00",
+    "bfe54040",
+    "be81c5c0",
+    "bc8e5800"
+   ],
+   [
+    "c1ff141a",
+    "bf43bc40",
+    "bda3fa00",
+    "bbad8000",
+    "c10b1eaa",
+    "be876040",
+    "bfcd2370",
+    "c17c471c"
+   ]
+  ],
+  "step_s": 9.953810963997967,
+  "step_info": {
+   "grad_norm": 1.807151436805725,
+   "lr": 1e-05,
+   "step": 1,
+   "num_lora_params": 104792064,
+   "loss": -0.0784313753247261,
+   "bridge": {
+    "client_backward_s": 0.1638082770004985,
+    "rtt_s": 9.789908304999699,
+    "server_compute_s": 9.779241673997603,
+    "surrogate_value": 0.11073774099349976,
+    "grad_elements": 102
+   }
+  },
+  "export": {
+   "ok": false,
+   "error": "WeightSyncError: LoRA hash mismatch across the trainer bridge: trainer reported 1260340d5536e5117666a1ad3afc39b78d8c85e25d6d9fc746a58f82092ba5d1, server recomputed 5b28ab49efd092ceb3de1f7c63da6890022dcc7f1982a4f4fa84c2dde4332dfe, client recomputed 5b28ab49efd092ceb3de1f7c63da6890022dcc7f1982a4f4fa84c2dde4332dfe"
+  },
+  "export_s": 2.627939391997643,
+  "calls": [
+   {
+    "op": "token_logprobs",
+    "rtt_s": 2.850573224000982,
+    "server": {
+     "compute_s": 2.8417917490005493,
+     "ranks": [
+      {
+       "rank": 0,
+       "compute_s": 2.8417917490005493,
+       "memory": {
+        "allocated_gib": 56.4768123626709,
+        "peak_allocated_gib": 56.61693096160889,
+        "reserved_gib": 58.630859375
+       },
+       "op_counts": {
+        "token_logprobs": 1
+       },
+       "ok": true,
+       "error": null
+      }
+     ],
+     "world": 1,
+     "memory": {
+      "allocated_gib": 56.4768123626709,
+      "peak_allocated_gib": 56.61693096160889,
+      "reserved_gib": 58.630859375
+     },
+     "profile": null
+    },
+    "request_bytes": 2349,
+    "response_bytes": 2597
+   },
+   {
+    "op": "step",
+    "rtt_s": 9.789908304999699,
+    "server": {
+     "compute_s": 9.779241673997603,
+     "ranks": [
+      {
+       "rank": 0,
+       "compute_s": 9.779241673997603,
+       "memory": {
+        "allocated_gib": 56.85576248168945,
+        "peak_allocated_gib": 57.942307472229004,
+        "reserved_gib": 59.189453125
+       },
+       "op_counts": {
+        "token_logprobs": 1,
+        "step": 1
+       },
+       "ok": true,
+       "error": null
+      }
+     ],
+     "world": 1,
+     "memory": {
+      "allocated_gib": 56.85576248168945,
+      "peak_allocated_gib": 57.942307472229004,
+      "reserved_gib": 59.189453125
+     },
+     "profile": null
+    },
+    "request_bytes": 2213,
+    "response_bytes": 1773
+   },
+   {
+    "op": "export_lora",
+    "rtt_s": 2.4259382889977132,
+    "server": {
+     "compute_s": 1.2125580699976126,
+     "ranks": [
+      {
+       "rank": 0,
+       "compute_s": 1.2125580699976126,
+       "memory": {
+        "allocated_gib": 56.85576248168945,
+        "peak_allocated_gib": 56.85794448852539,
+        "reserved_gib": 59.189453125
+       },
+       "op_counts": {
+        "token_logprobs": 1,
+        "step": 1,
+        "export_lora": 1
+       },
+       "sha256": "5b28ab49efd092ceb3de1f7c63da6890022dcc7f1982a4f4fa84c2dde4332dfe",
+       "ok": true,
+       "error": null
+      }
+     ],
+     "world": 1,
+     "memory": {
+      "allocated_gib": 56.85576248168945,
+      "peak_allocated_gib": 56.85794448852539,
+      "reserved_gib": 59.189453125
+     },
+     "profile": null
+    },
+    "request_bytes": 1325,
+    "response_bytes": 209839103
+   }
+  ],
+  "commit": "3c04c8ffb33fc210f85bf18572820a76778b8664"
+ },
+ "real_trainer_smoke_tp2": {
+  "status": "NOT RUN",
+  "reason": "StrictTrainer is pinned to the 30B shapes (megatron_strict._check_config), so no toy-config smoke exists; the 30B smoke is for the integrator's lease",
+  "command": "~/bin/gpu-lease -n 2 --pool 6-7 -- env PYTHONPATH=$PWD ~/envs/vllm/bin/python -m rl_engine.models.muse_glimmer.e2e.bench_bridge --real-trainer-smoke --train-tp 2"
+ }
+}

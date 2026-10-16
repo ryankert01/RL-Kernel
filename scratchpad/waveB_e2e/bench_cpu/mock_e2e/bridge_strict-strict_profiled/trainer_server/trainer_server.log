@@ -1,0 +1,28 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 22:09:04] start pid=442588 world=1 launcher=process CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank0 22:09:04] client connected
+[trainer_server rank0 22:09:06] trainer MockTrainer built in 1.5 s
+[trainer_server rank0 22:09:06] export_lora id=1 ok=True compute=1.2 ms
+[trainer_server rank0 22:09:06] provenance id=2 ok=True compute=0.1 ms
+[trainer_server rank0 22:09:07] token_logprobs id=3 ok=True compute=92.8 ms
+[trainer_server rank0 22:09:07] step id=4 ok=True compute=125.1 ms
+[trainer_server rank0 22:09:07] export_lora id=5 ok=True compute=0.9 ms
+[trainer_server rank0 22:09:07] profile_arm id=6 ok=True compute=0.0 ms
+USDT:2026-10-15 22:09:36 442588:442588 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:09:36 442588:442588 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ERROR:2026-10-15 22:09:36 442588:442588 DeviceProperties.cpp:50] gpuGetDeviceCount failed with code 100
+[trainer_server rank0 22:09:37] token_logprobs id=7 ok=True compute=764.3 ms
+USDT:2026-10-15 22:09:38 442588:442588 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 22:09:38 442588:442588 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[trainer_server rank0 22:09:41] step id=8 ok=True compute=3014.1 ms
+[trainer_server rank0 22:09:41] export_lora id=9 ok=True compute=1.5 ms
+[trainer_server rank0 22:09:42] token_logprobs id=10 ok=True compute=221.0 ms
+[trainer_server rank0 22:09:42] step id=11 ok=True compute=151.1 ms
+[trainer_server rank0 22:09:42] export_lora id=12 ok=True compute=0.9 ms
+[trainer_server rank0 22:09:44] token_logprobs id=13 ok=True compute=58.1 ms
+[trainer_server rank0 22:09:44] step id=14 ok=True compute=181.1 ms
+[trainer_server rank0 22:09:44] export_lora id=15 ok=True compute=1.1 ms
+[trainer_server rank0 22:09:44] provenance id=16 ok=True compute=0.1 ms
+[trainer_server rank0 22:09:44] close id=17 ok=True compute=0.0 ms
+[trainer_server rank0 22:09:44] bye

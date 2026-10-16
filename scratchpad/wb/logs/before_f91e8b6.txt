@@ -1,0 +1,7 @@
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_other_repo_table_builders_are_bitwise_identical_on_cuda
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestF1RopeTableIdentity::test_trace_records_table_provenance
+FAILED tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_runtime_provenance_reports_the_built_digest
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks
+FAILED tests/models/muse_glimmer/test_strict_model_tiny.py::test_decode_batch_and_kv_plans_reject_bad_sequence_ids
+6 failed, 100 passed, 7 errors in 43.52s

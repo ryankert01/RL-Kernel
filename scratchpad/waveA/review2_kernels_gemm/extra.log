@@ -1,0 +1,7 @@
+dA_k_proj_fast_vs_adapter_mismatch_by_M {1: 0, 5: 0, 16: 0, 17: 0, 64: 0, 65: 0, 256: 0}
+dW_fast_vs_adapter {1: {'mismatch': 0, 'block_k': 16, 'chunk_len': 32}, 31: {'mismatch': 0, 'block_k': 16, 'chunk_len': 32}, 33: {'mismatch': 0, 'block_k': 16, 'chunk_len': 32}, 200: {'mismatch': 0, 'block_k': 16, 'chunk_len': 32}, 257: {'mismatch': 0, 'block_k': 32, 'chunk_len': 64}, 300: {'mismatch': 0, 'block_k': 32, 'chunk_len': 64}, 511: {'mismatch': 0, 'block_k': 32, 'chunk_len': 64}, 513: {'mismatch': 0, 'block_k': 32, 'chunk_len': 96}, 777: {'mismatch': 0, 'block_k': 64, 'chunk_len': 128}, 1000: {'mismatch': 0, 'block_k': 64, 'chunk_len': 128}, 4001: {'mismatch': 0, 'block_k': 64, 'chunk_len': 512}, 8192: {'mismatch': 0, 'block_k': 64, 'chunk_len': 1024}}
+cuda_graph_capture_equal {1: True, 16: True, 64: True, 128: True, 256: True}
+lm_head_graph_capture_novalidate True
+column_parallel_decode_dA_mismatch {'q_proj/M1/TP2': 0, 'q_proj/M1/TP4': 0, 'q_proj/M16/TP2': 0, 'q_proj/M16/TP4': 0, 'q_proj/M33/TP2': 0, 'q_proj/M33/TP4': 0, 'k_proj/M1/TP2': 0, 'k_proj/M1/TP4': 0, 'k_proj/M16/TP2': 0, 'k_proj/M16/TP4': 0, 'k_proj/M33/TP2': 0, 'k_proj/M33/TP4': 0}
+trace_names {'lm_backend_name_raw': 'muse_glimmer.fast_det_gemm', 'lm_gemm_order_raw': 'explicit non-default backend muse_glimmer.fast_det_gemm (see gemm.reduction_orde', 'lm_backend_name_default': 'fast_det_gemm', 'ffn_gemm_name_raw': 'muse_glimmer.fast_det_gemm', 'ffn_gemm_name_default': 'fast_det_gemm', 'verified_ir_variants': 38}
+ffn_raw_vs_default_gemm_grads_equal {1: True, 300: True}

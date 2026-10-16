@@ -1,0 +1,23 @@
+poc(muse_glimmer): global/local gated attention forward (O5) — strict Triton kernel, golden, paged KV, gates G1-G3/G5
+
+One Triton kernel body for training, prefill, chunked prefill, decode and paged-KV
+rollout of the Muse-Glimmer-30B gated attention (sliding-window RoPE layers and
+full-causal NoPE layers), with the sigmoid output gate fused in the epilogue.
+
+- KV blocks of 64 keys aligned at absolute position 0, ascending; contract O5 online
+  softmax order; p -> bf16 before the PV dot; o -> bf16; y = o * sigmoid(g) -> bf16.
+- TOKEN tile (BLOCK_M=64) for prefill and HEAD tile (BLOCK_M=16 = one GQA group at one
+  position) for decode are bitwise identical per row; both pinned to num_warps=4 because
+  Triton 3.7.1 splits warps along the key axis and the rowsum tree follows num_warps.
+- strict_gated_attention_fwd_varlen / strict_gated_attention_fwd_paged (vLLM NHD pages of
+  16 tokens, block table, -1 for evicted pages), gated_attention_forward_fp32 (fp32/fp64
+  explicit blocked online-softmax golden, no SDPA/matmul), trace().
+- PagedKVCache test utility with window eviction (freed pages NaN-poisoned in tests).
+- 63 tests: G1 vs fp32/fp64 golden, G2 batch invariance, G3 one-shot vs chunked vs
+  token-by-token paged decode with/without eviction for lengths 64..8192, tile parity,
+  GQA mapping, real shapes (prefill 4096, decode B=64 @ 4096), G5 trace.
+- Benchmark on A100: prefill 4096 2.06 ms vs SDPA 1.57 ms; decode B=64@4096 paged 0.32 ms
+  (varlen 0.20 ms) vs SDPA 0.20 ms.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

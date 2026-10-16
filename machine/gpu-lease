@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Lease N GPUs exclusively (flock) and run a command with CUDA_VISIBLE_DEVICES set.
+
+Usage: gpu-lease -n 2 [--pool 0-5] [--timeout 3600] -- <command...>
+GPU 6 and 7 are reserved for multi-GPU/integration runs unless --pool includes them.
+Locks live in /tmp/gpu-lease/<gpu>.lock; a lease is released when the command exits.
+"""
+import argparse, fcntl, os, subprocess, sys, time
+
+def parse_pool(s):
+    out = []
+    for part in s.split(","):
+        if "-" in part:
+            a, b = part.split("-"); out.extend(range(int(a), int(b) + 1))
+        else:
+            out.append(int(part))
+    return out
+
+p = argparse.ArgumentParser()
+p.add_argument("-n", type=int, default=1)
+p.add_argument("--pool", default="0-5")
+p.add_argument("--contiguous", action="store_true", help="lease consecutive GPU ids (NVLink-friendly)")
+p.add_argument("--timeout", type=int, default=7200)
+p.add_argument("cmd", nargs=argparse.REMAINDER)
+a = p.parse_args()
+cmd = a.cmd[1:] if a.cmd and a.cmd[0] == "--" else a.cmd
+if not cmd:
+    sys.exit("gpu-lease: no command given")
+pool = parse_pool(a.pool)
+deadline = time.time() + a.timeout
+held = []
+def release():
+    for fh in held:
+        try: fcntl.flock(fh, fcntl.LOCK_UN); fh.close()
+        except OSError: pass
+while True:
+    held.clear(); got = []
+    candidates = [pool[i:i + a.n] for i in range(len(pool) - a.n + 1)] if a.contiguous else [pool]
+    for cand in candidates:
+        got = []
+        for g in cand:
+            fh = open(f"/tmp/gpu-lease/{g}.lock", "w")
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                held.append(fh); got.append(g)
+                if len(got) == a.n: break
+            except OSError:
+                fh.close()
+        if len(got) == a.n: break
+        release(); held.clear()
+    if len(got) == a.n: break
+    if time.time() > deadline:
+        sys.exit(f"gpu-lease: timed out waiting for {a.n} GPU(s) from pool {a.pool}")
+    time.sleep(5)
+env = dict(os.environ, CUDA_VISIBLE_DEVICES=",".join(map(str, got)), GPU_LEASE=",".join(map(str, got)))
+print(f"[gpu-lease] using GPUs {got}", file=sys.stderr, flush=True)
+try:
+    rc = subprocess.call(cmd, env=env)
+finally:
+    release()
+sys.exit(rc)

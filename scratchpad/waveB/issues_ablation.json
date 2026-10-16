@@ -1,0 +1,110 @@
+[
+ {
+  "id": "ablation:R1",
+  "severity": "blocking",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "line": 356,
+  "claim": "The setting 'rope_inv_freq_cuda' ('inv_freq computed by HF's formula on the GPU instead of the CPU') never computes anything on the GPU. Its 0/933 null result, and the RFC feedback 'drop ... inv_freq CPU vs CUDA from the list of drift sources', are wrong: computing inv_freq on the GPU for real flips 924/933 tokens.",
+  "evidence": "The setting calls rope_inv_freq_on (line 356), which calls hf_rope_inv_freq(cfg, device) (line 228). That calls HF's compute_default_rope_parameters(cfg), which builds torch.arange(0, dim, 2, dtype=float) on the CPU, does the pow there, and returns inv_freq.to(device), a copy of the CPU result. The rope_inv_freq_on docstring 'CUDA pow vs CPU pow' is therefore wrong. probe_hf2 output: harness_cuda_vs_cpu_bits_differ=0 and true_cuda_pow_vs_cpu_bits_differ=4 (of 64). probe_hf3 output: scoring the baseline driver with a GPU-computed inv_freq gives tokens_differ=924/933 (per sequence [51,47,128,39,92,148,88,156,175]), max |dlogp| 0.820, mean 0.0167. That is as large as any schedule factor.",
+  "suggested_fix": "In rope_inv_freq_on, build inv_freq on the target device: 1/(theta ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device)/dim)). Re-run that one setting and re-merge. Rewrite the REPORT and RFC feedback: the device and function used to build the RoPE inv_freq/cos/sin table is a real bitwise drift source. This supports contract O4's rule of one fixed torch-CUDA table shared by both runtimes, and HF (CPU-built) differs from it."
+ },
+ {
+  "id": "ablation:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "line": 758,
+  "claim": "chunked_prefill_64/256/1024 are compared against the L-token training baseline, so each flips two factors at once (dropping the last token, which changes M from L to L-1, plus chunking). The REPORT and RFC feedback list 'chunk size' as a factor that flips about 99% of tokens. In isolation, chunking only affects sequences longer than the chunk.",
+  "evidence": "My re-run at HEAD (probe_hf.py) counts tokens differing from the one-shot L-1 prefill. chunk 1024: [0,0,0,0,0,0,0,0,176], 176/933, only the 2439-token sequence. chunk 256: [0,0,0,0,91,148,0,155,177], 571/933, so 5 of 9 sequences are bitwise identical because they fit in one chunk. chunk 64: 925/933. The committed analysis matrix agrees: chunked_1024 and prefill_L_minus_1 share 757 tokens, chunked_256 and prefill_L_minus_1 share 362.",
+  "suggested_fix": "For factor 3, report every chunked setting against prefill_L_minus_1 (add records with baseline='hf_prefill_L_minus_1', or a derived view in analysis()). Correct the REPORT summary and the RFC feedback item that lists 'chunk size' as an approximately 99% factor."
+ },
+ {
+  "id": "ablation:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "line": 422,
+  "claim": "Many of the 'argmax flips' (REPORT: '4-8 argmax flips', 'about 0.5% greedy argmax flips'; logits_fp32 8, softcap_fp32 4) are tie-break artifacts. The bf16 soft-capped logits contain exact ties, and argmax returns the lowest index among them.",
+  "evidence": "probe_hf2.py found 16 of 933 baseline positions where the bf16 top-1 and top-2 logits are equal. Counting how many of each setting's committed flips fall on those positions: logits_fp32 8/8, softcap_fp32 4/4, sdpa 4/7, chunked_256 3/7, rollout_like_sdpa 3/5, padded_right 2/6, kv_cache_decode 2/7. Across the 11 schedule-factor settings, 24 of 66 flips are at ties.",
+  "suggested_fix": "Record a tie flag, or the top-1 minus top-2 gap, per position. Count flips only where the baseline argmax is unique, or compute argmax on fp32 logits. Restate the argmax-flip numbers in the REPORT."
+ },
+ {
+  "id": "ablation:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/REPORT_ablation.md",
+  "line": 14,
+  "claim": "The REPORT and RFC feedback attribute the low-probability gold tokens to GSM8K <<calc>> annotations ('GSM8K gold answers put 13% of tokens at p <= 0.1 because of <<calc>> annotations'). The data refutes this.",
+  "evidence": "inspect_lowp2.py decodes the tokens with tokenizer.json, read as data through the tokenizers library, and maps each one to its character span. Of the 123 tokens with p <= 0.1, only 13 overlap a <<...>> span, and 9 are the first completion token (logp -31 to -34, at the soft-cap floor). 225 of the 933 tokens lie inside calc spans, and most of them have high probability. The other low-p tokens are wording choices (for example ' sells', ' duck', ' came').",
+  "suggested_fix": "Drop the <<calc>> explanation. If useful, say that low-p gold tokens are ordinary wording disagreements plus the first completion token."
+ },
+ {
+  "id": "ablation:R5",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/REPORT_ablation.md",
+  "line": 1,
+  "claim": "The required deliverable REPORT_ablation.md is not in the branch, and its text, which exists only in the workflow journal, contains factual errors.",
+  "evidence": "The file is absent at 10a9a39 and in the implementer's worktree. The implementer's result says the harness blocked writing report .md files; the text is in requests_to_integrator[0] (saved to scratchpad/waveA/review2_ablation/REPORT_ablation_from_journal.md). Errors in it, besides R1-R4:\n- 'Any other pair shares fewer than 25 tokens' is false: in analysis.hf_pairwise_identical_tokens, chunked_256 shares 362 tokens with prefill_L_minus_1 and 361 with chunked_1024.\n- '38-55 of 39-55 tokens differing on short sequences' is wrong: the short sequences have 39-156 completion tokens.\n- 'a handful of layer-0 elements' for M=190 vs 191 is actually 3 rows, frac 0.001, about 1.2k elements.",
+  "suggested_fix": "The integrator commits the REPORT after applying R1-R4 and R6 and correcting these sentences."
+ },
+ {
+  "id": "ablation:R6",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/REPORT_ablation.md",
+  "line": 77,
+  "claim": "The RFC feedback and conclusions overgeneralise HF-transformers measurements to 'native stacks' and real train/rollout pairs. They also claim layer localisation and accuracy statements the data does not support.",
+  "evidence": "Only HF transformers 5.17 (eager/SDPA) and the strict reference were run; vLLM 0.31 and Megatron were not. Unsupported claims:\n- 'present in every real train/rollout pair', said of allow_bf16_reduced_precision_reduction and the L-1 prefill. Rollout engines decode rather than run an L-1 one-shot prefill, and the flag's settings in vLLM and Megatron were not checked.\n- 'expect layer 0 / first GEMM'. LayerTap hooks only embed_tokens, the 52 decoder-layer outputs and the final norm (ablation_hf.py:546-569), so nothing localises below layer granularity.\n- 'the strict path does not cost accuracy relative to the native noise floor'. This row measures distance to HF-bf16 only; no fp32 or fp64 reference is used.",
+  "suggested_fix": "Scope the claims to 'HF transformers 5.17 on A100'. Cite REPORT_full_model_chain for accuracy against HF-fp32. Either add sub-layer hooks (q/k/v/gate/o/mlp) or drop 'first GEMM'."
+ },
+ {
+  "id": "ablation:R7",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_strict.py",
+  "line": 75,
+  "claim": "packed_pass is a private re-implementation of MuseGlimmerStrictModel._run, and it imports the private strict_model._row_parallel. In parallel, the reference_profile branch rewrites _run with a KVPlan multi-sequence path and adds decode_batch. After the merge, the strict batch rows would measure a fork of the reference, not the reference.",
+  "evidence": "packed_pass mirrors _run as it is at 307fcf2 (I compared them op by op and they match at HEAD). git diff 307fcf2...worktree-wf_7b064961-36f-8 on strict_model.py: +KVPlan dataclass, _run(kv: KVPlan | Session | None) packing several sequences, and new decode_batch (line 409) and new_batch_cache. The tiny CUDA test compares packed_pass only with logprobs(mode=train), on the golden backend.",
+  "suggested_fix": "After merging, route score_paged_batch_prefill and score_batched_decode through model._run(..., KVPlan) / decode_batch. Keep packed_pass only for the multi-segment varlen form, or add a test asserting packed_pass equals the reference's own KVPlan path byte for byte."
+ },
+ {
+  "id": "ablation:R8",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ablation/run_ablation.py",
+  "line": 462,
+  "claim": "The merged 'env' map is keyed by part@gpu, so two 'hf' parts on GPU 7 collide. The main part's env is silently replaced by the rollout-like part's env (6 parts, but 5 env entries).",
+  "evidence": "ablation.json env keys: hf@gpu7, strict@gpu6, strict@gpu7, hf_layers@gpu7, hf_baseline_only@gpu6. parts[] lists two 'hf' parts on lease 7, at commits 84f30f8 and 106ba05.",
+  "suggested_fix": "Key env by part path or index, or store env inside each parts[] entry."
+ },
+ {
+  "id": "ablation:R9",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/ablation.json",
+  "line": 1,
+  "claim": "Provenance is spread over 5 commits: the top-level 'commit' is 84f30f8, not HEAD 10a9a39, and the hf_layers part ran with worktree_dirty=true at 4105697.",
+  "evidence": "parts[].commit and worktree_dirty in the JSON. This is mitigated: my run at HEAD reproduced the HF baseline, padded_right, prefill_L_minus_1, chunked 64/256/1024 and the strict baseline bitwise. The layer-tap code is unchanged between 4105697 and HEAD.",
+  "suggested_fix": "Re-run hf-layers from a clean tree, or store a diff hash. Add a 'head_at_merge' field."
+ },
+ {
+  "id": "ablation:R10",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_ablation.py",
+  "line": 214,
+  "claim": "Test coverage gaps:\n- The merge, analysis and markdown code (run_ablation.py:362-598) has no tests.\n- The strict-runner test uses only the golden backend on a tiny config.\n- test_settings_registry_covers_required_factors only re-reads the registry, so it is close to a tautology.\n- The committed strict data covers decode batch sizes up to 9 only.",
+  "evidence": "Read the test file. 13 passed in my run, 150 s. My 65-sequence continuous-batching probe gave 0/6218 differing tokens, but that result is not in the committed data.",
+  "suggested_fix": "Add a merge test built from synthetic parts (baseline-equality gating, naming, env). Add a strict batched-decode setting with more than 16 and more than 64 active sequences to the JSON."
+ },
+ {
+  "id": "ablation:R11",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "line": 25,
+  "claim": "Two docstrings contradict the measurements: the module docstring calls the RoPE K=1 GEMM 'TF32-sensitive', and rope_inv_freq_on's docstring says 'CUDA pow vs CPU pow'.",
+  "evidence": "tf32_probe in the JSON gives rope_gemm_k1_elems_differ_tf32_on_vs_off=0, and my probe gives 0 at 5 shapes. For the pow, see R1.",
+  "suggested_fix": "Fix both docstrings."
+ },
+ {
+  "id": "ablation:R12",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ablation/ablation_hf.py",
+  "line": 415,
+  "claim": "Metric gaps: k3 on gold tokens is not a KL (the implementer acknowledges this), and the variant argmax token ids are not stored.",
+  "evidence": "_logp_argmax already materialises the full fp32 logits for every position but keeps only the selected-token logp and the argmax index.",
+  "suggested_fix": "Also record the exact full-vocabulary KL(base||var) per position and the variant argmax id. This is cheap and gives better plots."
+ }
+]

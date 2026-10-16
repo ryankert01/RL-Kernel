@@ -1,0 +1,28 @@
+[gpu-lease] using GPUs [2, 3]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 15849931776
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 15849931776
+[load] {'init_seconds': 166.44828672000222, 'bridge_load_seconds': 113.1688826084137, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 39.616610527038574, 'allocated_gib': 34.88352966308594, 'peak_reserved_gib': 39.87109375}, {'rank': 1, 'peak_allocated_gib': 39.616610527038574, 'allocated_gib': 34.88352966308594, 'peak_reserved_gib': 39.765625}]}
+[xrt] strict scored 933 tokens in 3.82s
+[grad_repeat] pass 0: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 12.0845447540014}
+[grad_repeat] pass 1: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 11.673827744001755}
+[grad_repeat] mismatching elements 0/104792064
+[step] {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 11.651319526001316, 'grad_norm': 7.020298480987549, 'lr': 1e-05, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.3211050520003482, 'num_lora_params_local': 74547200, 'loss': 0.3581387996673584} sha 04c604ff2f24 -> 02b3d04ae54b
+[run] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_megatron_runtime/tp2_mb4096.json

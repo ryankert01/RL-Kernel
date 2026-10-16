@@ -1,0 +1,19 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 17:13:37] start pid=311225 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 17:13:37] client connected
+[trainer_server rank0 17:13:38] trainer MockTrainer built in 1.1 s
+[trainer_server rank0 17:13:38] token_logprobs id=1 ok=True compute=24.6 ms
+[trainer_server rank0 17:13:38] step id=2 ok=True compute=41.8 ms
+[trainer_server rank0 17:13:38] export_lora id=3 ok=True compute=1.0 ms
+[trainer_server rank0 17:13:38] token_logprobs id=4 ok=True compute=18.9 ms
+[trainer_server rank0 17:13:38] step id=5 ok=True compute=36.8 ms
+[trainer_server rank0 17:13:38] export_lora id=6 ok=True compute=1.0 ms
+[trainer_server rank0 17:13:38] token_logprobs id=7 ok=True compute=18.4 ms
+[trainer_server rank0 17:13:38] step id=8 ok=True compute=41.1 ms
+[trainer_server rank0 17:13:38] export_lora id=9 ok=True compute=1.0 ms
+[trainer_server rank0 17:13:38] token_logprobs id=10 ok=True compute=20.7 ms
+[trainer_server rank0 17:13:38] step id=11 ok=True compute=37.5 ms
+[trainer_server rank0 17:13:38] export_lora id=12 ok=True compute=0.9 ms
+[trainer_server rank0 17:13:38] close id=13 ok=True compute=0.0 ms
+[trainer_server rank0 17:13:38] bye

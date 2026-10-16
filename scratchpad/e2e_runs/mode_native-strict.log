@@ -1,0 +1,11 @@
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/mode_native-strict  mode: native/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.062 | loss +0.00002 ratio 1.000069 clip 0.000 | drift bitwise 1772/1774 max 1.112e-02 first (0,0) | sync c035a8077b52 ok=True | 3.1s
+step   1 | reward 0.094 | loss -0.00002 ratio 1.000008 clip 0.000 | drift bitwise 1774/1775 max 1.102e-02 first (0,0) | sync dcf42e173589 ok=True | 3.6s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000073 clip 0.000 | drift bitwise 1935/1935 max 1.148e-02 first (0,0) | sync 3942ecd1992d ok=True | 2.6s
+step   3 | reward 0.000 | loss +0.00000 ratio 0.999979 clip 0.000 | drift bitwise 1501/1501 max 9.198e-03 first (0,0) | sync a494c1affa70 ok=True | 3.0s
+step   4 | reward 0.062 | loss -0.00894 ratio 0.999950 clip 0.000 | drift bitwise 1679/1679 max 1.006e-02 first (0,0) | sync 31142e9a4ee8 ok=True | 2.6s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000018 clip 0.000 | drift bitwise 1714/1714 max 1.390e-02 first (0,0) | sync 16d6eee4717a ok=True | 2.6s
+step   6 | reward 0.031 | loss +0.00000 ratio 0.999999 clip 0.000 | drift bitwise 1740/1740 max 1.059e-02 first (0,0) | sync 3379e2ef8619 ok=True | 2.6s
+step   7 | reward 0.000 | loss +0.00000 ratio 0.999988 clip 0.000 | drift bitwise 1833/1833 max 9.525e-03 first (0,0) | sync 8b41efda6228 ok=True | 2.6s
+done: 8 steps, bitwise mismatches 13948/13951, max |Δ| 1.390e-02, first drift {'step': 0, 'sample': 0, 'token': 0, 'abs_diff': 0.000560760498046875}, reward mean 0.03125, weight sync 9/9 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/mode_native-strict/summary.json

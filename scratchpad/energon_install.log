@@ -1,0 +1,31 @@
+START Thu Oct 15 13:34:58 UTC 2026
+Using Python 3.12.15 environment at: /home/ubuntu/envs/megatron
+Resolved 76 packages in 243ms
+Downloading multi-storage-client (8.1MiB)
+Downloading botocore (15.2MiB)
+ Downloaded multi-storage-client
+ Downloaded botocore
+Prepared 16 packages in 184ms
+Uninstalled 2 packages in 3ms
+Installed 18 packages in 126ms
+ + aiobotocore==3.9.2
+ + aioitertools==0.13.0
+ + botocore==1.43.106
+ + bracex==3.1
+ + deprecation==2.1.0
+ + filetype==1.2.0
+ - fsspec==2026.7.0
+ + fsspec==2026.9.0
+ + jmespath==1.1.0
+ + lark==1.3.1
+ + megatron-energon==7.4.1
+ + mfusepy==3.1.1
+ + multi-storage-client==1.2.0
+ - multidict==7.1.0
+ + multidict==6.9.1
+ + rapidyaml==0.15.2
+ + s3fs==2026.9.0
+ + tzdata==2025.3
+ + wcmatch==10.2.1
+ + xattr==1.3.0
+exit=0 Thu Oct 15 13:34:58 UTC 2026

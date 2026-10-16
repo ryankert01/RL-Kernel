@@ -1,0 +1,108 @@
+[gpu-lease] using GPUs [3]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 29776626688
+[load] {'init_seconds': 99.13436081799955, 'bridge_load_seconds': 59.59410572052002, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 57.976962089538574, 'allocated_gib': 55.86241149902344, 'peak_reserved_gib': 58.19921875}]}
+[xrt] strict scored 933 tokens in 5.64s
+[native] max|d| 0.314 mean|d| 0.01602
+[bench] {'tokens': 512, 'strict_forward_ms': 741.1135900001682, 'strict_forward_peak_gib': 57.25295543670654, 'strict_train_logprobs_ms': 738.7238699993759, 'strict_recompute_fwd_bwd_ms': 3275.9182269983285, 'strict_optimizer_ms': 87.75551300277584, 'strict_step_total_ms': 4103.744965999795, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 58.40936994552612, 'native_forward_ms': 147.82540699889068, 'native_forward_peak_gib': 57.99385690689087, 'native_fwd_bwd_forward_ms': 144.28798700100742, 'native_fwd_bwd_backward_ms': 1001.1198680003872, 'native_fwd_bwd_peak_gib': 58.91394853591919}
+[bench] {'tokens': 1024, 'strict_forward_ms': 1349.3903550006507, 'strict_forward_peak_gib': 57.504971504211426, 'strict_train_logprobs_ms': 1345.7971259995247, 'strict_recompute_fwd_bwd_ms': 4918.937997001194, 'strict_optimizer_ms': 90.74343300017063, 'strict_step_total_ms': 6356.879052000295, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 58.93035078048706, 'native_forward_ms': 293.35523700137855, 'native_forward_peak_gib': 58.99075365066528, 'native_fwd_bwd_forward_ms': 290.9505280003941, 'native_fwd_bwd_backward_ms': 618.9997709989257, 'native_fwd_bwd_peak_gib': 60.83168840408325}
+[bench] {'tokens': 2048, 'strict_forward_ms': 2538.1958649995795, 'strict_forward_peak_gib': 57.946505546569824, 'strict_train_logprobs_ms': 2541.2220810030703, 'strict_recompute_fwd_bwd_ms': 8429.350712998712, 'strict_optimizer_ms': 94.39098899747478, 'strict_step_total_ms': 11066.772065001715, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 60.75937604904175, 'native_forward_ms': 661.3480189989787, 'native_forward_peak_gib': 59.434311389923096, 'native_fwd_bwd_forward_ms': 655.6983110021974, 'native_fwd_bwd_backward_ms': 1422.3950049999985, 'native_fwd_bwd_peak_gib': 63.06651020050049}
+[rank0]:[W1015 17:07:45.271920973 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 16711680, total: 85094825984).
+[rank0]:[W1015 17:07:45.659380484 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14614528, total: 85094825984).
+[rank0]:[W1015 17:07:47.146581732 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:47.317798617 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:47.441977343 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:47.592818587 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.738074288 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.870839661 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.048924189 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.182077006 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.319222235 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.466332519 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:48.617404204 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.753481773 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.895364888 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.050106184 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.209318668 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.347168840 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.493160919 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:07:49.627401442 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[bench] {'tokens': 4096, 'strict_forward_ms': 4901.108719997865, 'strict_forward_peak_gib': 58.82957363128662, 'strict_train_logprobs_ms': 4900.017900999956, 'strict_recompute_fwd_bwd_ms': 15902.236839003308, 'strict_optimizer_ms': 129.17945300068823, 'strict_step_total_ms': 20933.4875880013, 'strict_recompute_mismatches': 0, 'strict_train_peak_gib': 64.45175886154175, 'native_forward_ms': 1662.090308000188, 'native_forward_peak_gib': 64.14449214935303, 'native_fwd_bwd_forward_ms': 1662.3351119997096, 'native_fwd_bwd_backward_ms': 6772.819551999419, 'native_fwd_bwd_peak_gib': 70.34277725219727}
+[rank0]:[W1015 17:08:28.545777893 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:08:29.961708802 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:08:29.187630131 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:08:29.575281579 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:08:29.641154434 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]:[W1015 17:08:29.705736696 CUDACachingAllocator.cpp:508] expandable_segments: memory mapping failed with OOM on device 0 while trying to map 20971520 bytes (free: 14548992, total: 85094825984).
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/run_megatron_strict.py", line 448, in <module>
+[rank0]:     sys.exit(main())
+[rank0]:              ^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/run_megatron_strict.py", line 403, in main
+[rank0]:     info = trainer.step(-lp[0].mean())
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 570, in step
+[rank0]:     info = self.backward(loss)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 566, in backward
+[rank0]:     return self._call("backward", grad.detach().float().cpu())
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 536, in _call
+[rank0]:     return getattr(self._state, f"cmd_{cmd}")(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 289, in cmd_backward
+[rank0]:     (logp,) = self._values(pend["token_ids"], pend["starts"], [group], grad=True)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 253, in _values
+[rank0]:     return self._strict_values(token_ids, starts, groups, grad=grad)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_trainer.py", line 246, in _strict_values
+[rank0]:     outs.append(self.binding.forward_packed(tokens, cu, positions, select, tgt))
+[rank0]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_strict.py", line 627, in forward_packed
+[rank0]:     h = self.hidden_states(tokens, cu_seqlens, positions)
+[rank0]:         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_strict.py", line 597, in hidden_states
+[rank0]:     resid, x_n = torch_checkpoint(
+[rank0]:                  ^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/_compile.py", line 54, in inner
+[rank0]:     return disable_fn(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 1446, in _fn
+[rank0]:     return fn(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/utils/checkpoint.py", line 522, in checkpoint
+[rank0]:     gen.throw(e)
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/utils/checkpoint.py", line 1706, in _checkpoint_without_reentrant_generator
+[rank0]:     yield
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/utils/checkpoint.py", line 519, in checkpoint
+[rank0]:     ret = function(*args, **kwargs)
+[rank0]:           ^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_strict.py", line 570, in _layer
+[rank0]:     up = self._col(x_f, (lw.fc1_up_local,), i, "mlp.up_proj", d.ffn)
+[rank0]:          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_strict.py", line 510, in _col
+[rank0]:     return StrictColumnLinear.apply(x, a, b, self.comm, n_total, *blocks)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/autograd/function.py", line 625, in apply
+[rank0]:     return super().apply(*args, **kwargs)  # type: ignore[misc]
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/megatron_lora.py", line 109, in forward
+[rank0]:     y32 = y32 + small_k_fp32(z, b)
+[rank0]:                 ^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-2/rl_engine/models/muse_glimmer/runtime/strict_kernels.py", line 232, in small_k_fp32
+[rank0]:     acc = acc + prod
+[rank0]:           ~~~~^~~~~~
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 624.00 MiB. GPU 0 has a total capacity of 79.25 GiB of which 553.88 MiB is free. Including non-PyTorch memory, this process has 78.70 GiB memory in use. Of the allocated memory 69.77 GiB is allocated by PyTorch, and 354.96 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

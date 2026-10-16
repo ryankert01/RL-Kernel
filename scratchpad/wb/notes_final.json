@@ -1,0 +1,283 @@
+{
+ "provenance": "measured_commits is derived from each run file's own commit field (captured when the run starts; dirty = tracked files modified at that moment). Wave B: every run was re-measured. The triton runs, the HF runs and the profiles ran at 39053b2 (clean); the golden runs ran from `git archive 615ee61` (a clean copy of the commit, so the run's own git lookup found no repository and its commit field was filled in afterwards from the archive; see xrt_reference_golden.json commit_note). Strict code (strict_model, chain_harness, golden_ops, paged_kv, weights, backend, every ops/ and triton/ file) is identical from 39053b2 to the final commit of this row; later commits only add scripts, reports and data.",
+ "o7_fix": "c88607f (softcap kernels launched with enable_fp_fusion=False) changed strict Triton logprob bits; every triton measurement here includes it (includes_o7_fix). The previous triton xrt file (f7d3723) agreed with the regenerated one on 739/933 tokens. The golden backend does not use the Triton O7 kernel.",
+ "removed": "chain_triton_512_hf_pre_change (307fcf2, the wave A before/after check of that row's own code change) and xrt_triton_repeat from the wave A first run (69b4409): both predate c88607f and are superseded by the wave B re-runs; the raw wave A files remain in the session scratchpad only.",
+ "hf_anchor_attention": "chain runs: HF eager attention (as in the original row report); xrt_reference_hf_bf16 and the HF profile: sdpa",
+ "profile_views": "wall = CUDA-event exclusive time per region (median of 3 prefill / 5 decode repeats, instrumented run; includes CPU launch gaps); gpu = torch.profiler kernel time charged to the innermost region open at launch (kernel_profile = the first of 3 profiler calls; kernel_profile_repeats = all 3); clean_total_ms = CUDA events around the whole call without regions",
+ "host_load": "the node was shared with other agents during the wave B runs: load average 335 / 404 / 296 (1 / 5 / 15 min, 240 cores) right after the profiles finished. Launch-bound numbers (decode wall times, T=512 wall times) depend on host load (strict decode B=1 clean 149 ms here vs 132 ms in wave A; HF decode B=1 260 ms vs 130 ms); the gpu view (kernel time) does not (repeat spread below 1 % for strict).",
+ "decode_setup": "strict: 16 sequences of 2048 random tokens prefilled through the paged cache, then batched decode steps (commit=True, context 2048..2060); HF: DynamicCache from one batched prefill of B x 2048 tokens, then decode steps with full-vocab logits + fp32 log_softmax",
+ "prefill_setup": "prefill_train = training forward over T tokens with the selected-token logp of every position (strict varlen attention; HF forward with use_cache=False, full logits, fp32 log_softmax + gather); prefill_paged (strict only) = one-shot paged prefill of T tokens with logp of every position; its KV cache is allocated per call outside the timed region and only one is alive at a time, so peak_allocated_gib includes exactly one call's cache (prepared_state_gib) on top of the train-forward activations",
+ "xrt_decode_timing": "xrt_scoring decode checks now time the prompt prefill and every decode step separately (prompt_prefill_seconds, decode_step_seconds, decode_step_context); per-token decode cost = decode_seconds_excl_prefill / decode_steps",
+ "batched_decode_gate": "tests/models/muse_glimmer/test_full_model_chain.py::test_batched_decode_is_batch_invariant_with_eviction (real weights, triton): 16 sequences with contexts 1..2100 (2100 > W+16 evicts pages), 3 decode steps, batch 1 == 2 == permuted 4 == reversed 16 == committed 16 per sequence (fp32 bit patterns), and two sequences' committed decode logps == the training forward; the profile's decode_batch_invariance is the same property at context 2048 measured once",
+ "wave_b_review": {
+  "review": "adversarial review of the wave A reference_profile row (issues reference_profile:R1..R12)",
+  "code_commit": "39053b2",
+  "tests_before_tree": "f91e8b6 (the new test files copied into `git archive f91e8b6`)",
+  "verdicts": [
+   {
+    "id": "reference_profile:R1",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "change": "KVPlan.validate(): unique ids, 0 <= id < cache.max_seqs, equal seqs/starts/lens lengths, lens >= 1, starts == committed lengths; decode_batch validates the ids before reading lengths; every paged forward validates its plan (and that positions are the plan's positions) before any K/V write",
+    "test": "test_strict_model_tiny.py::test_decode_batch_and_kv_plans_reject_bad_sequence_ids",
+    "before": "duplicate ids [0,0]: no error, row 0 differs from the batch-1 step (|dlogp| 0.0179 on the tiny model; 0.23 on real weights per the review); test FAILED (DID NOT RAISE); negative ids not probed on old builds (device-side assert)",
+    "after": "ValueError before any write; cache K/V, block table and lengths unchanged; PASSED"
+   },
+   {
+    "id": "reference_profile:R2",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "change": "measure(prepare=, release=): the paged-prefill KV cache is allocated per call outside the timed region and only one is alive at a time; mem_allocated_before_gib holds no per-call state; prepared_state_gib records the one cache included in the peak",
+    "evidence": "profile_strict at 39053b2: prefill_paged mem_allocated_before_gib 52.10 (= prefill_train); peak 52.25 / 52.67 / 53.23 vs train 52.22 / 52.57 / 53.03 GiB at T = 512 / 2048 / 4096; prepared_state_gib 0.026 / 0.102 / 0.204 (one cache). Wave A: before 52.16 / 52.69 / 53.41, peak 52.28 / 53.16 / 54.33"
+   },
+   {
+    "id": "reference_profile:R3",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "change": "collect_results.profile_record replaces kernel_profile.by_group_gpu_ms with the regrouped values and records the GROUPS list (one grouping in the file); the profiles were also re-measured at 39053b2 so the nested field was computed with the current groups anyway"
+   },
+   {
+    "id": "reference_profile:R4",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "change": "tests/models/muse_glimmer/test_full_model_chain.py::test_batched_decode_is_batch_invariant_with_eviction (real weights, triton): 16 sequences with contexts 1..2100 in one paged cache (2100 > W+16, so local layers evict pages; asserted), 3 decode steps; per step batch 1 == batch 2 == permuted batch 4 == reversed batch 16 == committed batch 16 (fp32 bit patterns), and the committed decode logps of sequences 0 (2100, evicting) and 6 (17) equal logprobs(mode='train')",
+    "evidence": "MUSEGLIMMER_CHECKPOINT=... MUSEGLIMMER_BACKEND=triton pytest test_full_model_chain.py: 2 passed in 39.10s at 39053b2"
+   },
+   {
+    "id": "reference_profile:R5",
+    "severity": "should_fix",
+    "verdict": "fixed",
+    "change": "every run re-measured in wave B; measured_commits is now derived from each run file's own commit field (captured at run start) by the collector, with includes_o7_fix; xrt_reference_golden.json regenerated (from `git archive 615ee61`, commit filled from the archive with commit_note); xrt_reference_hf_bf16.json regenerated at 39053b2 (clean)"
+   },
+   {
+    "id": "reference_profile:R6",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "xrt_scoring checks and profiling.decode_batch_invariance compare fp32 bit patterns (view(int32))",
+    "test": "test_strict_model_tiny.py::test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks (FAILED before: -0.0 vs +0.0 counted equal)"
+   },
+   {
+    "id": "reference_profile:R7",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "checks.n_checks / n_skipped / n_tokens_compared; all_byte_equal_to_train = n_checks > 0 and all(...); run_chain --score-file exits 1 when no check ran",
+    "test": "same test as R6 (no check requested / every chunking skipped -> False)"
+   },
+   {
+    "id": "reference_profile:R8",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "tiny tests: identities replaced by properties that can fail: every region's exclusive time >= 0 (nesting on the GPU timeline), instrumented total within [0.5x, 5x + 5 ms] of the clean call, every layer's regions charged to its own index; unattributed GPU time <= 10 % and GPU busy <= 1.25 x wall + 0.5 ms (one stream); compare_xrt against a payload with one flipped mantissa bit (n-1 equal, exact |d|)"
+   },
+   {
+    "id": "reference_profile:R9",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "REPORT STATUS: triton checks W-1/W/W+1 (on the long sequence only), golden W only"
+   },
+   {
+    "id": "reference_profile:R10",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "REPORT wording: strict global attention ~2x slower than HF's sdpa kernel per layer; GEMM gap > total gap (offset by faster non-GEMM ops); det_gemm share as measured; the paged-cache scatter remark marked as an expectation"
+   },
+   {
+    "id": "reference_profile:R11",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "logprobs(mode='decode', timings=) and xrt_scoring record prompt_prefill_seconds and decode_step_seconds separately (plus the context of every step); REPORT quotes per-step costs without the prompt prefill"
+   },
+   {
+    "id": "reference_profile:R12",
+    "severity": "nit",
+    "verdict": "fixed",
+    "change": "the triton scoring repeat is a second full process at the same commit, committed as xrt_reference_triton_repeat.json; the profiler (gpu) view runs 3 times per config (kernel_profile_repeats); KVPlan._seq_index removed. Decode per-step series: xrt checks decode_step_seconds"
+   }
+  ],
+  "tiny_tests": [
+   {
+    "test": "test_strict_model_tiny.py::test_attention_core_split_invariance_with_window_inside_blocks",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_backward_is_deterministic_across_runs_and_finite",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_decode_batch_and_kv_plans_reject_bad_sequence_ids",
+    "before_f91e8b6": "FAILED",
+    "before_failure": "Failed: DID NOT RAISE ValueError",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_decode_batch_matches_single_sequence_decode_bitwise",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_first_drift_localizer_catches_an_injected_difference",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_first_drift_localizer_reports_no_drift_on_equal_paths",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_golden_gemm_is_batch_invariant_and_row_parallel_tree_matches_reference",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_kernel_attribution_charges_gpu_time_to_regions",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_matches_transformers_tiny_model_at_tolerance",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_official_config_node_names_match_operator_trace",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_region_timer_regions_nest_bound_overhead_and_keep_bits",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_tiny_config_has_real_schedule_and_padding",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[150-20-1000]",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[150-20-1024]",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[3-5-1000]",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_train_prefill_chunked_decode_are_byte_equal[3-5-1024]",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_tree_sum_is_row_independent_and_exact_on_integers",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_triton_backend_requires_sibling_ops_or_allow_partial",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_window_eviction_happens_and_keeps_bits",
+    "before_f91e8b6": "PASSED",
+    "before_failure": null,
+    "before_failure_kind": null,
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks",
+    "before_f91e8b6": "FAILED",
+    "before_failure": "assert (True is False)",
+    "before_failure_kind": "behaviour (wrong result / did not raise / did not warn)",
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   },
+   {
+    "test": "test_strict_model_tiny.py::test_xrt_scoring_writes_hex_of_train_logp_and_rollout_forms_agree",
+    "before_f91e8b6": "FAILED",
+    "before_failure": "KeyError: 'n_checks'",
+    "before_failure_kind": "api_missing (new name/field; says nothing about behaviour)",
+    "after_vllm_env": "PASSED",
+    "after_megatron_env": "PASSED"
+   }
+  ],
+  "tiny_tests_summary": {
+   "count": 21,
+   "before_failed": 3,
+   "after_passed_vllm_env": 21,
+   "after_passed_megatron_env": 21
+  },
+  "real_weights_pytest": {
+   "command": "MUSEGLIMMER_CHECKPOINT=~/models/Muse-Glimmer-30B MUSEGLIMMER_BACKEND=triton pytest tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA",
+   "commit": "39053b2",
+   "passed": [
+    "tests/models/muse_glimmer/test_full_model_chain.py::test_full_model_chain_prompt256_completion32",
+    "tests/models/muse_glimmer/test_full_model_chain.py::test_batched_decode_is_batch_invariant_with_eviction"
+   ],
+   "summary": "2 passed in 39.10s"
+  }
+ }
+}

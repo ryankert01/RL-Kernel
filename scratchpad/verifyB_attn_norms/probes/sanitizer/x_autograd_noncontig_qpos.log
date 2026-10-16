@@ -1,0 +1,4 @@
+========= COMPUTE-SANITIZER
+RAISED gated_attention_bwd requires contiguous ascending q_pos inside every sequence
+CHILD-OK
+========= ERROR SUMMARY: 0 errors

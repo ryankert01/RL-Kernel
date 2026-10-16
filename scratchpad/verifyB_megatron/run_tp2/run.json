@@ -1,0 +1,446 @@
+{
+ "row": "megatron_runtime",
+ "tp": 2,
+ "status": "complete",
+ "commit": "2447025787b16610e3a7a93e1e43d4995b2af777",
+ "dirty": false,
+ "env": {
+  "python": "3.12.15",
+  "torch": "2.13.0+cu129",
+  "cuda": "12.9",
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "triton": "3.7.1",
+  "transformer_engine": "2.20.2",
+  "megatron_core": "0.20.0+913159367",
+  "megatron_bridge": "0.7.0+d86a5c09b",
+  "transformers": "5.17.0"
+ },
+ "command": "/home/ubuntu/envs/megatron/bin/python -m rl_engine.models.muse_glimmer.runtime.run_megatron_strict --tp 2 --checks xrt,repeat,packing --packing-budgets 512 --xrt-out-dir /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp2 --results /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp2/run.json",
+ "cuda_visible_devices": "0,1",
+ "inputs": {
+  "xrt_file": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-11/reports/muse_glimmer_poc/data/xrt_tokens.json",
+  "sequences": [
+   {
+    "id": "gsm8k_test_0",
+    "len": 191,
+    "completion_start": 136
+   },
+   {
+    "id": "gsm8k_test_1",
+    "len": 146,
+    "completion_start": 99
+   },
+   {
+    "id": "gsm8k_test_2",
+    "len": 251,
+    "completion_start": 122
+   },
+   {
+    "id": "gsm8k_test_3",
+    "len": 146,
+    "completion_start": 107
+   },
+   {
+    "id": "gsm8k_test_4",
+    "len": 273,
+    "completion_start": 181
+   },
+   {
+    "id": "gsm8k_test_5",
+    "len": 274,
+    "completion_start": 125
+   },
+   {
+    "id": "gsm8k_test_6",
+    "len": 202,
+    "completion_start": 114
+   },
+   {
+    "id": "gsm8k_test_7",
+    "len": 294,
+    "completion_start": 138
+   },
+   {
+    "id": "gsm8k_long_window",
+    "len": 2439,
+    "completion_start": 2261
+   }
+  ],
+  "total_tokens": 4216,
+  "scored_tokens": 933
+ },
+ "config": {
+  "model": "/home/ubuntu/models/Muse-Glimmer-30B",
+  "tp": 2,
+  "xrt_file": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-11/reports/muse_glimmer_poc/data/xrt_tokens.json",
+  "xrt_out_dir": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp2",
+  "results": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp2/run.json",
+  "grads_out": null,
+  "checks": "xrt,repeat,packing",
+  "lora_rank": 16,
+  "lr": 1e-05,
+  "seed": 0,
+  "grad_b_std": 0.001,
+  "micro_batch_tokens": 4096,
+  "packing_budgets": "512",
+  "bench_tokens": "512,1024,2048,4096,8192",
+  "bench_warmup": 1,
+  "bench_repeats": 3,
+  "no_checkpoint": false
+ },
+ "checks": {
+  "xrt_strict": {
+   "seconds": 3.7719914430053905,
+   "memory": [
+    {
+     "rank": 0,
+     "peak_allocated_gib": 31.941094875335693,
+     "allocated_gib": 31.428812503814697,
+     "peak_reserved_gib": 32.302734375
+    },
+    {
+     "rank": 1,
+     "peak_allocated_gib": 31.941094875335693,
+     "allocated_gib": 31.428812503814697,
+     "peak_reserved_gib": 32.302734375
+    }
+   ],
+   "lora": "enabled, B = 0",
+   "per_sequence": [
+    {
+     "id": "gsm8k_test_0",
+     "n": 55,
+     "sum_logp": -98.95499420166016,
+     "min_logp": -34.04236602783203
+    },
+    {
+     "id": "gsm8k_test_1",
+     "n": 47,
+     "sum_logp": -87.4958906173706,
+     "min_logp": -31.83074951171875
+    },
+    {
+     "id": "gsm8k_test_2",
+     "n": 129,
+     "sum_logp": -128.48301696777344,
+     "min_logp": -31.46825408935547
+    },
+    {
+     "id": "gsm8k_test_3",
+     "n": 39,
+     "sum_logp": -88.74944496154785,
+     "min_logp": -30.27586555480957
+    },
+    {
+     "id": "gsm8k_test_4",
+     "n": 92,
+     "sum_logp": -123.15543460845947,
+     "min_logp": -33.5208740234375
+    },
+    {
+     "id": "gsm8k_test_5",
+     "n": 149,
+     "sum_logp": -175.03350067138672,
+     "min_logp": -31.623485565185547
+    },
+    {
+     "id": "gsm8k_test_6",
+     "n": 88,
+     "sum_logp": -102.17814064025879,
+     "min_logp": -32.879642486572266
+    },
+    {
+     "id": "gsm8k_test_7",
+     "n": 156,
+     "sum_logp": -170.17699337005615,
+     "min_logp": -33.51570129394531
+    },
+    {
+     "id": "gsm8k_long_window",
+     "n": 178,
+     "sum_logp": -133.6430959701538,
+     "min_logp": -33.83673095703125
+    }
+   ],
+   "file": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp2/xrt_megatron_strict_tp2.json",
+   "file_sha256": "449c2453d1070a862875cda243b5636b93c1328b7e978c5a5f470b6d2ce897b4"
+  },
+  "repeat": {
+   "mismatches_per_sequence": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "total_mismatches": 0,
+   "tokens": 933,
+   "torch_equal": true
+  },
+  "grad_setup": {
+   "lora_b_std": 0.001,
+   "lora_b_seed": 1,
+   "loss": "sum_i sum_t lp[i,t] * g[i,t], g = (+1 if i even else -1)/n_i"
+  },
+  "packing": {
+   "elements": 104792064,
+   "per_budget": [
+    {
+     "micro_batch_tokens": 4096,
+     "micro_batches": 2,
+     "recompute_logp_mismatches": 0,
+     "grad_bit_mismatching_elements_vs_default": 0,
+     "logprob_bit_mismatches_vs_default": 0,
+     "aggregate_sha256": "1df6d60bcca6f2c675b24ff54650bd1ac18a0cebc793cecb46761d4496f5ad9c",
+     "memory": [
+      {
+       "rank": 0,
+       "peak_allocated_gib": 35.49607181549072,
+       "allocated_gib": 31.428816318511963,
+       "peak_reserved_gib": 37.37890625
+      },
+      {
+       "rank": 1,
+       "peak_allocated_gib": 35.49606370925903,
+       "allocated_gib": 31.428812503814697,
+       "peak_reserved_gib": 37.37890625
+      }
+     ]
+    },
+    {
+     "micro_batch_tokens": 512,
+     "micro_batches": 6,
+     "recompute_logp_mismatches": 0,
+     "grad_bit_mismatching_elements_vs_default": 0,
+     "logprob_bit_mismatches_vs_default": 0,
+     "aggregate_sha256": "1df6d60bcca6f2c675b24ff54650bd1ac18a0cebc793cecb46761d4496f5ad9c",
+     "memory": [
+      {
+       "rank": 0,
+       "peak_allocated_gib": 35.49607276916504,
+       "allocated_gib": 31.428816318511963,
+       "peak_reserved_gib": 37.37890625
+      },
+      {
+       "rank": 1,
+       "peak_allocated_gib": 35.49606466293335,
+       "allocated_gib": 31.428812503814697,
+       "peak_reserved_gib": 37.37890625
+      }
+     ]
+    }
+   ],
+   "bitwise_invariant": true
+  }
+ },
+ "load": {
+  "init_seconds": 149.1397650870058,
+  "bridge_load_seconds": 88.00920414924622,
+  "memory_after_load": [
+   {
+    "rank": 0,
+    "peak_allocated_gib": 36.161893367767334,
+    "allocated_gib": 31.428812503814697,
+    "peak_reserved_gib": 36.328125
+   },
+   {
+    "rank": 1,
+    "peak_allocated_gib": 36.161893367767334,
+    "allocated_gib": 31.428812503814697,
+    "peak_reserved_gib": 36.328125
+   }
+  ]
+ },
+ "provenance": {
+  "engine": "StrictTrainer",
+  "runtime": "megatron-bridge",
+  "strict": true,
+  "tp": 2,
+  "load_seconds": 88.00920414924622,
+  "step_count": 0,
+  "lr": 1e-05,
+  "micro_batch_tokens": 4096,
+  "packing_rule": "micro_batches(lengths, micro_batch_tokens): greedy, order-preserving packs of <= budget tokens (a longer sequence is its own pack); the logprob and LoRA-gradient bits do not depend on the packing (batch-invariant forward, per-sequence gradient fold)",
+  "torch_flags": {
+   "allow_tf32": false,
+   "cudnn_deterministic": true,
+   "cublas_workspace_config": ":4096:8",
+   "fp32_matmul_precision": "highest"
+  },
+  "binding": "megatron_bridge_native_hybridmodel_strict",
+  "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+  "tp_collective": "nccl_all_gather_data_movement",
+  "ops": {
+   "normalized_embedding": "strict:norms.normalized_embedding",
+   "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+   "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+   "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+   "rope_rows": "strict:qknorm_rope.rope_rows",
+   "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+   "silu_mul": "strict:swiglu_ffn.swiglu",
+   "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen(num_q_heads,num_kv_heads) + gated_attention_bwd.{gated_attention_bwd_preprocess,strict_gated_attention_bwd_partials,kv_partials_subtree} + canonical_tree.combine_tree (per-rank heads)",
+   "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+   "gemm_token_grad": "strict:ops.det_gemm.fast_det_gemm(ragged_k=True): T_pad=roundup(T,256), 8 chunks",
+   "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+   "all_strict": true
+  },
+  "allow_fallback": false,
+  "attention_heads_per_rank": {
+   "q_heads": 16,
+   "kv_heads": 1,
+   "q_head_start": 0,
+   "kv_head": 0,
+   "replicas": 1
+  },
+  "rope_table_sha256": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+  "lora": {
+   "rank": 16,
+   "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+   "grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+   "enabled": true,
+   "seed": 0
+  },
+  "vision_drop": {
+   "dropped": [
+    "vision_tower",
+    "vision_adapter",
+    "vision_projection"
+   ],
+   "vision_param_gib": 3.579716682434082,
+   "allocated_drop_gib": 3.579716682434082
+  },
+  "checkpoint_layers": true,
+  "canonical_chunks": 8,
+  "vocab_tiles": {
+   "rows": 25344,
+   "local": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "padded_vocab": 202752
+  },
+  "final_norm_roundtrip_mismatches": 1120,
+  "memory_gib": {
+   "bound_start": 29.586276054382324,
+   "after_vision_drop": 26.006558895111084,
+   "after_weight_views": 31.151102542877197,
+   "model_params": 25.943081855773926
+  },
+  "notes": [
+   "dropped ['vision_tower', 'vision_adapter', 'vision_projection'] (text-only trainer): 3.580 GiB of vision parameters, memory_allocated fell by 3.580 GiB",
+   "embedding table gathered on every rank (TP>1)",
+   "lm_head redistributed to canonical tiles [0, 1, 2, 3] on this rank",
+   "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+  ],
+  "lora_grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+  "recompute_check": "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)",
+  "lora_sha256": "857c076eb67dcd332dc04906638bc62d134543e1e6c11c036c9d71fade53ddd9",
+  "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+  "gpu_ids": [
+   0,
+   1
+  ],
+  "init_seconds": 149.13962364196777,
+  "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1"
+ },
+ "provenance_end": {
+  "engine": "StrictTrainer",
+  "runtime": "megatron-bridge",
+  "strict": true,
+  "tp": 2,
+  "load_seconds": 88.00920414924622,
+  "step_count": 0,
+  "lr": 1e-05,
+  "micro_batch_tokens": 4096,
+  "packing_rule": "micro_batches(lengths, micro_batch_tokens): greedy, order-preserving packs of <= budget tokens (a longer sequence is its own pack); the logprob and LoRA-gradient bits do not depend on the packing (batch-invariant forward, per-sequence gradient fold)",
+  "torch_flags": {
+   "allow_tf32": false,
+   "cudnn_deterministic": true,
+   "cublas_workspace_config": ":4096:8",
+   "fp32_matmul_precision": "highest"
+  },
+  "binding": "megatron_bridge_native_hybridmodel_strict",
+  "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+  "tp_collective": "nccl_all_gather_data_movement",
+  "ops": {
+   "normalized_embedding": "strict:norms.normalized_embedding",
+   "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+   "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+   "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+   "rope_rows": "strict:qknorm_rope.rope_rows",
+   "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+   "silu_mul": "strict:swiglu_ffn.swiglu",
+   "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen(num_q_heads,num_kv_heads) + gated_attention_bwd.{gated_attention_bwd_preprocess,strict_gated_attention_bwd_partials,kv_partials_subtree} + canonical_tree.combine_tree (per-rank heads)",
+   "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+   "gemm_token_grad": "strict:ops.det_gemm.fast_det_gemm(ragged_k=True): T_pad=roundup(T,256), 8 chunks",
+   "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+   "all_strict": true
+  },
+  "allow_fallback": false,
+  "attention_heads_per_rank": {
+   "q_heads": 16,
+   "kv_heads": 1,
+   "q_head_start": 0,
+   "kv_head": 0,
+   "replicas": 1
+  },
+  "rope_table_sha256": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+  "lora": {
+   "rank": 16,
+   "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+   "grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+   "enabled": true,
+   "seed": 0
+  },
+  "vision_drop": {
+   "dropped": [
+    "vision_tower",
+    "vision_adapter",
+    "vision_projection"
+   ],
+   "vision_param_gib": 3.579716682434082,
+   "allocated_drop_gib": 3.579716682434082
+  },
+  "checkpoint_layers": true,
+  "canonical_chunks": 8,
+  "vocab_tiles": {
+   "rows": 25344,
+   "local": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "padded_vocab": 202752
+  },
+  "final_norm_roundtrip_mismatches": 1120,
+  "memory_gib": {
+   "bound_start": 29.586276054382324,
+   "after_vision_drop": 26.006558895111084,
+   "after_weight_views": 31.151102542877197,
+   "model_params": 25.943081855773926
+  },
+  "notes": [
+   "dropped ['vision_tower', 'vision_adapter', 'vision_projection'] (text-only trainer): 3.580 GiB of vision parameters, memory_allocated fell by 3.580 GiB",
+   "embedding table gathered on every rank (TP>1)",
+   "lm_head redistributed to canonical tiles [0, 1, 2, 3] on this rank",
+   "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+  ],
+  "lora_grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+  "recompute_check": "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)",
+  "lora_sha256": "04c604ff2f2460b4e26e38011e204117fae8ac74d3be67f5ed239f6eeb66ef58",
+  "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+  "gpu_ids": [
+   0,
+   1
+  ],
+  "init_seconds": 149.13962364196777,
+  "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1"
+ }
+}

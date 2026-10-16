@@ -1,0 +1,26 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank1 17:00:07] start pid=288240 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 17:00:07] start pid=288239 world=2 launcher=torchrun CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 17:00:07] client connected
+[trainer_server rank1 17:00:08] trainer MockTrainer built in 1.2 s[trainer_server rank0 17:00:08] trainer MockTrainer built in 1.2 s
+
+[trainer_server rank0 17:00:09] token_logprobs id=1 ok=True compute=24.3 ms
+[trainer_server rank0 17:00:09] step id=2 ok=True compute=38.3 ms
+[trainer_server rank0 17:00:09] export_lora id=3 ok=True compute=0.9 ms
+[trainer_server rank0 17:00:09] token_logprobs id=4 ok=True compute=22.2 ms
+[trainer_server rank0 17:00:09] step id=5 ok=True compute=40.1 ms
+[trainer_server rank0 17:00:09] export_lora id=6 ok=True compute=0.9 ms
+[trainer_server rank0 17:00:09] token_logprobs id=7 ok=True compute=20.8 ms
+[trainer_server rank0 17:00:09] step id=8 ok=True compute=44.5 ms
+[trainer_server rank0 17:00:09] export_lora id=9 ok=True compute=1.1 ms
+[trainer_server rank0 17:00:09] token_logprobs id=10 ok=True compute=21.8 ms
+[trainer_server rank0 17:00:09] step id=11 ok=True compute=41.4 ms
+[trainer_server rank0 17:00:09] export_lora id=12 ok=True compute=2.2 ms
+[trainer_server rank0 17:00:09] close id=13 ok=True compute=0.0 ms
+[trainer_server rank0 17:00:09] bye
+[trainer_server rank1 17:00:09] bye

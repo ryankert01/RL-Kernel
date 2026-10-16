@@ -1,0 +1,5 @@
+=== 22:26:02 strict (pool 3,7)
+=== 22:32:48 strict rc=0
+[22:32:46]   0/933 tokens differ, max|d| 0.000e+00, 2818 ms, peak 52.3 GiB
+[22:32:46] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_ablation/parts/part_strict.json
+=== 22:32:48 strict_gpu7 (pool 7)

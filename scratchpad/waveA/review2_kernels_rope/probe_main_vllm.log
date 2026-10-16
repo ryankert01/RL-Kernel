@@ -1,0 +1,46 @@
+[gpu-lease] using GPUs [4]
+{
+ "torch": "2.13.0+cu130",
+ "cuda": "13.0",
+ "canonical_sha_fresh": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "pinned": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+ "builders": {
+  "golden_ops.rope_table": {
+   "cuda_cos_mismatch": 0,
+   "cuda_sin_mismatch": 0,
+   "cpu_accepted": true,
+   "cpu_cos_mismatch_vs_cuda": 3916740
+  },
+  "fallback_ops.rope_table": {
+   "cuda_cos_mismatch": 0,
+   "cuda_sin_mismatch": 0,
+   "cpu_accepted": true,
+   "cpu_cos_mismatch_vs_cuda": 3916740
+  },
+  "strict_kernels._fb_rope_table": {
+   "cuda_cos_mismatch": 0,
+   "cuda_sin_mismatch": 0,
+   "cpu_accepted": true,
+   "cpu_cos_mismatch_vs_cuda": 3916740
+  }
+ },
+ "cpu_vs_cuda_first4096": {
+  "cos": 97294,
+  "sin": 99316
+ },
+ "cpu_table_through_strict_op": {
+  "raised": false,
+  "q_hat_mismatch": 19810,
+  "k_hat_mismatch": 1266
+ },
+ "legacy_local_none_silent_nope_q_mismatch": 15992816,
+ "verify_after_inplace_corruption": "raised RuntimeError",
+ "sha_reported_after_corruption": "ab8edf867f5b16bcde04e1fe0b9cfce5aa407bda2456fa7a1a2e2690a911390f",
+ "sha_actual_after_corruption": "ab8edf867f5b16bcde04e1fe0b9cfce5aa407bda2456fa7a1a2e2690a911390f",
+ "rope_rows_returns_corrupted_row": true,
+ "T0": "ok",
+ "T0_at": "ok",
+ "k_on_cpu": "ValueError: Pointer argument cannot be accessed from Triton (cpu tensor?)",
+ "local_str_False": "ValueError: a local (RoPE) layer needs positions",
+ "fp32_downstream_backward": "ok dq dtype torch.bfloat16"
+}

@@ -1,0 +1,24 @@
+[gpu-lease] using GPUs [6]
+Loading weights:   0%|          | 0/1436 [00:00<?, ?it/s]Loading weights:  34%|███▍      | 490/1436 [00:00<00:00, 4895.29it/s]Loading weights:  68%|██████▊   | 980/1436 [00:00<00:00, 3952.45it/s]Loading weights:  97%|█████████▋| 1387/1436 [00:00<00:00, 3574.37it/s]Loading weights: 100%|██████████| 1436/1436 [00:00<00:00, 3833.94it/s]
+[17:01:31] HF bf16 (sdpa) loaded in 17.5s; 55.55 GiB allocated
+[17:01:31] [hf] forward T=512
+USDT:2026-10-15 17:01:33 289363:289363 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 17:01:33 289363:289363 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[17:01:36]   total 157.8 ms (clean 149.6) peak 56.52 GiB
+[17:01:36] [hf] forward T=2048
+USDT:2026-10-15 17:01:40 289363:289363 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 17:01:41 289363:289363 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[17:01:43]   total 612.5 ms (clean 603.5) peak 59.41 GiB
+[17:01:44] [hf] forward T=4096
+USDT:2026-10-15 17:01:52 289363:289363 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 17:01:54 289363:289363 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[17:01:56]   total 1257.7 ms (clean 1248.1) peak 63.26 GiB
+[17:01:57] [hf] decode batch 1 context 2048
+USDT:2026-10-15 17:01:59 289363:289363 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 17:02:00 289363:289363 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[17:02:04]   step 202.33 ms (clean 130.34) peak 55.71 GiB
+[17:02:13] [hf] decode batch 16 context 2048
+USDT:2026-10-15 17:02:15 289363:289363 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 17:02:16 289363:289363 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[17:02:18]   step 205.87 ms (clean 136.07) peak 57.69 GiB
+[17:02:19] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/profile_hf.json

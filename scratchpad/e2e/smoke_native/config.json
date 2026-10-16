@@ -1,0 +1,43 @@
+{
+  "run_dir": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/smoke_native",
+  "steps": 1,
+  "prompts_per_step": 2,
+  "samples_per_prompt": 2,
+  "max_tokens": 32,
+  "temperature": 1.0,
+  "lora_rank": 16,
+  "lr": 1e-05,
+  "clip_eps": 0.2,
+  "kl_coef": 0.0,
+  "mode": "native/native",
+  "seed": 1234,
+  "model_path": "/home/ubuntu/models/Muse-Glimmer-30B",
+  "max_model_len": 4096,
+  "rollout_tp": 1,
+  "rollout_gpus": [
+    4
+  ],
+  "train_tp": 2,
+  "train_gpus": [
+    5,
+    6
+  ],
+  "sync_via_file": false,
+  "recheck_rollout_logprobs": true,
+  "mock": false,
+  "mock_perturb": 0.0,
+  "task": "gsm8k",
+  "data_dir": "/home/ubuntu/data/gsm8k",
+  "split": "train",
+  "limit_examples": null,
+  "trainer_bridge": true,
+  "trainer_python": "~/envs/megatron/bin/python",
+  "trainer_launcher": "process",
+  "trainer_factory": "rl_engine.models.muse_glimmer.runtime.strict_trainer:StrictTrainer",
+  "trainer_timeout_s": 3600.0,
+  "trainer_startup_timeout_s": 3600.0,
+  "mock_trainer_device": "cpu",
+  "profile_step": null,
+  "train_strict": false,
+  "rollout_strict": false
+}

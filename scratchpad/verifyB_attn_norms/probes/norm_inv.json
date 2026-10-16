@@ -1,0 +1,24 @@
+{
+ "norm_input_scale2": {
+  "rows": 4096,
+  "golden_new_equals_exact_div_rows": 4096,
+  "golden_old_equals_exact_div_rows": 3442,
+  "kernel_vs_old_inv_mismatch_rows": 958,
+  "kernel_vs_new_inv_mismatch_rows": 451,
+  "kernel_vs_old_y_flips": 46,
+  "kernel_vs_new_y_flips": 46,
+  "ss_cpu_equals_cuda_rows": 2135,
+  "inv_cpu_equals_cuda_rows_where_ss_equal": 1799
+ },
+ "embedding_rows_scale0.02": {
+  "rows": 4096,
+  "golden_new_equals_exact_div_rows": 4096,
+  "golden_old_equals_exact_div_rows": 3238,
+  "kernel_vs_old_inv_mismatch_rows": 1243,
+  "kernel_vs_new_inv_mismatch_rows": 626,
+  "kernel_vs_old_y_flips": 30,
+  "kernel_vs_new_y_flips": 93,
+  "ss_cpu_equals_cuda_rows": 2354,
+  "inv_cpu_equals_cuda_rows_where_ss_equal": 2174
+ }
+}

@@ -1,0 +1,16 @@
+[gpu-lease] using GPUs [7]
+[22:26:07] start probe_wave_b_before
+[22:26:12] probe_wave_b_before exit 0
+[22:26:12] start probe_wave_b_after
+[22:26:19] probe_wave_b_after exit 0
+[22:26:19] start bench_graph
+[22:26:33] bench_graph exit 0
+[22:26:33] start pytest_after_vllm
+[22:27:17] pytest_after_vllm exit 0
+[22:27:17] start pytest_after_megatron
+[22:28:06] pytest_after_megatron exit 0
+[22:28:06] start xrt_golden
+[22:45:40] xrt_golden exit 0
+[22:45:40] start chain_golden_2100
+[22:55:00] chain_golden_2100 exit 0
+[22:55:00] queue2 done

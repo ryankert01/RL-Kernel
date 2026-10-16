@@ -1,0 +1,35 @@
+{
+ "status_per_check": {
+  "tp1": "complete: identity 626/627, xrt, repeat 0/933, lora_noop 0/933, native, grad_repeat 0, packing invariant, step, bench 512..8192 (native reference OOM at 4096 fwd+bwd and at 8192)",
+  "tp2": "complete: identity 626/627, xrt == tp1 0/933, repeat 0, lora_noop 0, native, grad_repeat 0, packing invariant, grads == tp1 0/104792064, post-step hash == tp1, bench 512..8192 complete",
+  "tp4": "complete for identity 626/627, xrt == tp1 0/933, repeat 0, lora_noop 0, grad_repeat 0, packing invariant, grads == tp1, post-step hash == tp1; native and bench NOT RUN at tp4",
+  "tp8": "NOT RUN on the real model (needs 8 GPUs); gated behind MUSE_MEGATRON_ALLOW_UNTESTED_TP=8; simulated-TP unit tests only"
+ },
+ "measured_code": {
+  "tp1": "926da6585ea54d91100427b031112eea0f8cd5bd (dirty=false)",
+  "tp2": "926da6585ea54d91100427b031112eea0f8cd5bd (dirty=false)",
+  "tp4": "58deb442b16f49f499003eaaaf06ca9a0a607faf: a data-only commit on top of 926da65 (git diff --stat 926da65 58deb44 -- rl_engine tests is empty). The run recorded dirty=true because REPORT_megatron_strict.md (documentation, under rl_engine/) was being edited when the process started; git diff --stat 58deb44 5a809e3 -- rl_engine tests lists only that file, so every *.py measured equals 926da65."
+ },
+ "not_run": [
+  "TP8 real-model run (8 GPUs)",
+  "native forward / bench at TP4",
+  "cross-runtime byte-diff against post-O7 vLLM / reference dumps (the dumps on disk predate c88607f; integrator)"
+ ],
+ "o7_note": "The wave A Megatron strict TP1 dump (17dafef, pre-O7) equals xrt_reference_triton.json (f7d3723, pre-O7) 0/933; the new dump (926da65) differs from both in the same 194/933 tokens, consistent with the O7 fix (c88607f) being the only change in the forward bits.",
+ "review_verdicts": {
+  "megatron_runtime:R1": "fixed",
+  "megatron_runtime:R2": "fixed (packing-invariant accumulation)",
+  "megatron_runtime:R3": "fixed",
+  "megatron_runtime:R4": "fixed",
+  "megatron_runtime:R5": "fixed",
+  "megatron_runtime:R6": "fixed",
+  "megatron_runtime:R7": "fixed",
+  "megatron_runtime:R8": "fixed (real TP4 run; TP8 gated)",
+  "megatron_runtime:R9": "fixed",
+  "megatron_runtime:R10": "fixed",
+  "megatron_runtime:R11": "fixed",
+  "megatron_runtime:R12": "fixed",
+  "kernels_gemm:R1": "fixed",
+  "kernels_gemm:R2": "not fixed here (REPORT_det_gemm.md / test_det_gemm.py belong to the gemm row); regression test test_binding_dx_equals_ops_fast_det_gemm_autograd added (0 mismatches)"
+ }
+}

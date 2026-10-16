@@ -1,0 +1,230 @@
+{
+  "rollout_start": {
+    "engine": "MockRolloutEngine",
+    "runtime": "cpu-mock (no vLLM)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, polynomial exp/log, sequential sums",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [],
+    "max_model_len": 4096,
+    "seed": 1234,
+    "lora_sha256": "645e0419cc7ef68ee6b6d65b66f014d4499202ec533a670371008bcbaff6ab79",
+    "lora_loads": 1,
+    "generate_calls": 0,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "perturb": 0.0,
+    "logprob_temperature": 1.0
+  },
+  "trainer_start": {
+    "engine": "MockTrainer",
+    "runtime": "cpu-mock (no Megatron)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+    "tensor_parallel_size": 2,
+    "gpu_ids": [],
+    "device": "cpu",
+    "lora_rank": 4,
+    "lr": 0.001,
+    "optimizer": "Adam",
+    "seed": 1234,
+    "optimizer_steps": 0,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "lora_storage": "fp32 master -> bf16 at use and at export",
+    "build_delay_s": 0.0,
+    "bridge": {
+      "protocol": "muse_glimmer_trainer_bridge_v1",
+      "client": "RemoteTrainer",
+      "launcher": "process",
+      "python": "/home/ubuntu/envs/megatron/bin/python",
+      "factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+      "factory_kwargs": {
+        "device": "cpu"
+      },
+      "command": [
+        "/home/ubuntu/envs/megatron/bin/python",
+        "-m",
+        "rl_engine.models.muse_glimmer.e2e.trainer_server",
+        "--spec",
+        "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/trainer_server/spec.json"
+      ],
+      "server_pid": 442588,
+      "gpu_ids_physical": [],
+      "server_cuda_visible_devices": "",
+      "tcp_nodelay": true,
+      "hello": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "pid": 442588,
+        "world": 1,
+        "launcher": "process",
+        "trainer_class": "rl_engine.models.muse_glimmer.e2e.mocks.MockTrainer",
+        "build_s": 1.4619743430012022,
+        "server_unix": {
+          "start": 1792102144.7379591,
+          "build_start": 1792102144.7387757,
+          "client_connected": 1792102144.7767625,
+          "build_end": 1792102146.2007508
+        },
+        "tcp_nodelay": true,
+        "versions": {
+          "python": "3.12.15",
+          "executable": "/home/ubuntu/envs/megatron/bin/python",
+          "torch": "2.13.0+cu129",
+          "torch_cuda": "12.9",
+          "triton": "3.7.1",
+          "megatron-core": "0.20.0+913159367",
+          "megatron-bridge": "0.7.0+d86a5c09b",
+          "transformer_engine": "2.20.2",
+          "transformers": "5.17.0",
+          "vllm": null
+        },
+        "devices": {
+          "cuda_visible_devices": "",
+          "devices": [],
+          "device_count": 0
+        },
+        "memory": null,
+        "startup_s": 3.2769087990018306,
+        "startup": {
+          "launch_unix": 1792102143.2117856,
+          "server_start_after_launch_s": 1.5261735916137695,
+          "server_build_start_after_launch_s": 1.5269901752471924,
+          "server_build_end_after_launch_s": 2.9889652729034424,
+          "client_connected_after_launch_s": 1.5649769306182861,
+          "wait_ready_called_after_launch_s": 3.9601000025868416e-05,
+          "ready_after_launch_s": 3.2769087990018306,
+          "wait_ready_blocked_s": 3.2768691980018048
+        }
+      },
+      "calls": 2,
+      "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/trainer_server/trainer_server.log"
+    }
+  },
+  "rollout_end": {
+    "engine": "MockRolloutEngine",
+    "runtime": "cpu-mock (no vLLM)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, polynomial exp/log, sequential sums",
+    "tensor_parallel_size": 1,
+    "gpu_ids": [],
+    "max_model_len": 4096,
+    "seed": 1234,
+    "lora_sha256": "1fd900786a05cb63a842e195ed30edc9b84c727f44a779a4ac9628d428929b57",
+    "lora_loads": 5,
+    "generate_calls": 4,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "perturb": 0.0,
+    "logprob_temperature": 1.0
+  },
+  "trainer_end": {
+    "engine": "MockTrainer",
+    "runtime": "cpu-mock (no Megatron)",
+    "strict": true,
+    "logprob_path": "strict: fp32 exactly-rounded primitives, batched right-padded (invariant)",
+    "tensor_parallel_size": 2,
+    "gpu_ids": [],
+    "device": "cpu",
+    "lora_rank": 4,
+    "lr": 0.001,
+    "optimizer": "Adam",
+    "seed": 1234,
+    "optimizer_steps": 4,
+    "tiny_config": {
+      "vocab_size": 259,
+      "hidden_size": 32,
+      "intermediate_size": 64,
+      "num_layers": 2,
+      "rms_norm_eps": 1e-05
+    },
+    "base_seed": 20261015,
+    "lora_storage": "fp32 master -> bf16 at use and at export",
+    "build_delay_s": 0.0,
+    "bridge": {
+      "protocol": "muse_glimmer_trainer_bridge_v1",
+      "client": "RemoteTrainer",
+      "launcher": "process",
+      "python": "/home/ubuntu/envs/megatron/bin/python",
+      "factory": "rl_engine.models.muse_glimmer.e2e.mocks:MockTrainer",
+      "factory_kwargs": {
+        "device": "cpu"
+      },
+      "command": [
+        "/home/ubuntu/envs/megatron/bin/python",
+        "-m",
+        "rl_engine.models.muse_glimmer.e2e.trainer_server",
+        "--spec",
+        "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/trainer_server/spec.json"
+      ],
+      "server_pid": 442588,
+      "gpu_ids_physical": [],
+      "server_cuda_visible_devices": "",
+      "tcp_nodelay": true,
+      "hello": {
+        "protocol": "muse_glimmer_trainer_bridge_v1",
+        "pid": 442588,
+        "world": 1,
+        "launcher": "process",
+        "trainer_class": "rl_engine.models.muse_glimmer.e2e.mocks.MockTrainer",
+        "build_s": 1.4619743430012022,
+        "server_unix": {
+          "start": 1792102144.7379591,
+          "build_start": 1792102144.7387757,
+          "client_connected": 1792102144.7767625,
+          "build_end": 1792102146.2007508
+        },
+        "tcp_nodelay": true,
+        "versions": {
+          "python": "3.12.15",
+          "executable": "/home/ubuntu/envs/megatron/bin/python",
+          "torch": "2.13.0+cu129",
+          "torch_cuda": "12.9",
+          "triton": "3.7.1",
+          "megatron-core": "0.20.0+913159367",
+          "megatron-bridge": "0.7.0+d86a5c09b",
+          "transformer_engine": "2.20.2",
+          "transformers": "5.17.0",
+          "vllm": null
+        },
+        "devices": {
+          "cuda_visible_devices": "",
+          "devices": [],
+          "device_count": 0
+        },
+        "memory": null,
+        "startup_s": 3.2769087990018306,
+        "startup": {
+          "launch_unix": 1792102143.2117856,
+          "server_start_after_launch_s": 1.5261735916137695,
+          "server_build_start_after_launch_s": 1.5269901752471924,
+          "server_build_end_after_launch_s": 2.9889652729034424,
+          "client_connected_after_launch_s": 1.5649769306182861,
+          "wait_ready_called_after_launch_s": 3.9601000025868416e-05,
+          "ready_after_launch_s": 3.2769087990018306,
+          "wait_ready_blocked_s": 3.2768691980018048
+        }
+      },
+      "calls": 16,
+      "log": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_e2e/bench_cpu/mock_e2e/bridge_strict-strict_profiled/trainer_server/trainer_server.log"
+    }
+  }
+}

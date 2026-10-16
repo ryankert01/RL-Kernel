@@ -1,0 +1,218 @@
+[
+ {
+  "id": "kernels_rope:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 484,
+  "claim": "Finding qknorm_rope:4 is reported as \"real, fixed\" (REPORT row 47) and \"confirmed_fixed\" (kernels_rope.json line 238). The failure it describes still happens on every production call path. `local` defaults to None, `_check_layer_kind` returns early for None (lines 467-468), and none of the callers pass `local=` (vllm_strict.py:896, megatron_strict.py:511/514, reference/strict_model.py:138, strict_ops.py:226/228). The JSON's own evidence_after says `none_on_local_layer_raised: false` with the same 15,994,827 mismatches as before.",
+  "evidence": "My probe_main.py (vLLM env, at e891ecc): `qknorm_scaled_rope(q, k, None, None)` on data for a local layer runs without error, and 15,992,816 of 16,777,216 q_hat elements differ from the RoPE path. A git diff of 307fcf2...e891ecc shows no caller file changed.",
+  "suggested_fix": "Change the verdict to \"partially fixed: an opt-in explicit API was added; still open until call sites pass local=\" in the REPORT table and in findings[3].verdict. To fail closed now without editing other owners' files, have the legacy path emit a one-time warning and count its calls in trace(), or gate it behind an env flag that the E2E harness sets so that `local` becomes required. Then land integration patch 1."
+ },
+ {
+  "id": "kernels_rope:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 147,
+  "claim": "Finding qknorm_rope:1 is reported as \"real, fixed\" / \"CPU build raises\". Only this module's `rope_table` raises. The strict op still accepts any fp32 (T,128) table. The other three table builders in the repo still build on CPU without error, and the runtimes bind them as fallbacks. No runtime calls canonical_rope_table or verify. The finding's failure scenario (a table built on CPU and moved to CUDA) therefore still passes silently, and the O4 requirement that the table be built once, cached and identical across runtimes is still not enforced at runtime.",
+  "evidence": "probe_main.py, run in both envs: golden_ops.rope_table, fallback_ops.rope_table and strict_kernels._fb_rope_table all accept device='cpu', and each gives 3,916,740 cos elements that differ from the CUDA table. A CPU-built table moved to CUDA and passed to `qknorm_scaled_rope(..., local=True)` raises nothing and flips 19,810 q_hat and 1,266 k_hat elements. Fallback bindings: strict_ops.py:78 `fb.rope_table` and strict_kernels.py:732 `_fb_rope_table`.",
+  "suggested_fix": "Change the verdict to \"fixed in this module's builder; enforcement at the call sites is open\". In the integration requests, ask that golden_ops.rope_table, fallback_ops.rope_table and strict_kernels._fb_rope_table delegate to qknorm_rope.rope_table, or at least raise on non-CUDA devices. Also ask that both runtimes call canonical_rope_table(verify=True) and log rope_table_sha256, and that the orchestrator compares the two digests."
+ },
+ {
+  "id": "kernels_rope:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 219,
+  "claim": "canonical_rope_table(verify=True) fails open once the digest is memoised. rope_table_sha256 caches the hex digest per key (lines 220-227) and never re-hashes, while the cached cos/sin are plain mutable tensors shared with every caller. After an in-place change, verify still passes and rope_table_sha256() still reports the pinned digest, so the logged provenance would be wrong.",
+  "evidence": "probe_verify_memo.py: verify=True at start-up, then `c.mul_(1+2**-20)` on the shared table. A second verify=True passes silently. rope_table_sha256() returns 088dbb8c... while the actual sha256 is d85662d6.... cos._version is 1.",
+  "suggested_fix": "Record cos._version and sin._version at build time. In canonical_rope_table and rope_rows, raise RuntimeError if either has changed (this is cheap and needs no sync). With verify=True, recompute the digest instead of reading the memo, or recompute whenever the version has changed. Add a negative test that corrupts the table and expects RuntimeError."
+ },
+ {
+  "id": "kernels_rope:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 255,
+  "claim": "rope_rows and qknorm_scaled_rope_at are documented to work during CUDA-graph capture (the range check is skipped there). If the first use of the canonical table happens inside a capture, the lazy 131072-row build is recorded but not executed, so the cached table holds uninitialised graph-pool memory. An eager caller before the first replay then gets wrong outputs with no error, and every replay re-runs the full 128 MiB table build.",
+  "evidence": "probe_graph_capture2.py: first `qknorm_scaled_rope_at` call is inside torch.cuda.graph. Right after capture the table's sha256 does not equal the pinned digest. An eager `qknorm_scaled_rope_at` at T=64 then returns finite output with 262,144 of 262,144 q_hat elements wrong and no error. After g.replay() the table matches the pinned digest.",
+  "suggested_fix": "In canonical_rope_table, when the table is not yet built and torch.cuda.is_current_stream_capturing() is true, raise RuntimeError('build canonical_rope_table before CUDA-graph capture'). Document that runtimes call canonical_rope_table(device, verify=True) at init, before warm-up and capture. Add a test for this."
+ },
+ {
+  "id": "kernels_rope:R5",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_qknorm_rope.md",
+  "line": 106,
+  "claim": "Every follow-up number (the probes, bench_series, bench_ab, the JSON builder) comes from scripts in a session scratchpad that is not committed. The wrappers also hard-code the implementer's worktree path (run_pytest.sh `W=/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-6`). Only the repo tests and the repo benchmark can be re-run from the repo, so the \"how to reproduce\" section does not work for anyone else.",
+  "evidence": "REPORT lines 103-116 and kernels_rope.json \"scripts\" all point to /tmp/claude-1000/.../scratchpad/rope_fu/. The scripts.note field says they are \"not committed\".",
+  "suggested_fix": "Commit probe_findings.py, bench_series.py, bench_ab.py and build_json.py under reports/muse_glimmer_poc/scripts/ or benchmarks/models/muse_glimmer/, with no hard-coded worktree paths, and point the REPORT and the JSON at them."
+ },
+ {
+  "id": "kernels_rope:R6",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_qknorm_rope.py",
+  "line": 550,
+  "claim": "verify=True is only tested on the happy path. Because `c is canonical_rope_table(DEV)[0]` holds whether or not verify does anything, a verify that never raises would still pass this test. Only the theta ValueError branch is exercised.",
+  "evidence": "test_canonical_table_fingerprint_is_pinned (lines 550-558) has no case where the digest mismatches.",
+  "suggested_fix": "Add one test that monkeypatches op.CANONICAL_ROPE_TABLE_SHA256 to a wrong value and expects RuntimeError, and one that corrupts a cache entry, expects RuntimeError, then restores it (this one depends on R3)."
+ },
+ {
+  "id": "kernels_rope:R7",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_qknorm_rope.py",
+  "line": 801,
+  "claim": "Some new tests cannot fail when the behaviour regresses. test_trace_records_int64_offsets, test_trace_records_layer_selection (761) and test_shard_tile_config_in_trace (672) only check hard-coded strings or values from tile_config()/trace(), so they would still pass if `.to(tl.int64)` were reverted. The one behavioural int64 guard (773) skips when the shared GPU has less than 24 GiB free. Several of the \"18 tests that fail on the old code\" fail only with AttributeError for new names or missing trace keys (for example test_other_repo_table_builders_are_bitwise_identical_on_cuda, test_layer_schedule_matches_manifest), so that count overstates how many tests detect a bug.",
+  "evidence": "tile_config line 337 hard-codes \"offsets\": \"int64\". The before log (rope_fu/before/pytest_new_tests_before.log) lists the trace-key and new-API tests among the 17 failures.",
+  "suggested_fix": "Replace the string test with a check on the compiled kernel, e.g. look for the i64 extension of program_id in `_qknorm_rope_fwd_kernel`'s TTIR, so it needs no large allocation. In tests_new.per_test, record why each test failed before the fix."
+ },
+ {
+  "id": "kernels_rope:R8",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_qknorm_rope.py",
+  "line": 584,
+  "claim": "The builder-identity regression test covers golden_ops and fallback_ops but not strict_kernels._fb_rope_table, which is the Megatron binding's fallback builder. The REPORT says \"all 4 table builders\" are guarded.",
+  "evidence": "Line 584: `for fn in (golden_ops.rope_table, fallback_ops.rope_table):`. My probe confirms _fb_rope_table is bitwise identical today, but nothing pins it.",
+  "suggested_fix": "Add `strict_kernels._fb_rope_table` to the tuple (it takes device as a torch.device)."
+ },
+ {
+  "id": "kernels_rope:R9",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/kernels_rope.json",
+  "line": 632,
+  "claim": "tests_summary_lines labels \"79 passed\" as test_qknorm_rope plus the megatron binding tests in the Megatron env, and the listed command runs both files. That command actually gives \"1 failed, 87 passed\". The 79-passed log contains only test_qknorm_rope. In addition, findings[2] (TP shards, a coverage gap with the kernel already correct) is labelled \"confirmed_fixed\".",
+  "evidence": "I ran `pytest test_qknorm_rope.py test_megatron_strict_binding.py` in the Megatron env at e891ecc and got 1 failed (test_lm_head_tiles_tp2_equals_tp1_and_reference), 87 passed. rope_fu/final/pytest_qknorm_rope_megatron.log contains only test_qknorm_rope.py tests.",
+  "suggested_fix": "Rename the key to test_qknorm_rope_megatron_env, or record \"87 passed, 1 failed (pre-existing lm_head TP2)\" with its command. Use a verdict such as \"coverage_gap_test_added\" for finding 3."
+ },
+ {
+  "id": "kernels_rope:R10",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/kernels_rope.json",
+  "line": 1,
+  "claim": "Some plot-ready series are confounded. In experiments.bench_series.plot, the before/after arrays differ by about 25% at T<=2048 because of host load, not code (the JSON's own host_load_note says this), so plotting them shows a false regression. after_local_fwd_GBps divides bytes by launch-bound wall time for small T. The REPORT also calls T=4096 GPU-bound, but its GPU time (about 54.6 µs) is the same as the launch floor.",
+  "evidence": "before_local_fwd_kernel_ms is about 44 µs and after is about 55 µs at T=1..2048. My CUDA-graph timing (20 launches per replay) gives T=4096 fwd 55.0 (old) vs 54.6 (new) µs, T=8192 101.17 vs 101.22, T=32768 379.9 vs 381.3.",
+  "suggested_fix": "Remove the before_* series from bench_series.plot or mark them as confounded. Add timings measured with CUDA-graph replay so that GPU time is reported separately from launch overhead, and limit GBps to T>=8192."
+ },
+ {
+  "id": "kernels_rope:R11",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/qknorm_rope.py",
+  "line": 567,
+  "claim": "trace() provenance is fixed text, not measured. rope_table.sha256 is the pinned constant, not the digest of a table built in this process, and layer_selection says \"explicit ... mismatch raises\" while every runtime uses the implicit legacy path. A runtime that records trace() would claim a canonical, verified table and explicit layer selection that it never used.",
+  "evidence": "Lines 567-585 are literals. No caller uses canonical_rope_table or local= (grep over runtime/ and reference/).",
+  "suggested_fix": "Rename the field to sha256_pinned and add sha256_built (None if this process never built the canonical table), plus the number of legacy local=None calls. Alternatively, document trace() as describing the op, not the runtime."
+ },
+ {
+  "id": "kernels_rope:R12",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_qknorm_rope.md",
+  "line": 212,
+  "claim": "The Design section's usage line still recommends building `rope_table(torch.arange(max_pos))` per device and the legacy `qknorm_scaled_rope(q, k, None, None)` call. This contradicts the follow-up, which makes canonical_rope_table/rope_rows and an explicit `local` the contract form.",
+  "evidence": "REPORT lines 212-214 compared with lines 139-153 and 174-183.",
+  "suggested_fix": "Update the usage line to `cos, sin = rope_rows(pos)` once per forward, then `qknorm_scaled_rope(q, k, cos, sin, local=True)` and `qknorm_scaled_rope(q, k, None, None, local=False)`."
+ },
+ {
+  "id": "reference_profile:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/reference/strict_model.py",
+  "line": 427,
+  "claim": "decode_batch (and a KVPlan built by hand) does not check that the sequence ids are unique and in range. A duplicated seq gives a silently wrong logp. A negative seq id is read through Python negative indexing as the last sequence, then raises a device-side assert that kills the CUDA context. Strict ops must fail closed.",
+  "evidence": "Real-weights probe (/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_reference_profile/p7_real2.log): decode_batch(cache,[3,3],[tok3,77],[tgt3,tgt3],commit=False) gave no error, and row 0 = -13.978 vs -14.210 for the same step at batch 1 (row 1's K/V overwrote the shared slot before attention read it). With commit=True, advance() would add 2 to seq 3's length while only one slot was written. decode_batch(cache,[-1],...) gave 'AcceleratorError: CUDA error: device-side assert triggered' from index_select at line 198, after the K/V had already been written into seq max_seqs-1's slot (paged_kv.append with seq=-1).",
+  "suggested_fix": "In decode_batch and at the top of _run_inner for a KVPlan, raise ValueError unless len(set(seqs)) == len(seqs), 0 <= s < cache.max_seqs, len(seqs) == len(starts) == len(lens), and (for decode_batch) starts[j] == cache.seq_lens[seqs[j]]. Add a tiny test that duplicate and negative ids raise."
+ },
+ {
+  "id": "reference_profile:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/reference/profiling.py",
+  "line": 509,
+  "claim": "The strict paged-prefill peak memory in the REPORT table and in stacked_bars.peak_allocated_gib is inflated by up to 8 unused Session caches that are allocated before measure(). The rows suggest paged prefill costs about +1.4 GiB at T=4096; it costs nothing extra.",
+  "evidence": "reference_profile.json: prefill_paged mem_allocated_before_gib = 52.16/52.69/53.41, vs 51.98 for prefill_train. The extra 0.18/0.71/1.43 GiB equals 7 idle sessions × (52 layers × 2 × (T/16+1) pages × 8 KiB): 1.43 GiB at T=4096. activation_peak_gib is identical for paged and train (0.117/0.464/0.928). REPORT line 98 lists the paged peak as '52.28 / 53.16 / 54.33' with no caveat.",
+  "suggested_fix": "Allocate each session just before its call outside the timed region (or call reset_peak_memory_stats after the pre-allocation and subtract their bytes). Alternatively, plot activation_peak_gib and state in the REPORT that the paged peak includes the pre-allocated caches."
+ },
+ {
+  "id": "reference_profile:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/reference/collect_results.py",
+  "line": 180,
+  "claim": "The collector recomputes run-level by_group_gpu_ms with the kv_cache group but leaves the stale runs[i].kernel_profile.by_group_gpu_ms (computed at 7401fc9, before kv_cache existed) in the JSON. That stale field charges kv_write/kv_evict to attention_local/global, so the same file holds two contradictory GPU group breakdowns.",
+  "evidence": "strict decode B=16: kernel_profile.by_group_gpu_ms has attention_local 20.38 ms, attention_global 6.84 ms and no kv_cache. runs[i].by_group_gpu_ms / stacked_bars.gpu_ms has attention_local 5.93, attention_global 1.99, kv_cache 20.84. Paged prefill T=4096 shows the same split. A plotter that follows the REPORT's '.kernel_profile.*' plot-map path to the nested object gets the wrong attention bars.",
+  "suggested_fix": "In profile_record, overwrite kp['by_group_gpu_ms'] with the regrouped values (or delete the nested key) so only one grouping exists. Optionally store the GROUPS version that produced each field."
+ },
+ {
+  "id": "reference_profile:R4",
+  "severity": "should_fix",
+  "file": "tests/models/muse_glimmer/test_strict_model_tiny.py",
+  "line": 279,
+  "claim": "Batched decode (G2 at the model level) has no repeatable gate on the triton op set. The tiny test is golden-only, and the real-weights evidence is a single profiling run: B ∈ {1, 16, permuted 4} at context exactly 2048, with no page eviction and no batch 2. The contract asks for {2, 4, 16} as tests.",
+  "evidence": "profiling.decode_batch_invariance runs once inside run_profile.py, not under pytest. The context of 2048..2060 never triggers evict_window (eviction needs seq_len − W ≥ 15). My probes found the property does hold: B=256 vs B=1 10/10; reversed B=256 256/256; sub-batches 2/3/17/255 all equal; B=256 == train forward 3/3 plus a second step; B=4 across the window (lengths 2047/2064/2100/2200, 507 evicted pages) gave B=1 == B=4 == permuted commit 40/40 and decode == train forward 20/20. Only a probe, not a gate, shows this.",
+  "suggested_fix": "Add an opt-in real-weights pytest (MUSEGLIMMER_CHECKPOINT, like test_full_model_chain.py) that runs decode_batch at B ∈ {1, 2, 4, 16} plus a permutation, with at least one context > W+16 so eviction happens, and ties one sequence to logprobs(mode='train'). Compare via .view(torch.int32)."
+ },
+ {
+  "id": "reference_profile:R5",
+  "severity": "should_fix",
+  "file": "reports/muse_glimmer_poc/data/xrt_reference_golden.json",
+  "line": 1,
+  "claim": "Provenance in the committed data is wrong or inconsistent. The golden file's commit field says 86d1087 (clean), but the run started at 69b4409. notes.measured_commits says xrt_reference_hf_bf16 was measured at 86d1087, while that file's own commit field says 422c33b with dirty=true.",
+  "evidence": "p1_xrt.py output: golden commit {'sha': '86d1087…', 'dirty': False}; hf_bf16 commit {'sha': '422c33b…', 'dirty': True}. reference_profile.json notes.measured_commits: 'xrt_reference_hf_bf16: 86d1087', 'xrt_reference_golden: 69b4409; the file's commit field says 86d1087…'. At 69b4409, xrt_scoring.py:169 called source_commit() when the file was written. The REPORT does document the golden discrepancy (line 137). Anyone reading xrt_reference_golden.json on its own (e.g. tools/xrt_diff.py) gets the wrong sha.",
+  "suggested_fix": "Add a 'commit_measured' / 'commit_note' key to xrt_reference_golden.json (69b4409, plus a dirty flag if known), or re-score golden at a clean HEAD (~20 min). Change notes.measured_commits.xrt_reference_hf_bf16 to '422c33b + uncommitted HF scoring code (committed as 86d1087)'."
+ },
+ {
+  "id": "reference_profile:R6",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/reference/xrt_scoring.py",
+  "line": 141,
+  "claim": "The 'byte_equal' checks use float equality (torch.eq), not a bit-pattern compare. -0.0 == +0.0 counts as equal. profiling.decode_batch_invariance (profiling.py:588-589) does the same.",
+  "evidence": "same = torch.eq(other, lp). The committed files contain no -0.0 or NaN, and logp == 0.0 occurs on 1-2 tokens, so the current results are unaffected. The tiny region-timer test already compares bits with .view(torch.int32), which is the right pattern.",
+  "suggested_fix": "Compare other.view(torch.int32) == lp.view(torch.int32) (likewise in decode_batch_invariance), and keep max_abs_diff for information."
+ },
+ {
+  "id": "reference_profile:R7",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/reference/xrt_scoring.py",
+  "line": 157,
+  "claim": "all_byte_equal_to_train is vacuously true when every requested check is skipped or none is requested. For example, --score-check-modes '' or a chunking that fits no sequence makes run_chain return 0 with 'byte-equal: True'.",
+  "evidence": "all_equal = all(v['byte_equal'] for … if 'skipped' not in v) gives all([]) = True. In the committed runs, window_boundary_* is skipped for 8 of 9 sequences. The overall verdict is honest only because prefill/decode were also requested.",
+  "suggested_fix": "Record n_checks (non-skipped mode×sequence pairs) and set all_byte_equal_to_train = n_checks > 0 and all(...). Make _score_main exit non-zero when n_checks == 0."
+ },
+ {
+  "id": "reference_profile:R8",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_strict_model_tiny.py",
+  "line": 331,
+  "claim": "Three of the new assertions hold by construction and cannot fail: classes summing to the root, attributed + unattributed == gpu_busy, and compare_xrt(out, out) returning equal == n.",
+  "evidence": "line 331: the sum of exclusive times (incl − children) over all regions equals the root's inclusive time by algebra. line 360: every kernel duration goes to exactly one of the two buckets in attributed_kernel_profile. line 398: a self-comparison is always all-equal; only the 45-token count is informative. The surrounding asserts (bits unchanged under the timer, non-zero classes, ≥90 % launch match, rollout-form equality) are meaningful.",
+  "suggested_fix": "Replace the identities with properties that can fail: |instrumented total − clean total| within a bound, sum of exclusive times within x % of the clean wall time, and compare_xrt against a payload with one flipped hex digit (expect n−1 equal and the right max_abs_diff)."
+ },
+ {
+  "id": "reference_profile:R9",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/reference/REPORT_full_model_chain.md",
+  "line": 5,
+  "claim": "The STATUS line says every token is byte-equal on both backends 'including the 2047/2048/2049 window boundaries'. The golden backend ran only prompt_boundary and window_boundary_2048, and the window checks apply to just one of the nine sequences.",
+  "evidence": "xrt_reference_golden.json checks.modes = ['prefill','decode','chunked:prompt_boundary','chunked:window_boundary_2048']. window_boundary_* is 'skipped' for gsm8k_test_0..7. The results table (lines 59-61) is accurate.",
+  "suggested_fix": "Reword to: 'triton: 2047/2048/2049 (long sequence); golden: 2048 only'."
+ },
+ {
+  "id": "reference_profile:R10",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/reference/REPORT_full_model_chain.md",
+  "line": 118,
+  "claim": "Some performance wording overstates. (a) 'Strict attention … each faster than HF' is true only in aggregate: per global layer, strict takes 1.79 ms vs HF sdpa 0.89 ms (the REPORT's own numbers). (b) 'GEMM accounts for essentially all of the 1.55× gap' (line 151): the GEMM gap (1817.5 − 829.0 = 988 ms) is 145 % of the total GPU gap (1930.5 − 1249.7 = 681 ms). (c) '94–95 %' is 93.5–95.5 % across the train and paged configs. (d) 'a vLLM-style single scatter removes it' (line 129) is a projection, not measured.",
+  "evidence": "reference_profile.json kernel_profile: strict T=4096 attention global 23.2 ms / 13 layers, HF 11.6 ms / 13; det_gemm share 95.5/95.1/94.1 % (train), 94.1/94.4/93.5 % (paged).",
+  "suggested_fix": "Say 'strict local attention, norms and qknorm/rope are faster; strict global attention is ~2× slower than HF flash'. State that the GEMM gap exceeds the total gap, partly offset by faster non-GEMM ops. Write 93.5–95.5 %. Mark the scatter remark as an expectation."
+ },
+ {
+  "id": "reference_profile:R11",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/reference/REPORT_full_model_chain.md",
+  "line": 68,
+  "claim": "The per-token decode costs include the one-shot prompt prefill. The golden '2.3 s/token at 2.3k context (415.6 s for 178 steps)' is about 2.1 s per decode step, because 415.6 s includes a ~44 s prefill of 2261 tokens and there are 177 decode steps. The same applies to triton's 29.3 s.",
+  "evidence": "xrt_reference_golden.json gsm8k_long_window: decode 415.6 s, prefill-mode 43.85 s, train 44.75 s, n_tokens 178 (177 decode steps after the prompt prefill).",
+  "suggested_fix": "Time the prompt prefill and the decode steps separately in xrt_scoring (store per-step seconds too, so s/step vs context can be plotted), or quote (decode − prefill)/177."
+ },
+ {
+  "id": "reference_profile:R12",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/reference_profile.json",
+  "line": 1,
+  "claim": "The plot data is mostly complete, with gaps. The GPU (torch.profiler) view is a single call per config, so it has no repeat spread. The first triton scoring run (xrt_reference_triton_first.json) behind the 'repeat' claim is not committed; only its summary is. Decode has no per-step series. KVPlan._seq_index is a dead field.",
+  "evidence": "kernel_profile is produced by one attributed_kernel_profile call. experiments.xrt_triton_repeat holds only counts and commits. strict_model.py:60 _seq_index is never read.",
+  "suggested_fix": "Commit the first-run xrt file (or its hex) next to the others, run the profiler view 2-3 times or state n=1 in the views note, and remove _seq_index."
+ }
+]

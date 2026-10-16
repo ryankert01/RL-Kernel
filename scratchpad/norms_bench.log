@@ -1,0 +1,11 @@
+[gpu-lease] using GPUs [3]
+device=NVIDIA A100-SXM4-80GB T=4096 H=6656 V=202048 iters=50 (median ms)
+| op | strict ms | native ms | strict/native |
+|---|---:|---:|---:|
+| centered_rmsnorm fwd | 0.141 | 0.804 | 0.18x |
+| weighted_rmsnorm fwd | 0.137 | 0.798 | 0.17x |
+| normalized_embedding fwd | 0.212 | 0.686 | 0.31x |
+| fused_post_norm_residual_pre_norm fwd | 0.213 | 1.588 | 0.13x |
+| centered_rmsnorm fwd+bwd | 0.627 | 2.620 | 0.24x |
+| fused_post_norm_residual_pre_norm fwd+bwd | 1.123 | 5.486 | 0.20x |
+| normalized_embedding fwd+bwd (V=202048) | 5.139 | 7.182 | 0.72x |

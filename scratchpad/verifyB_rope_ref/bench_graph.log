@@ -1,0 +1,21 @@
+[gpu-lease] using GPUs [3]
+T=     1 local  gpu us/launch: new_fwd     3.33 new_bwd     4.39 old_fwd     3.26 old_bwd     4.43
+T=     1 global gpu us/launch: new_fwd     3.03 new_bwd     3.99 old_fwd     2.96 old_bwd     3.94
+T=    16 local  gpu us/launch: new_fwd     3.51 new_bwd     4.63 old_fwd     3.44 old_bwd     4.66
+T=    16 global gpu us/launch: new_fwd     3.20 new_bwd     4.14 old_fwd     3.15 old_bwd     4.12
+T=    64 local  gpu us/launch: new_fwd     3.68 new_bwd     4.99 old_fwd     3.66 old_bwd     5.00
+T=    64 global gpu us/launch: new_fwd     3.38 new_bwd     4.38 old_fwd     3.30 old_bwd     4.37
+T=   256 local  gpu us/launch: new_fwd     5.45 new_bwd     7.94 old_fwd     5.44 old_bwd     7.97
+T=   256 global gpu us/launch: new_fwd     4.65 new_bwd     6.67 old_fwd     4.51 old_bwd     6.71
+T=  1024 local  gpu us/launch: new_fwd    12.00 new_bwd    18.27 old_fwd    11.91 old_bwd    18.40
+T=  1024 global gpu us/launch: new_fwd     9.06 new_bwd    15.87 old_fwd     8.91 old_bwd    15.98
+T=  2048 local  gpu us/launch: new_fwd    29.29 new_bwd    41.68 old_fwd    29.78 old_bwd    41.84
+T=  2048 global gpu us/launch: new_fwd    23.09 new_bwd    38.81 old_fwd    22.98 old_bwd    39.10
+T=  4096 local  gpu us/launch: new_fwd    51.59 new_bwd    73.05 old_fwd    52.10 old_bwd    73.35
+T=  4096 global gpu us/launch: new_fwd    46.25 new_bwd    70.19 old_fwd    46.17 old_bwd    70.49
+T=  8192 local  gpu us/launch: new_fwd    96.75 new_bwd   137.93 old_fwd    96.97 old_bwd   138.53
+T=  8192 global gpu us/launch: new_fwd    86.81 new_bwd   132.75 old_fwd    86.70 old_bwd   133.11
+T= 16384 local  gpu us/launch: new_fwd   186.82 new_bwd   267.81 old_fwd   186.57 old_bwd   269.11
+T= 16384 global gpu us/launch: new_fwd   167.93 new_bwd   257.58 old_fwd   167.22 old_bwd   258.25
+T= 32768 local  gpu us/launch: new_fwd   367.83 new_bwd   524.18 old_fwd   367.13 old_bwd   526.60
+T= 32768 global gpu us/launch: new_fwd   330.57 new_bwd   503.53 old_fwd   330.52 old_bwd   505.21

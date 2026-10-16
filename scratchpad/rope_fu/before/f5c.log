@@ -1,0 +1,29 @@
+{
+ "probe": "f5c",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "T": 524352,
+ "addr_GiB": {
+  "tmp": 124032.90625,
+  "pad1": 124026.5,
+  "q": 124022.0625,
+  "pad2": 124016.0
+ },
+ "raised": false,
+ "oq_reused_tmp_block": true,
+ "rows_checked_range": [
+  524224,
+  524351
+ ],
+ "rows_mismatch_q": 64,
+ "first_bad_row": 524288,
+ "rows_below_2p31_mismatch": 0,
+ "pad1_elements_modified": 262144,
+ "pad2_elements_modified": 0,
+ "wall_s": 0.98
+}

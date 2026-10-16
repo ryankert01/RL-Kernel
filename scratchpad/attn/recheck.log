@@ -1,0 +1,25 @@
+[gpu-lease] using GPUs [4]
+== tests
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/__init__.py:1333: UserWarning: Synchronization debug mode is a prototype feature and does not yet detect all synchronizing operations (Triggered internally at /__w/pytorch/pytorch/torch/csrc/cuda/Module.cpp:1028.)
+    torch._C._cuda_set_sync_debug_mode(debug_mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:132: requires 2 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:132: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:146: requires 2 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:146: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:78: requires 2 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:78: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:92: requires 2 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:92: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_tp_topology.py:44: requires 4 CUDA GPUs
+157 passed, 9 skipped, 1 warning in 98.07s (0:01:38)
+rc=0
+== digest new2
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/digest_new2.json in 32.0s
+rc=0
+== parity
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/parity.json in 31.7s
+rc=0
+== done

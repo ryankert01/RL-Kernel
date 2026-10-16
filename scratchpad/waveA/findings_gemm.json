@@ -1,0 +1,241 @@
+[
+ {
+  "id": "swiglu_ffn:1",
+  "severity": "should_fix",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+  "line": 393,
+  "claim": "With the production default GEMM (fast_det_gemm) the FFN backward raises for every token count T that is not a multiple of 256 as soon as a weight gradient is requested; swiglu_ffn validates nothing about T, the error comes from deep inside the sibling with a misleading text ('out of contract for the forward GEMM'), and the author's docstring/REPORT state the rule as 'T must be a multiple of 8'.",
+  "evidence": "ops/swiglu_ffn.py:393,404,406 call gemm(dy.t(), h.t()), gemm(dg.t(), x.t()), gemm(du.t(), x.t()) -> K = T. _FastDetGemm (swiglu_ffn.py:278) forwards to det_gemm.fast_det_gemm which calls tree_gemm(..., allow_pad=False) (ops/det_gemm.py:92); triton/det_gemm_tree.py:114-119 raises when K % (8*32) != 0. _validate_ffn (swiglu_ffn.py:338-369, called at 424) checks shapes/dtypes/device only. REPORT_swiglu_ffn.md:91-92 and module docstring line 24 claim 'K = T, same chunk rule' / 'T must be a multiple of 8'. GPU probe (scratchpad review-probes/swiglu_ffn/probe.py): 'backward T= 64 gemm=fast_det_gemm: ValueError: reduction length 64 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM'; same for T=72; T=256 OK; frozen weights (dx only) OK at all T. The author's only default-gemm backward test uses T=256 (test_swiglu_ffn.py:339), the one small value that passes.",
+  "failure_scenario": "Megatron-Bridge full fine-tune with a micro-batch of 64 tokens, or any ragged last micro-batch (T=4000) with trainable MLP weights: forward succeeds, loss.backward() throws ValueError from det_gemm_tree.plan_chunks naming a 'forward GEMM' and a 'reduction length' the trainer never set, no mention of T or of swiglu_ffn.",
+  "suggested_fix": "Decide the dW chunk rule for K=T explicitly: either validate T % 256 == 0 in swiglu_ffn()/_SwiGLUFFNFunction.forward when any weight requires grad and raise ValueError('swiglu_ffn: token count T=... must be a multiple of 256 for the dW chunk tree (pad the micro-batch)'), or route the three dW GEMMs through the sibling's declared ragged rule (det_gemm_tree.tree_gemm(..., allow_pad=True), M padded to 256 and masked) so bits equal fast_det_gemm's own dW. Correct the docstring (line 24) and REPORT deviation 3 / RFC feedback 1 accordingly, and add a default-gemm backward test at a T that is not a multiple of 256."
+ },
+ {
+  "id": "swiglu_ffn:2",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+  "line": 281,
+  "claim": "trace() on the default (fast_det_gemm) path records no GEMM launch constants at all (R6/R4 violation): _FastDetGemm.trace() looks for a .trace attribute on the fast_det_gemm function, which does not exist (the sibling exposes a module-level det_gemm.trace()), so it returns the 3-key fallback dict; the G5 test cannot catch this because it only asserts top-level keys for the default tracer and checks tile_config/k_chunks only for the adapter.",
+  "evidence": "swiglu_ffn.py:281-284: tracer = getattr(self._fn, 'trace', None) ... return {'op','impl','kernel'}. ops/det_gemm.py:210 defines trace(m_size, out_dtype) at module level; fast_det_gemm (det_gemm.py:123) is a plain function. Probe output: 'fast_det_gemm has .trace attr: False' and trace()['tile_config']['gemm'] = {\"op\": \"det_gemm\", \"impl\": \"fast_det_gemm\", \"kernel\": \"rl_engine.models.muse_glimmer.ops.det_gemm\"} \u2014 no BLOCK_M/N/K, num_warps, num_stages, shape classes, tree order, allow_tf32. test_swiglu_ffn.py:106-111 asserts only the swiglu_ffn-level keys for trace(); lines 112-117 assert k_chunks/BLOCK_F on trace(TritonDetGemmAdapter()) only.",
+  "failure_scenario": "Two runtimes (trainer vs vLLM) compare swiglu_ffn trace() dicts to prove parity: both show the same 3-key GEMM stub even if one has a different det_gemm_tree PREFILL_CONFIG/decode class or a different kernel version; the provenance the contract relies on (R6: launch constants recorded in trace()) is absent exactly on the path that ships.",
+  "suggested_fix": "In default_gemm() import `from rl_engine.models.muse_glimmer.ops.det_gemm import fast_det_gemm, trace as fast_det_gemm_trace` and have _FastDetGemm.trace() return fast_det_gemm_trace() (it lists all three shape classes, tree_order, block_k_rule, allow_tf32=False). Extend test_g5 to assert `trace()['tile_config']['gemm']['tile_config']` is non-empty and contains block sizes/num_warps/num_stages for the default path too.",
+  "prior_verification": {
+   "verdict": "confirmed",
+   "reason": "Re-derived from code and confirmed by a CPU-only import probe (no GPU needed). rl_engine/models/muse_glimmer/ops/swiglu_ffn.py:280-284 `_FastDetGemm.trace()` does `getattr(self._fn, \"trace\", None)` on the `fast_det_gemm` function object; det_gemm.py:123 defines `fast_det_gemm` as a plain function and nothing in rl_engine/models/muse_glimmer/ assigns a `.trace` attribute to it (grep for `fast_det_gemm.trace` / `.trace =` returns nothing). The sibling's provenance lives in the module-level `trace(m_size, out_dtype)` at det_gemm.py:210-252 (kernel_id, k_chunks, tree_order, block_k_rule, allow_tf32=False, shape_class, tile_config with decode16/decode64/prefill BLOCK/num_warps/num_stages). Probe output: `fast_det_gemm has .trace: False`, `default_gemm type: _FastDetGemm`, and `swiglu_ffn.trace()['tile_config']['gemm']` = `{\"op\": \"det_gemm\", \"impl\": \"fast_det_gemm\", \"kernel\": \"rl_engine.models.muse_glimmer.ops.det_gemm\"}` \u2014 no BLOCK sizes, num_warps, num_stages, shape classes, tree order or allow_tf32. This is the path `default_gemm()` (swiglu_ffn.py:290-301) selects whenever det_gemm is importable, i.e. the path that ships, so it violates contract R4 (trace must carry tile_config, docs/contracts/muse-glimmer-30b-strict-contract.md:26-29) and R6 (launch constants recorded in trace(), contract:31-32). The author's REPORT_swiglu_ffn.md:31-33 and :213 admit the sibling was absent and the shim was \"exercised only structurally\", and the same report at :87 says consumers \"must pin the GEMM via trace()\" \u2014 which the shipped path cannot do. tests/models/muse_glimmer/test_swiglu_ffn.py:106-111 only asserts the swiglu_ffn-level keys for the default `trace` and checks `k_chunks`/`BLOCK_F` only on `trace(TritonDetGemmAdapter())` (:112-117), so G5 cannot fail on this. Kept at should_fix (not blocking): the numerics on the default path are still deterministic with pinned constants in det_gemm_tree; the defect is missing provenance, which makes trainer-vs-vLLM parity proofs via trace() vacuous rather than producing wrong bits. Suggested fix stands: have `_FastDetGemm.trace()` call `det_gemm.trace()` (optionally with out_dtype) and extend test_g5 to assert `trace()['tile_config']['gemm']['tile_config']` is non-empty with block sizes/num_warps/num_stages for the default path."
+  }
+ },
+ {
+  "id": "swiglu_ffn:3",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+  "line": 194,
+  "claim": "TritonDetGemmAdapter silently abandons the contract's 8-chunk tree and computes a single-chunk reduction whenever K % 8 != 0 (for the FFN: every dW GEMM with T % 8 != 0), with no error, no warning and no per-call record; the adapter test enshrines the silent fallback.",
+  "evidence": "swiglu_ffn.py:194: `chunks = self.K_CHUNKS if k_size % self.K_CHUNKS == 0 else 1`; 200-201 `if chunks == 1: y = partial(0)`. Docstring line 149-150 and trace string 251-252 describe it as 'out of contract ... computed as a single chunk' but trace() is static and does not say which path a given call took. test_swiglu_ffn.py:226-232 asserts the K=36 case 'must still compute (single chunk)'. Contract O3:69 'any K that is not a multiple of 8 chunks is out of contract'. Probe: backward T=72 gemm=adapter: OK (no diagnostic), while the fast path raises for the same T.",
+  "failure_scenario": "A trainer using gemm=TritonDetGemmAdapter() (the fallback default_gemm() installs when det_gemm.py fails to import, or the gemm the author's own G4 tests pin) runs T=4001 tokens: dW_gate/dW_up/dW_down are produced in a reduction order different from the contract tree with no signal; a TP-2 rank reducing 'its 4 chunks in tree order' per O3 cannot match this output.",
+  "suggested_fix": "Raise ValueError in TritonDetGemmAdapter.__call__ when k_size % K_CHUNKS != 0 (message naming the K and, for dW, that T must be padded), mirroring fast_det_gemm's behaviour, or require an explicit `allow_single_chunk=True` opt-in; update test_adapter_gemm_accuracy_invariance_and_strides to expect the raise."
+ },
+ {
+  "id": "swiglu_ffn:4",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+  "line": 297,
+  "claim": "default_gemm() swallows any ImportError raised while importing the sibling (including transitive failures inside det_gemm.py) and silently installs TritonDetGemmAdapter, changing the T rule (silent single-chunk vs raise), trace() contents and memory profile with no log line.",
+  "evidence": "swiglu_ffn.py:294-300: `try: from ...det_gemm import fast_det_gemm / except ImportError: _DEFAULT_GEMM = TritonDetGemmAdapter()`. det_gemm.py imports rl_engine.ops.autograd.backward_runtime and canonical_tree (det_gemm.py:44-51); a failure in either silently flips the GEMM. Bit parity between the two paths was probed at M=256 (FFN output and gate GEMM torch.equal, probe2.py) so this is a behaviour/provenance hazard, not a confirmed parity hazard.",
+  "failure_scenario": "Rollout container lacks a dependency pulled in by det_gemm.py; swiglu_ffn keeps working on the adapter with a different trace() and different T handling than the trainer, and nobody is told.",
+  "suggested_fix": "Re-raise unless an explicit opt-in (e.g. gemm='adapter' argument or env RL_KERNEL_MUSE_GLIMMER_GEMM=adapter) is set, and log the chosen implementation once."
+ },
+ {
+  "id": "swiglu_ffn:5",
+  "severity": "nit",
+  "category": "test_cannot_fail",
+  "file": "tests/models/muse_glimmer/test_swiglu_ffn.py",
+  "line": 192,
+  "claim": "The real-shape FFN batch-invariance gate (G2) pins gemm=TritonDetGemmAdapter(), so the production default fast_det_gemm \u2014 whose launch config changes with M across decode16/decode64/prefill shape classes \u2014 never passes through the FFN-level G2 gate.",
+  "evidence": "test_swiglu_ffn.py:192 `gemm = TritonDetGemmAdapter()` and every swiglu_ffn call in the test passes gemm=gemm; det_gemm_tree.py:76-96 selects a different TileConfig for M<=16, M<=64, M>64. Probe with the default gemm: T=1/16/64/65 at row offsets 0/2048/end vs T=4096 all torch.equal (so invariance does hold today).",
+  "failure_scenario": "A future change to det_gemm_tree's decode configs that breaks cross-class bit equality would pass this suite untouched; only the det_gemm suite would see it.",
+  "suggested_fix": "Parametrize test_g2_ffn_batch_invariance_real_shape over (TritonDetGemmAdapter(), default_gemm()) and include a T in each shape class (1, 64, 65).",
+  "prior_verification": {
+   "verdict": "confirmed",
+   "reason": "Factually correct, and correctly weighted as a nit. tests/models/muse_glimmer/test_swiglu_ffn.py:192 pins `gemm = TritonDetGemmAdapter()` and every swiglu_ffn call in test_g2_ffn_batch_invariance_real_shape (lines 194-202) passes that gemm. The production default is different: rl_engine/models/muse_glimmer/ops/swiglu_ffn.py:290-301 `default_gemm()` imports `fast_det_gemm` from ops/det_gemm.py (present in this worktree, commit 5f4b339) and wraps it in `_FastDetGemm` (lines 268-285, adds `.contiguous()`), falling back to the adapter only on ImportError. `fast_det_gemm` picks its TileConfig by M in rl_engine/models/muse_glimmer/triton/det_gemm_tree.py:74-96 (decode16 M<=16, decode64 16<M<=64, prefill M>64), so cross-shape-class bit equality of the default path is a real property the FFN G2 gate never exercises. The other default_gemm users in the FFN suite are not G2 gates: test_ffn_forward_real_shape_vs_fp64 (line 253-260, T=64, allclose only), test_g4_ffn_forward_backward_real_shape_repeat_determinism (lines 338-350, T=256, repeat-only), test_real_layer0_mlp_weights_forward (line 371, T=8, accuracy only). Why only a nit and not should_fix: the gap is covered transitively. tests/models/muse_glimmer/test_det_gemm.py:124-147 test_g2_batch_invariance_decode_vs_prefill runs M=1 / decode16 (row 5) / decode64 (row 37) / prefill (positions 0 and big_m//2+1) with torch.equal for all MUSE_SHAPES, which include exactly the three FFN GEMM shapes mlp_gate_proj (19968,6656), up_proj (19968,6656), down_proj (6656,19968) (test_det_gemm.py:41-50), and test_g2_tile_constants_do_not_change_bits (lines 170-188) checks the pinned configs against variants bitwise. Since the only non-row-local pieces of swiglu_ffn are the three gemm calls (swiglu_ffn.py:377-380) and swiglu is row-local by construction (contract R3, test_g2_swiglu_batch_invariance_real_width lines 168-184), batch invariance of the composed default-path FFN follows from the det_gemm gate; a regression in det_gemm_tree's decode configs would be caught by the det_gemm suite, just not by this file. The FFN test can still fail (it guards the adapter path and the swiglu composition), so this is not a 'test cannot fail' in the strict sense but a coverage-indirection gap at the op's own G2 gate; the suggested parametrization over (TritonDetGemmAdapter(), default_gemm()) with T in {1, 64, 65} is the right cheap fix. Note also that test_g5 (line 112-115) likewise pins the adapter and asserts an adapter-specific trace shape (`tile_config.gemm.tile_config.k_chunks`), so the default-gemm trace() is not exercised either, same nit class."
+  }
+ },
+ {
+  "id": "swiglu_ffn:6",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+  "line": 278,
+  "claim": "_FastDetGemm.__call__ forces .contiguous() on both operands, so every layer backward materialises three transposed 266 MB weight copies (w_down.t(), w_gate.t(), w_up.t()) plus dg.t()/h.t() (163 MB each at T=4096) although tree_gemm accepts strided views and fast_det_gemm has w_kn=True; the REPORT deferred removing this 'when det_gemm lands' and it has landed.",
+  "evidence": "swiglu_ffn.py:278 `self._fn(a.contiguous(), w.contiguous(), out_dtype=out_dtype)`; backward call sites 393-406 pass .t() views; det_gemm_tree.py:319-326 docstring 'both operands may be strided views ... w.t() with no copy'; det_gemm.py:129 `w_kn`. REPORT_swiglu_ffn.md:197-200.",
+  "failure_scenario": "52 layers x 5 transposed copies per backward adds ~1.1 GB of transient traffic per layer and allocator churn under Megatron memory pressure; no correctness impact.",
+  "suggested_fix": "Drop the .contiguous() calls (or pass w_kn=True for the transposed-weight GEMMs) and rerun the G4 tests."
+ },
+ {
+  "id": "lm_head_softcap_logprob:1",
+  "severity": "should_fix",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/lm_head_softcap_logprob.py",
+  "line": 119,
+  "claim": "Every strict forward performs two hidden device->host syncs: `_check_inputs` evaluates `bool(((targets < 0) | (targets >= vocab_size)).any())` and is called twice per call (line 471 in `lm_head_softcap_logprob` and again at line 325 inside `compute_tile_stats`).",
+  "evidence": "ops/lm_head_softcap_logprob.py:119-123 (`bool(... .any())`), :325 and :471 (both call `_check_inputs`). GPU probe (torch.profiler, one no_grad forward, small shape): sync-class events = ['aten::_local_scalar_dense', 'Memcpy DtoH (Device -> Pinned)', 'cudaStreamSynchronize', 'aten::_local_scalar_dense', 'cudaStreamSynchronize', 'Memcpy DtoH (Device -> Pinned)'] = two syncs from the op. The check is load-bearing: calling `launch_tile_stats` with target=-100 (bypassing the host check) returns target_in_tile=False, target_logit=0.0 -> logp = -logZ with no error (probe output), so it cannot simply be removed.",
+  "failure_scenario": "vLLM 0.31 decode binding capturing the logprob step in a CUDA graph: `.any()` -> `bool()` during capture raises 'operation not permitted when stream is capturing' (or forces eager mode); in eager the two syncs stall the pipeline on every step. Megatron Bridge: a pipeline bubble per micro-batch. If a consumer passes ignore_index=-100 rows (as the repo's vocab_parallel_logp callers do), the op raises on the host; if anyone sidesteps the check the kernel silently emits -logZ.",
+  "suggested_fix": "Validate once (drop the duplicate call in `compute_tile_stats` when reached via `lm_head_softcap_logprob`), and move the range check to the device: have `_softcap_tile_stats_kernel` write a per-row `invalid` flag (or define `ignore_index` semantics: logp=0, dz=0) that the caller may check asynchronously; keep the host-side raise behind an opt-in `validate_targets=True` kwarg documented for the bindings."
+ },
+ {
+  "id": "lm_head_softcap_logprob:2",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/lm_head_softcap_logprob.py",
+  "line": 161,
+  "claim": "The integrator's K%256 fallback in `_FastDetGemmAdapter.__call__` silently swaps the dW GEMM to the legacy fp32-promoted kernel (sequential BLOCK_K=32 walk, no 8-chunk tree) whenever the token count T is not a multiple of 256, changing the reduction order and the kernel class without any record in `trace()`; the comment's premise 'dW's K=T is tile-padded by callers' is not true of any caller in the repo.",
+  "evidence": "ops/lm_head_softcap_logprob.py:158-163 (`if a.shape[-1] % 256 != 0: return legacy_det_gemm_fp32(...)`), :414-416 (dW gemm with a=dz_t.t() so K=T). GPU probe at the real shape: T=256 fast vs legacy at the SAME T -> dW differs in 3,546,703 bf16 elements (max |d| 7.8e-3), dh in 1684 elements (max 1.2e-4), logp max 1.9e-6; at T=255 `det_gemm_tree.last_launch()['shape']` after backward is (255, 6656, 25344) (the dh launch), i.e. the dW never reached `tree_gemm`. Contract O3: 'dW = det_gemm(dY\u1d40, X) with the same chunking rule on K'; the sibling's own dW rule is `tree_gemm(..., allow_pad=True)` (det_gemm.py:107-113, det_gemm_tree.py:26-33: K padded to 256, masked). Legacy throughput 16.5 TFLOP/s (REPORT line 165) vs fast >=80.",
+  "failure_scenario": "Megatron Bridge training with packed/variable-length RL micro-batches (T=4001, 3999, ...): the lm_head dW follows a different reduction rule than at T=4096 and than every other dW in the model, trace() still claims 'backend fast_det_gemm', and the step pays ~0.7 s for the 11-TFLOP lm_head dW on the CUDA-core kernel instead of ~0.14 s. Nothing warns.",
+  "suggested_fix": "Route the dW GEMM through the sibling's ragged rule instead of a different kernel: call `det_gemm_tree.tree_gemm(dz_t.t(), h, out_dtype=torch.float32, allow_pad=True)` (strided views accepted, also removes the 207 MB transposed copy), or zero-pad K to a multiple of 256 before `fast_det_gemm`. Remove the silent branch (raise for unsupported K in forward/dh) and record the dW chunk rule in `trace()`."
+ },
+ {
+  "id": "lm_head_softcap_logprob:3",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/lm_head_softcap_logprob.py",
+  "line": 678,
+  "claim": "`trace()` does not record the GEMM's launch configuration (R6) and misdescribes its reduction order: `reduction_order.gemm` says 'K walked in block order' (the legacy walk) while the resolved backend is `fast_det_gemm` (8-chunk K tree, three shape-class tile configs selected by M); neither the shape-class configs nor the K%256 fallback rule appear in the dict.",
+  "evidence": "ops/lm_head_softcap_logprob.py:677-679 (`\"gemm\": \"det_gemm fp32 accumulation, K walked in block order, no split-K; backend \" + gemm_backend_name(gemm)`), :697-705 (`tile_config` lists only BLOCK_V/num_warps of the stats kernels). det_gemm_tree.py:72-91 (PREFILL/DECODE64/DECODE16 configs selected by M; `select_config`). Probe: T=4096 forward ran with shape_class=prefill cfg={block_m 64, block_n 128, block_k 64, num_warps 8, num_stages 3}, none of which is in `op.trace()`. Contract R6: 'Kernel launch configuration ... recorded in trace()'; R4 trace must carry `reduction_order`/`tile_config`.",
+  "failure_scenario": "Provenance comparison train vs rollout (the point of trace()) cannot tell whether the lm_head logits came from the tree GEMM or the legacy kernel, nor which tile class ran; a backend swap (finding 2 or 4) is invisible in the recorded provenance.",
+  "suggested_fix": "Embed `rl_engine.models.muse_glimmer.ops.det_gemm.trace()` (all shape classes) under `trace()['gemm']`, state the real reduction order ('K split into 8 canonical chunks, mma.sync chain per chunk, fixed fp32 tree'), add the dW chunk/fallback rule, and extend `test_trace_is_complete_and_stable` to assert the embedded GEMM tile_config."
+ },
+ {
+  "id": "lm_head_softcap_logprob:4",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/lm_head_softcap_logprob.py",
+  "line": 175,
+  "claim": "`resolve_gemm` swallows `ImportError`/`AttributeError` from the sibling `ops.det_gemm` and silently selects the legacy GEMM with a different reduction order; a strict op that quietly computes something else when the sibling is missing or broken.",
+  "evidence": "ops/lm_head_softcap_logprob.py:175-181 (`try: ... fast_det_gemm except (ImportError, AttributeError): _RESOLVED_GEMM = legacy_det_gemm_fp32`). The two backends produce different bits (probe: logp max |d| 1.9e-6, dh 1684 differing elements at T=256). The sibling now exists (ops/det_gemm.py:123), so the only remaining trigger is a broken import (e.g. Triton API drift inside det_gemm_tree.py), which would be silent.",
+  "failure_scenario": "Trainer host has a Triton where `det_gemm_tree` fails to import (or someone renames `fast_det_gemm`); rollout host does not. Both run 'strict' lm_head, both deterministic, bits differ by ~1e-6 in logp; the mismatch is attributed to the model instead of the import.",
+  "suggested_fix": "Import `fast_det_gemm` eagerly at module import and let the failure propagate; keep `legacy_det_gemm_fp32` only as an explicit `gemm=` argument (benchmarks/tests)."
+ },
+ {
+  "id": "lm_head_softcap_logprob:5",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/triton/softcap_logprob.py",
+  "line": 138,
+  "claim": "The backward rounds dz (fp32) to bf16 before the dh and dW GEMMs; contract O7 backward names no '-> bf16' at this point (R5: casts only where the document says so). The author self-reports it as deviation 1; it is forced by R1 + the bf16-MMA `fast_det_gemm`, but it is not yet ratified and WS2 must apply the identical cast for TP parity.",
+  "evidence": "triton/softcap_logprob.py:138 (`dz.to(tl.bfloat16)`), ops/lm_head_softcap_logprob.py:26-28 docstring, REPORT lines 84-86. Contract O7 backward: 'dh = det_gemm(d\u1e91, W_lm) with d\u1e91 = (onehot \u2212 softmax)\u00b7dlogp\u00b7(m\u00b7(1\u2212tanh\u00b2))' with no cast; det_gemm.py:97-98 shows the sibling applies the same bf16 cast to its dy. Measured effect (REPORT, G4): dh 0.36 %, dW 0.3 % vs fp32 autograd.",
+  "failure_scenario": "A WS2 `vocab_parallel_softcap_logp` backward written from the contract text keeps d\u1e91 in fp32 (e.g. via the legacy fp32 GEMM) -> its dh partials are not byte-equal to the TP1 sub-tree partials and the canonical tree no longer reproduces TP1 bits.",
+  "suggested_fix": "Amend O7 backward to 'd\u1e91 (fp32) \u2192 bf16 once, then det_gemm' (matching O3's dY \u2192 bf16), so the cast is a declared point; no code change."
+ },
+ {
+  "id": "lm_head_softcap_logprob:6",
+  "severity": "should_fix",
+  "category": "test_cannot_fail",
+  "file": "tests/models/muse_glimmer/test_lm_head_softcap_logprob.py",
+  "line": 353,
+  "claim": "The test file cannot detect which GEMM backend ran and never exercises the fast dW path: every test's T (37, 256 fwd-only, 40, 64, 8, 16) sends dW (K=T) through the legacy fallback, no test asserts `gemm_backend_name() == 'fast_det_gemm'`, and the suite passes identically with or without the sibling present.",
+  "evidence": "tests: `_small_inputs(40)` at :306 (dW K=40 -> legacy), real-shape `h = torch.randn(64, ...)` at :353 (dW K=64 -> legacy; forward K=6656 and dh K=25344 take the fast path only because those are multiples of 256). No `gemm_backend_name` assertion anywhere in the file. The REPORT's recorded run (lines 104-129) was all-legacy ('fast_det_gemm did not exist', line 206) and the post-integration run gives the same 15 passed. The only execution of the fast dW path is my probe (T=256: runs, finite, repeat-equal, pad rows zero).",
+  "failure_scenario": "A regression in the fast path's dW handling (e.g. a stride bug for the (Vt, T) operand) or a resolver change that silently drops to legacy ships green; the first execution of the fast dW path happens in the trainer at T=4096.",
+  "suggested_fix": "Add `assert op.gemm_backend_name() == 'fast_det_gemm'` in a GPU test, and a real-shape (or H=256, V tile 256) backward at T=256 and T=512 with repeat `torch.equal` plus allclose vs the fp32 autograd reference; add a test that the dW rule at T%256!=0 is the same rule as at T%256==0 once finding 2 is fixed."
+ },
+ {
+  "id": "lm_head_softcap_logprob:7",
+  "severity": "nit",
+  "category": "self_report_wrong",
+  "file": "rl_engine/models/muse_glimmer/ops/REPORT_lm_head_softcap_logprob.md",
+  "line": 206,
+  "claim": "The REPORT is stale relative to HEAD: it states the sibling `fast_det_gemm`/`combine_tree` do not exist and the automatic switch is untested, and its benchmark/memory rows describe the legacy backend; it also claims the tanh bitwise check used 5e7 samples while the shipped test uses ~5.2e6.",
+  "evidence": "REPORT lines 20, 165-171, 206-210 (legacy benchmark 668 ms fwd; 'fast_det_gemm ... did not exist'); HEAD 88a56a4 wires the adapter and `ops/det_gemm.py:123` exists. Probe with the resolved fast backend: T=4096 forward 0.65 s cold (incl. compile), fwd+bwd 0.47 s warm, peak extra 7195 MiB. Test :199-203 samples = (1<<22)+(1<<20)+7 \u2248 5.2e6 vs REPORT line 18/49 '5e7'.",
+  "failure_scenario": "Integrator reads the REPORT's 'untested switch' and 9.7x/14.6x numbers as current state and mis-prioritises; the 5e7 claim overstates the shipped evidence.",
+  "suggested_fix": "Re-run the benchmark and the test file on HEAD and refresh the Summary, Benchmark and Open-issues sections; state the test's actual sample count."
+ },
+ {
+  "id": "lm_head_softcap_logprob:8",
+  "severity": "nit",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/lm_head_softcap_logprob.py",
+  "line": 554,
+  "claim": "The R4 `forward_fp32` golden computes the logits with `torch.mv` (cuBLAS gemv) rather than hand-written fixed-order torch; in fp32 mode its reduction order is whatever cuBLAS chooses, so it is a tolerance reference only (the contract header does allow an FP64 reference, which `compute_dtype=float64` provides).",
+  "evidence": "ops/lm_head_softcap_logprob.py:554 (`z = torch.mv(w_t, h[i].to(compute_dtype))`); contract R4 'golden, hand-written fixed-order torch, no matmul shortcuts'; header 'allclose against an FP64 (or fp32 fixed-order) reference'. Tests use both fp32 and fp64 goldens with TIGHT_ATOL=2e-3 (measured 1.9e-6), so correctness coverage is unaffected.",
+  "failure_scenario": "None for parity (goldens are never on the strict path); only the fp32 golden's bits may vary across cuBLAS versions, which could make `test_golden_fp32_matches_fp64` tolerance (1e-4) flaky in principle.",
+  "suggested_fix": "Document that `compute_dtype=torch.float64` is the contract golden and the fp32 mode is a convenience; or write the fp32 gemv as a fixed-order chunked `(w_t[:, c:c+bk] * h[c:c+bk]).sum(-1)` accumulation."
+ },
+ {
+  "id": "det_gemm:1",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/triton/det_gemm_tree.py",
+  "line": 245,
+  "claim": "When CHUNK_LEN == BLOCK_K (ITERS == 1) the Triton compiler folds the 1-trip scf.for and its combine pass rewrites the tree adds `s01 = acc0 + acc1` (also s23/s45/s67 at :259/:274/:285) into chained MMA accumulation dot(a1,b1,acc0), so the compiled kernel does NOT implement the declared 8-leaf fp32 IEEE tree; bits then depend on BLOCK_K and differ from combine_tree over fast_det_gemm_partial leaves.",
+  "evidence": "GPU probe (scratchpad review-probes/det_gemm/probe_iters1.py): K=512 (chunk 64, BLOCK_K 64): fast_det_gemm(fp32) vs combine_tree(8 single-chunk partials) \u2192 equal=False, 10848/16384 elems differ, max|diff| 3.6e-7; same operands with TileConfig block_k=32 (ITERS=2) \u2192 equals the tree but NOT the pinned result. K=256: 7828/16384 differ. Control K=4096 and K=2048: bitwise equal. Model backward shapes: dA for k_proj/v_proj (reduce N=256 \u2192 chunk 32 = MIN_BLOCK_K, det_gemm_tree.py:121-124 gives block_k 32, ITERS 1): kernel\u2260tree on 208004/425984 elems; dW for M=256 tokens (M_pad 256, chunk 32): 189907/393216 differ; dW M=4096 control: equal. TTIR of the ITERS=1 compile: scf.for=0, 8 tt.dot of which 4 take `%acc` (the previous chunk's dot) as C operand \u2014 the adds were fused. Claims contradicted: det_gemm_tree.py:14-18 and det_gemm.py:25-26 ('BLOCK_K never changes the bits'), trace() block_k_rule det_gemm.py:242, REPORT_det_gemm.md:26-29/43-44/189-190 ('24 configs verified performance-only'). Tests cannot catch it: test_g2_tile_constants_do_not_change_bits (test_det_gemm.py:182-188) runs only K=6656; test_tp8_left_fold_is_not_the_tree (:244-258) uses K=4096; SMALL_SHAPES K=256/512 are only checked against fp64 tolerance.",
+  "failure_scenario": "(a) Any in-contract K accepted by plan_chunks (K%256==0, e.g. 512 or 256): TP8 = combine_tree(8 fast_det_gemm_partial leaves) is not byte-equal to the TP1 kernel, violating O3 'TP-t output bits equal TP-1 bits'. (b) Model training: dA of k_proj/v_proj and dW for micro-batches of \u2264512 tokens are computed with a different association than trace() declares, so any second implementation of the declared tree (CUDA twin, tp_canonical_tree, a reference re-derivation) will disagree bitwise with these gradients. (c) Changing BLOCK_K (documented as performance-only) silently changes bits for these shapes.",
+  "suggested_fix": "Guarantee ITERS >= 2 for every compiled variant: in plan_chunks pick effective_block_k <= chunk_len // 2 (BLOCK_K=16 is legal for bf16 mma.sync, so chunk 32 \u2192 16, chunk 64 \u2192 32) and add `tl.static_assert(ITERS >= 2)` in the kernel; alternatively make the chunk accumulator non-constant-zero at the dot (e.g. carry acc through a tl.where/identity the combine pass cannot see through) and keep the assert. Add bitwise tests kernel == combine_tree(8 partials) at K=256 and K=512 and for the dA (N=256) and dW (M=16/256/300) paths, and extend the tile-variant test to a chunk_len==BLOCK_K shape. Correct the 'BLOCK_K never changes the bits' statements in the docstrings/trace/REPORT."
+ },
+ {
+  "id": "det_gemm:2",
+  "severity": "should_fix",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/ops/det_gemm.py",
+  "line": 105,
+  "claim": "The autograd backward is not TP-capable for column-parallel GEMMs: dA is always reduced over the rank-LOCAL N with 8 chunks and rounded to bf16 (:98 cast, :105 out_dtype=a2d.dtype), so at TP>1 the all-reduced dA of q/k/v/attn_gate/mlp_gate/up cannot equal TP1 bits; the only sub-tree entry point, fast_det_gemm_partial, is @torch.no_grad() (:170) and the forward's k_chunks argument is ignored by backward.",
+  "evidence": "GPU probe: q_proj (N=4096,K=6656,M=64): TP1 autograd dA vs sum of two rank-local autograd dA (each 8 chunks over N/2, bf16) \u2192 equal=False, 159586/425984 elems differ; the correct composition kt.tree_gemm(gy[:, half], w[half], out_dtype=fp32, num_chunks=4) for each rank + combine_tree \u2192 equal to TP1 (True), showing the kernel can do it but the autograd path cannot. Contract header lines 4-6 require torch.equal TP1 vs TP2/4/8; O3 line 61 'Backward: dX = det_gemm(dY, W) ... with the same chunking rule'. REPORT_det_gemm.md:71-78 only describes TP for the forward partial.",
+  "failure_scenario": "Megatron Bridge binding trains at TP=2/4/8: ColumnParallel layers' input gradients (and therefore every upstream gradient) differ bitwise from TP1 training, breaking the RFC's train==rollout/TP-invariance claim for the backward even though the forward is byte-equal.",
+  "suggested_fix": "Give the autograd Function TP-aware knobs: a `reduce_chunks` (num_chunks for the N reduction of dA, = 8//tp for column-parallel shards) and `da_dtype=torch.float32` option returning the fp32 sub-tree partial for the caller to combine_tree + round once; or provide an autograd-capable `fast_det_gemm_partial` and document the rank-side recipe. Add a simulated-TP backward test mirroring test_tp_simulated_matches_tp1_bitwise."
+ },
+ {
+  "id": "det_gemm:3",
+  "severity": "should_fix",
+  "category": "interface_drift",
+  "file": "rl_engine/models/muse_glimmer/ops/det_gemm.py",
+  "line": 123,
+  "claim": "fast_det_gemm (a plain function) carries no `.trace` attribute, but the sibling shims discover provenance via getattr(gemm, 'trace') (swiglu_ffn.py:280-284 `_FastDetGemm.trace`, :304-308 `_gemm_trace`), so the assembled model trace loses det_gemm's R6 tile constants and reduction order whenever the default fast_det_gemm path is used.",
+  "evidence": "CPU check: swiglu_ffn.trace() with the default gemm (type _FastDetGemm) yields tile_config['gemm'] == {'op': 'det_gemm', 'impl': 'fast_det_gemm', 'kernel': 'rl_engine.models.muse_glimmer.ops.det_gemm'}; hasattr(fast_det_gemm, 'trace') is False, while det_gemm.trace() has 16 keys incl. tile_config/reduction_order. REPORT_det_gemm.md:242-249 tells siblings to import `trace` separately, which the shims do not do; test_swiglu_ffn.py:115 asserts k_chunks==8 only on the legacy TritonDetGemmAdapter trace, so the gap is untested.",
+  "failure_scenario": "The strict reference model's trace() (R4/R6 provenance, used to prove train==rollout configuration) records no BLOCK sizes/num_warps/num_stages/reduction order for the six FFN/attention GEMMs; two runs with different det_gemm tile constants or chunk rules produce identical traces.",
+  "suggested_fix": "Attach the provenance to the callable (`fast_det_gemm.trace = trace`, `fast_det_gemm.name = OP_NAME`) or export a small callable object/adapter with `__call__` and `trace()`; add an assertion in test_det_gemm that `getattr(fast_det_gemm, 'trace')()` equals `trace()`."
+ },
+ {
+  "id": "det_gemm:4",
+  "severity": "nit",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/det_gemm.py",
+  "line": 98,
+  "claim": "The autograd backward rounds the upstream gradient to bf16 (`grad_y.contiguous().to(torch.bfloat16)`) including for the fp32-output (lm_head logits) path \u2014 a cast not declared by the contract (R5; O3 line 61 and O7 lines 136-137 say nothing about dY\u2192bf16).",
+  "evidence": "det_gemm.py:97-98; self-reported as deviation 3 in REPORT_det_gemm.md:115-116 (confirmed). O7's own backward (lm_head_softcap_logprob.py:393-418) does not use this autograd path and casts dz to bf16 itself (its module doc line 26), so the model is consistent, but the det_gemm autograd fp32-out path (tested in test_g4_fp32_output_path_backward) is an undeclared cast point.",
+  "failure_scenario": "A consumer that differentiates through fast_det_gemm(out_dtype=fp32) (e.g. a future fused lm_head) gets an extra bf16 rounding of dY that no contract row declares, so an fp32-gradient reference will disagree beyond rounding noise.",
+  "suggested_fix": "Either amend the contract (O3 Backward: 'dY enters the backward GEMMs as bf16; one rounding') or make the fp32-out backward explicit (require the caller to pass a bf16 grad, or add a `grad_cast` kwarg recorded in trace())."
+ },
+ {
+  "id": "det_gemm:5",
+  "severity": "nit",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/ops/det_gemm.py",
+  "line": 240,
+  "claim": "trace() is static and incomplete: it always reports k_chunks=8/tree_order regardless of the `k_chunks` \u2208 {1,2,4} the public fast_det_gemm accepts (:139-140, :89-92), and records no GPU architecture or Triton version although the REPORT states bit-equality holds only within one GPU generation and depends on the mma.sync lowering.",
+  "evidence": "det_gemm.py:217-253 (no k_chunks parameter, no device capability/triton version); REPORT_det_gemm.md:112-114 and :269 ('Cross-architecture bit equality is not established'); det_gemm_tree.py:14-18 ties the reduction order to 'sm80+ mma.sync.m16n8k16'. R6 requires launch constants per shape class in trace(); R4 trace is the provenance record for parity.",
+  "failure_scenario": "A rollout run on H100 (wgmma lowering) and a training run on A100 emit identical trace() dicts yet produce different bits; a rank-local fast_det_gemm(..., k_chunks=4) emits a trace claiming the full 8-leaf tree.",
+  "suggested_fix": "Add `k_chunks`/`num_chunks` to trace(m_size, out_dtype, k_chunks) and include `torch.cuda.get_device_capability()`, device name and `triton.__version__` (plus the effective BLOCK_K per launch) in the dict."
+ },
+ {
+  "id": "det_gemm:6",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/triton/det_gemm_tree.py",
+  "line": 341,
+  "claim": "tree_gemm launches the Triton kernel without setting the CUDA device context to a.device; Triton launches on the *current* device/stream, and the wrapper only checks that a and w share a device (det_gemm.py:71), not that it is the current one.",
+  "evidence": "det_gemm_tree.py:341-365 (no `torch.cuda.device(...)` guard; grep over rl_engine/models/muse_glimmer finds none); Triton 3.7.1 runtime/jit.py:713-714 `device = driver.active.get_current_device(); stream = driver.active.get_current_stream(device)`.",
+  "failure_scenario": "A process holding several GPUs (Megatron Bridge test harness, a multi-device unit test, a strict reference model on cuda:1 while cuda:0 is current) calls fast_det_gemm on tensors living on a non-current device \u2192 launch on the wrong context (illegal address / wrong stream ordering) with no clear error.",
+  "suggested_fix": "Wrap the launch in `with torch.cuda.device(a.device):` (or validate `a.device.index == torch.cuda.current_device()` and raise a clear error)."
+ },
+ {
+  "id": "det_gemm:7",
+  "severity": "nit",
+  "category": "test_cannot_fail",
+  "file": "tests/models/muse_glimmer/test_det_gemm.py",
+  "line": 114,
+  "claim": "test_g1_forward_fp32_golden_is_fp64 compares forward_fp32 to the very expression that implements it ((a.double() @ w.double().t()).float()), so it can only fail if the one-line golden is edited.",
+  "evidence": "test_det_gemm.py:114-118 vs det_gemm.py:163-167 (identical computation).",
+  "failure_scenario": "Provides no independent evidence about the golden; harmless but counts toward the '80 tests passed' tally in the REPORT (line 21).",
+  "suggested_fix": "Replace with a check of the golden against a fixed-order fp64 loop on a tiny shape (e.g. explicit per-k accumulation) or drop it from the gate list."
+ }
+]

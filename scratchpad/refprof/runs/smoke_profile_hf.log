@@ -1,0 +1,16 @@
+[gpu-lease] using GPUs [6]
+Loading weights:   0%|          | 0/1436 [00:00<?, ?it/s]Loading weights:  33%|███▎      | 481/1436 [00:00<00:00, 4806.13it/s]Loading weights:  67%|██████▋   | 962/1436 [00:00<00:00, 4354.61it/s]Loading weights:  98%|█████████▊| 1401/1436 [00:00<00:00, 4070.47it/s]Loading weights: 100%|██████████| 1436/1436 [00:00<00:00, 4256.58it/s]
+[16:41:09] HF bf16 (sdpa) loaded in 18.0s; 55.55 GiB allocated
+[16:41:09] [hf] forward T=128
+USDT:2026-10-15 16:41:11 252322:252322 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:41:11 252322:252322 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:41:12]   total 161.8 ms (clean 82.8) peak 55.80 GiB
+[16:41:13] [hf] decode batch 1 context 200
+USDT:2026-10-15 16:41:14 252322:252322 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:41:14 252322:252322 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:41:15]   step 179.17 ms (clean 104.12) peak 55.57 GiB
+[16:41:16] [hf] decode batch 4 context 200
+USDT:2026-10-15 16:41:17 252322:252322 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-15 16:41:17 252322:252322 SyncActivityProfilerHandler.cpp:59] profiler_stop
+[16:41:18]   step 172.56 ms (clean 103.23) peak 55.61 GiB
+[16:41:18] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/smoke_profile_hf.json

@@ -1,0 +1,21 @@
+[gpu-lease] using GPUs [2]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 29776626688
+[load] {'init_seconds': 79.36919330999808, 'bridge_load_seconds': 53.52726674079895, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 55.54134654998779, 'allocated_gib': 52.4999794960022, 'peak_reserved_gib': 55.900390625}]}
+[rank0]:[W1015 23:33:52.682774719 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 4294967296 bytes (free: 2401173504, total: 85094825984).
+[rank0]:[W1015 23:33:53.015960088 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 5796462592, total: 85094825984).
+[rank0]:[W1015 23:33:53.016648416 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 5796462592, total: 85094825984).
+[rank0]:[W1015 23:33:53.038934730 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 5796462592, total: 85094825984).
+[rank0]:[W1015 23:33:53.039742551 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 8589934592 bytes (free: 5796462592, total: 85094825984).
+[bench] 8192 tokens: median {'strict_forward_ms': 10256.821183000284, 'strict_train_logprobs_ms': 9689.943163000862, 'strict_recompute_fwd_bwd_ms': 30682.976586998848, 'strict_optimizer_ms': 369.3822219938738, 'strict_step_total_ms': 40803.899199003354, 'strict_recompute_mismatches': 0} errors {'native_forward': "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.40 GiB is free. Including non-PyTorch memory, this process has 73.84 GiB memory in use. Of the allocated memory 62.04 GiB is allocated by PyTorch, and 3.26 GiB is reserved by PyTorch ", 'native_fwd_bwd': "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.40 GiB is free. Including non-PyTorch memory, this process has 73.84 GiB memory in use. Of the allocated memory 62.14 GiB is allocated by PyTorch, and 3.15 GiB is reserved by PyTorch "}
+[run] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp1/run.json

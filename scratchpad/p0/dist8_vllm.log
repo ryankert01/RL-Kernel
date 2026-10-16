@@ -1,0 +1,4 @@
+[gpu-lease] using GPUs [0, 1, 2, 3, 4, 5, 6, 7]
+.........                                                                [100%]
+9 passed, 80 deselected in 42.15s
+exit=0

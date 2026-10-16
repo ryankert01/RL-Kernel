@@ -1,0 +1,33 @@
+run dir: /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/learn_ss  mode: strict/strict  task: synthetic-arith  mock: True
+initial sync ok: lora 0d5768eead03 via memory
+step   0 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/500 max 0.000e+00 first - | sync 0d5768eead03 ok=True | 4.8s
+step   1 | reward 0.031 | loss -0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/497 max 0.000e+00 first - | sync 305ce9950c3e ok=True | 2.1s
+step   2 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/502 max 0.000e+00 first - | sync 2fc91f6fb607 ok=True | 2.0s
+step   3 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/505 max 0.000e+00 first - | sync 65d6ca3653bb ok=True | 2.0s
+step   4 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/486 max 0.000e+00 first - | sync 8263fc8e6247 ok=True | 2.0s
+step   5 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/503 max 0.000e+00 first - | sync 2774ea6cb828 ok=True | 2.0s
+step   6 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/512 max 0.000e+00 first - | sync 1b3e18cd5ece ok=True | 2.0s
+step   7 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/512 max 0.000e+00 first - | sync 0f62a3c8c6a8 ok=True | 2.0s
+step   8 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/499 max 0.000e+00 first - | sync 4a61d7160ab7 ok=True | 2.4s
+step   9 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/482 max 0.000e+00 first - | sync cbc310ba4943 ok=True | 2.8s
+step  10 | reward 0.062 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/485 max 0.000e+00 first - | sync 4b111f19b32e ok=True | 2.4s
+step  11 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/501 max 0.000e+00 first - | sync e6ff7081e198 ok=True | 2.7s
+step  12 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/476 max 0.000e+00 first - | sync b34b329e230a ok=True | 3.0s
+step  13 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/480 max 0.000e+00 first - | sync 984ecac60ff3 ok=True | 2.6s
+step  14 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/512 max 0.000e+00 first - | sync 2bf321cf5809 ok=True | 2.3s
+step  15 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/512 max 0.000e+00 first - | sync 7fb2a8fda08e ok=True | 2.1s
+step  16 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/509 max 0.000e+00 first - | sync 24ce9445631a ok=True | 2.1s
+step  17 | reward 0.031 | loss -0.01288 ratio 1.000000 clip 0.000 | drift bitwise 0/493 max 0.000e+00 first - | sync 814ce3545d69 ok=True | 2.0s
+step  18 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/505 max 0.000e+00 first - | sync 9cd3afde9b9a ok=True | 2.0s
+step  19 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/463 max 0.000e+00 first - | sync 9aad6753582c ok=True | 2.4s
+step  20 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/477 max 0.000e+00 first - | sync abcb7ece1de0 ok=True | 2.2s
+step  21 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/493 max 0.000e+00 first - | sync 7e5655041298 ok=True | 2.1s
+step  22 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/494 max 0.000e+00 first - | sync ecb3b8848155 ok=True | 2.1s
+step  23 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/468 max 0.000e+00 first - | sync 4929aea0c747 ok=True | 2.0s
+step  24 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/486 max 0.000e+00 first - | sync b76967bd0046 ok=True | 2.0s
+step  25 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/503 max 0.000e+00 first - | sync e63b778e9ec2 ok=True | 2.0s
+step  26 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/487 max 0.000e+00 first - | sync c79471e58546 ok=True | 2.2s
+step  27 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/501 max 0.000e+00 first - | sync 31f04e39db56 ok=True | 2.2s
+step  28 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/504 max 0.000e+00 first - | sync 5faf9833c556 ok=True | 5.8s
+step  29 | reward 0.000 | loss +0.00000 ratio 1.000000 clip 0.000 | drift bitwise 0/493 max 0.000e+00 first - | sync d55c13141b22 ok=True | 2.7s
+done: 30 steps, bitwise mismatches 0/14840, max |Δ| 0.000e+00, first drift None, reward mean 0.004166666666666667, weight sync 31/31 -> /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e_runs/learn_ss/summary.json

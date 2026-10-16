@@ -1,0 +1,175 @@
+[gpu-lease] using GPUs [4]
+.............................FF.FF.FF.FF.FF.FF.FFFFFFFFFFFFFFFFFFFFFFFF. [ 35%]
+FF.FFFF.Fs.........................................FFFFFFFFFFF.FFFFFFFFF [ 70%]
+.FF..FFF........FFFFFFFF.......FFFFF.......FF.......FFF.F....            [100%]
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_swiglu_ffn.py:36
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_swiglu_ffn.py:36: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytestmark = pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:90
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:90: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:108
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:108: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:117
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:117: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:126
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:126: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:156
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:156: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:172
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:172: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:201
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:201: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:229
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:229: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:250
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:250: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:273
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:273: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:290
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:290: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:307
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:307: PytestUnknownMarkWarning: Unknown pytest.mark.ws2 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws2
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:317
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:317: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:341
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:341: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:409
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:409: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:436
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:436: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:464
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:464: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:506
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:506: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:548
+  /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix/before_tree/tests/models/muse_glimmer/test_lm_head_softcap_logprob.py:548: PytestUnknownMarkWarning: Unknown pytest.mark.ws1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.ws1
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[16x64x64w4-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[16x64x64w4-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[32x64x64w4-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[32x64x64w4-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x128x64w8-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x128x64w8-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[128x64x64w8-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[128x64x64w8-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x64x32w4-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x64x32w4-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x64x64w8-K256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g2_tile_constants_do_not_change_bits[64x64x64w8-K512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K256-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K256-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K256-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K256-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K512-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K512-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K512-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K512-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K768-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K768-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K768-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K768-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K1024-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K1024-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K1024-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K1024-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K4096-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K4096-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K4096-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K4096-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K6656-M1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K6656-M16]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K6656-M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_kernel_equals_declared_tree[K6656-M256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_da_reduce_n256_equals_declared_tree[M64]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_da_reduce_n256_equals_declared_tree[M4096]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_dw_ragged_rule_equals_declared_tree[T255]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_dw_ragged_rule_equals_declared_tree[T256]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_dw_ragged_rule_equals_declared_tree[T300]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_dw_ragged_rule_equals_declared_tree[T512]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_tree_ir_guard - Attri...
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g4_dw_ragged_rule_equals_zero_padded_tokens
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_ragged_k_forward_opt_in
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[q_proj-2]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[q_proj-4]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[q_proj-8]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[k_proj-2]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[k_proj-4]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[k_proj-8]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[mlp_gate-2]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[mlp_gate-4]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_autograd_tp_equals_tp1[mlp_gate-8]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_column_parallel_requires_reduce_and_aligned_shards
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[o_proj-1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[o_proj-2]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[o_proj-4]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[o_proj-8]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[down_proj-1]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[down_proj-2]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[down_proj-4]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_row_parallel_autograd_tp_equals_tp1[down_proj-8]
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_g5_trace_is_emitted_and_stable
+FAILED tests/models/muse_glimmer/test_det_gemm.py::test_contract_rejects_out_of_contract_inputs
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g5_trace_is_emitted_and_stable
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g5_default_gemm_trace_carries_launch_constants
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_default_gemm_has_no_silent_fallback
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_gemm_accuracy_invariance_and_strides
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[36]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[256]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[300]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[512]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[4001]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_adapter_and_fast_gemm_are_bitwise_twins[6656]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_fast_gemm_shim_passes_strided_views_without_copies
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_default_gemm_backward_any_token_count[1]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_default_gemm_backward_any_token_count[64]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_default_gemm_backward_any_token_count[255]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_default_gemm_backward_any_token_count[300]
+FAILED tests/models/muse_glimmer/test_swiglu_ffn.py::test_g4_default_gemm_backward_real_shape_ragged_tokens
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_trace_is_complete_and_stable
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_default_gemm_backend_and_no_silent_fallback
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_host_syncs_and_device_side_target_rule
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_dw_uses_declared_ragged_token_rule[40]
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_dw_uses_declared_ragged_token_rule[255]
+FAILED tests/models/muse_glimmer/test_lm_head_softcap_logprob.py::test_dw_uses_declared_ragged_token_rule[300]
+87 failed, 117 passed, 1 skipped, 20 warnings in 70.31s (0:01:10)

@@ -1,0 +1,15 @@
+[gpu-lease] using GPUs [0]
+device=NVIDIA A100-SXM4-80GB tokens=4096 H=6656 F=19968 gemm=TritonDetGemmAdapter
+torch=2.13.0+cu130
+swiglu  strict 0.364 ms (1350 GB/s)  native 0.497 ms
+ffn fwd strict 33.16 ms (99 TFLOP/s)  native 12.75 ms (256 TFLOP/s)
+breakdown: gate 11.92 + up 11.55 + down 10.02 = GEMMs 33.49 ms (99.0%), swiglu 0.35 ms (1.0%)
+per-GEMM throughput: gate 91 TFLOP/s, down 109 TFLOP/s
+adapter: gate GEMM single pass 11.49 ms vs 8-chunk tree 11.55 ms; down GEMM single pass 15.30 ms vs 8-chunk tree 10.06 ms
+
+| case | strict ms | native ms | strict / native |
+|---|---:|---:|---:|
+| swiglu (T x F) fwd | 0.364 | 0.497 | 0.73x |
+| swiglu_ffn fwd (T tokens) | 33.157 | 12.751 | 2.60x |
+| GEMM share of strict FFN fwd | 33.49 | - | 99.0% |
+| swiglu share of strict FFN fwd | 0.353 | - | 1.0% |

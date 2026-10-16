@@ -1,0 +1,10 @@
+[gpu-lease] using GPUs [4]
+.................................................................ss      [100%]
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_vllm_strict_binding.py: 14 warnings
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+65 passed, 2 skipped, 14 warnings in 29.78s
+exit=0

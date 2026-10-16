@@ -1,0 +1,22 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 20:46:34] start pid=366366 world=1 launcher=process CUDA_VISIBLE_DEVICES=''
+[trainer_server rank0 20:46:34] client connected
+[trainer_server rank0 20:46:36] trainer MockTrainer built in 1.7 s
+[trainer_server rank0 20:46:37] ping id=1 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=2 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=3 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=4 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=5 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=6 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=7 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=8 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=9 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=10 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=11 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=12 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=13 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=14 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] ping id=15 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] close id=16 ok=True compute=0.0 ms
+[trainer_server rank0 20:46:37] bye

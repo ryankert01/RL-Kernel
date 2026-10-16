@@ -1,0 +1,11 @@
+poc(muse_glimmer): cp attention backward on the sibling Triton dK/dV partials
+
+Adapt the CP backward to the landed WS1 API
+(triton/gated_attention_bwd.gated_attention_bwd_preprocess +
+strict_gated_attention_bwd_partials -> fp32 (8, Tk, 2, 128) group partials)
+and the sibling canonical_tree.combine_tree. CP2/CP4 autograd backward is
+bitwise equal to CP1 (dq, dk, dv, dgate) on global and local layers at
+T in {2048, 4096, 8192} through the canonical two-level tree.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

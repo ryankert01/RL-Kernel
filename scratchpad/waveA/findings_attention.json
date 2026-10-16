@@ -1,0 +1,101 @@
+[
+ {
+  "id": "gated_attention_bwd:1",
+  "severity": "blocking",
+  "category": "interface_drift",
+  "file": "rl_engine/models/muse_glimmer/ops/gated_attention_autograd.py",
+  "line": 38,
+  "claim": "The autograd binding imports the strict forward from the wrong module, so in this worktree (where the sibling forward exists) GatedAttentionFn still silently runs the slow fp32 golden as its forward and reports forward_is_fallback=True.",
+  "evidence": "gated_attention_autograd.py:37-45 does `from rl_engine.models.muse_glimmer.triton.gated_attention_fwd import strict_gated_attention_fwd_varlen` inside try/except ImportError -> golden fallback. That module's __all__ (triton/gated_attention_fwd.py:224-237) exports only `_gated_attention_fwd_kernel` and constants; the wrapper lives at rl_engine/models/muse_glimmer/ops/gated_attention.py:174, exactly where REPORT_gated_attention_fwd.md:4-6 says the backward agent must import it from. Probe (HEAD 88a56a4, sibling present): `ag.trace()['forward_is_fallback'] -> True`, `ag.FORWARD_IMPL -> 'FALLBACK:attention_golden_bwd.golden_forward_fixed_order'`. The fallback's o/lse are not the kernel's bits: strict fwd vs golden at L=2100 n_lse_diff=58900/67200, n_o_diff=13561, max|lse d|=7.6e-6; the resulting grads differ (dk max|d| 6.25e-2). The golden takes 2.6-2.8 s per 4096-token layer (REPORT:82). The 7 tests I ran (autograd/trace/tp/repeat) pass under the fallback.",
+  "failure_scenario": "The strict reference model / Megatron Bridge binding calls `gated_attention(...)` on this branch: every layer's forward runs the pure-torch fp32 golden (~2.8 s at T=4096, 52 layers -> minutes per step) and produces o/lse/y bits that differ from the strict Triton forward used in rollout, so train==rollout parity is broken while trace() merely says forward_is_fallback=True; nobody gets an error.",
+  "suggested_fix": "Import `strict_gated_attention_fwd_varlen` (and the forward `trace`) from `rl_engine.models.muse_glimmer.ops.gated_attention`; remove the ImportError->golden fallback from a strict op (raise, or at minimum warn loudly); have `trace()` merge the forward's tile_config/casts (R6) and align op naming ('muse_glimmer.gated_attention' vs forward's 'gated_attention')."
+ },
+ {
+  "id": "gated_attention_bwd:2",
+  "severity": "should_fix",
+  "category": "test_cannot_fail",
+  "file": "tests/models/muse_glimmer/test_gated_attention_bwd.py",
+  "line": 261,
+  "claim": "test_autograd_function_binds_strict_backward only passes because of the fallback bug: it asserts torch.equal between grads computed from the strict forward's saved o/lse and grads computed from the golden's o/lse, which are different pipelines.",
+  "evidence": "Lines 245-262: `y = ag.gated_attention(...)` (saves o/lse from whatever forward runs), `y.backward(dy)`, then `o, lse = gold.golden_forward_fixed_order(...)` and `dq,.. = ag.gated_attention_backward(..., o, lse, ...)`, finally `assert torch.equal(q.grad, dq) and torch.equal(k.grad, dk)` etc. Lines 252-256 anticipate the real forward (allclose on y) but the grad assertions do not. Probe3 (monkeypatching `ag._strict_fwd = ops.gated_attention.strict_gated_attention_fwd_varlen`, lens [300,64], both windows): `q.grad==dq False k.grad==dk False v.grad==dv False gate.grad==dgate False`, while the autograd path itself is repeat-deterministic (all torch.equal True across two runs).",
+  "failure_scenario": "Integrator fixes finding 1 -> this test fails for both parametrizations, and the natural 'fix' (loosening to allclose) would remove the only check that the Function's backward is bit-identical to the direct entry.",
+  "suggested_fix": "Feed the direct entry the SAME o/lse the Function saved (e.g. call `ag.strict_forward(...)` to obtain o/lse, or expose them), and keep torch.equal; add a separate allclose check of the grads vs reference_backward."
+ },
+ {
+  "id": "gated_attention_bwd:3",
+  "severity": "should_fix",
+  "category": "interface_drift",
+  "file": "rl_engine/models/muse_glimmer/ops/attention_golden_bwd.py",
+  "line": 58,
+  "claim": "A second, non-identical 'fixed-order fp32 golden' for O5 was written instead of importing the sibling's `gated_attention_forward_fp32`; the two goldens disagree bitwise, so the op now has two competing references and the autograd fallback/tests use the non-canonical one.",
+  "evidence": "REPORT_gated_attention_fwd.md:4-6 names `gated_attention_forward_fp32` (ops/gated_attention.py:344, R4 name `forward_fp32`) as the golden the backward agent imports. attention_golden_bwd.py:58-129 reimplements it with a different inner order (sequential `for d in range(128): s = s + q_d*k_d` and `for j: acc += p_j v_j`, lines 108-109/121-122) vs the sibling's torch `.sum(dim=-1)` over the trailing axis (ops/gated_attention.py:404,417). Probe2 at L=2100, both windows: `bwd-golden vs fwd-golden: lse eq False, max|lse d|=5.7e-6`, o not equal (bf16 vs fp32 return convention also differs). The duplicate is the forward used by GatedAttentionFn's fallback (finding 1) and the source of o/lse for every backward test (test file line 87).",
+  "failure_scenario": "Two agents' 'fixed-order fp32' references give different bits for the same op; an integrator checking the strict kernel against 'the golden' gets different error numbers depending on which module they import, and the backward tests validate the kernel against o/lse that no production forward ever produces.",
+  "suggested_fix": "Delete `golden_forward_fixed_order` (or reduce it to a thin adapter over `ops.gated_attention.gated_attention_forward_fp32` per sequence) and derive test o/lse from the strict forward (`strict_gated_attention_fwd_varlen`) with the sibling golden only as the accuracy reference."
+ },
+ {
+  "id": "gated_attention_bwd:4",
+  "severity": "should_fix",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "line": 105,
+  "claim": "The preprocess sigmoid uses Triton's default fp32 `/` (approximate div.full.f32), so the backward's sigma(g) is not the same function as the forward's (which uses libdevice.div_rn for exactly this reason) and this is not declared anywhere.",
+  "evidence": "gated_attention_bwd.py:105 `sg = 1.0 / (1.0 + tl.exp(-g))`; forward kernel triton/gated_attention_fwd.py:~209-216 `gate = libdevice.div_rn(one, one + tl.exp(-g))` with the comment 'Triton's default fp32 `/` may lower to the approximate div.full'. Probe2 micro-kernel over 4,194,304 bf16 g values (N(0,3)): plain `/` vs div_rn differ on 508,356 elements (1 ulp, max 5.96e-8) and the declared `do = dy*sg -> bf16` cast (line 108) flips on 12 elements. Neither REPORT (casts section, lines 70-72) nor trace()['cast_points'] (lines 585-588) mention an approximate division. R2: 'no fast-math'.",
+  "failure_scenario": "Deterministic and within tolerance today, but dgate/do are computed with a different sigmoid than the one that produced y; a CUDA twin written from the contract/forward (div_rn or 1/(1+exp) in IEEE) will not match this Triton backward bitwise, and the forward's own report asks for the division mode to be written into O5.",
+  "suggested_fix": "Use `libdevice.div_rn(1.0, 1.0 + tl.exp(-g))` exactly as the forward does (or `tl.sigmoid` only if verified identical), and record the division mode in trace()['cast_points'] and the REPORT."
+ },
+ {
+  "id": "gated_attention_bwd:5",
+  "severity": "should_fix",
+  "category": "self_report_wrong",
+  "file": "tests/models/muse_glimmer/test_gated_attention_bwd.py",
+  "line": 228,
+  "claim": "The 'TP2/4/8 simulation' gate is a tautology (same torch fp32 adds on the same operands in the same association) and the kernel cannot actually run at TP>1, so the REPORT's 'TP simulation PASS' and '(tested in simulation)' claims are vacuous.",
+  "evidence": "Lines 228-234: `rank_partials = [_tree(part[g] for g in rank slice)]` then `assert torch.equal(_tree(rank_partials), full)` where `full = _tree(all 8)`; `_tree` is recursive halving, so for TP2/4/8 both sides are literally the identical sequence of `+` ops -> cannot fail. REPORT_gated_attention_bwd.md:15 reports it as a PASS gate and :194-197 says a rank 'runs the same kernel with its 4*8/t heads ... (tested in simulation)'. But `_check_inputs` (gated_attention_bwd.py:334-335) rejects q with shape[1] != 32 and the grid hard-codes NUM_GROUPS=8 / H=32 (lines 480, 471), so no TP>1 shard can call the kernel. The meaningful parts (zero other-KV-head slice, lines 223-225; bf16 tree equals combined, line 227) are fine.",
+  "failure_scenario": "WS2 kv_head_replication / Megatron TP binding assumes the per-rank partial path exists and was tested; at TP2 it raises 'q must be (Tq, 32, 128)', and any later generalisation of the kernel to 32/t heads has no test proving the per-group partials are bit-identical to the TP1 slices.",
+  "suggested_fix": "Either drop the TP2/4/8 loop and reword the report gate as 'tree association verified', or make it real: parametrise the kernel host on num_heads/num_groups, run it on `q[:, 4r:4r+4*8/t]` per rank and torch.equal the rank partials against the TP1 group slices before the tree."
+ },
+ {
+  "id": "gated_attention_bwd:6",
+  "severity": "nit",
+  "category": "test_cannot_fail",
+  "file": "tests/models/muse_glimmer/test_gated_attention_bwd.py",
+  "line": 106,
+  "claim": "The ws1 gradient_accuracy row check is vacuous: it runs on unit-scaled tensors after a stricter 1e-2 normalized bound already passed, so the contract's G1/G4 'within ws1 tolerances' is never actually what gates the test.",
+  "evidence": "_check_accuracy lines 103-108: first `assert norm_err <= NORMALIZED_BOUND (1e-2)` where norm_err = max|got-ref|/max|ref|, then `torch.allclose(got/scale, ref/scale, atol=5e-2, rtol=2e-2)`; after the first assertion every element satisfies |got/scale - ref/scale| <= 1e-2 < atol, so allclose cannot fail. Disclosed as deviation 4 (REPORT:96-105) and in the module docstring, but the report's wording 'the row is therefore applied at unit scale' overstates what is checked.",
+  "failure_scenario": "None today (the 1e-2 bound is the effective gate and is reasonable); but the profile row's tolerance has no effect, so changing ws1.json cannot tighten or loosen this op's gate.",
+  "suggested_fix": "Drop the redundant allclose or make it the stricter check (e.g. apply atol/rtol to the raw tensors on a dy scaled so max|ref|~1), and add the proposed 'attention_gradient' normalized row to the profile per REPORT integration request 2."
+ },
+ {
+  "id": "gated_attention_bwd:7",
+  "severity": "nit",
+  "category": "contract",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "line": 211,
+  "claim": "The backward introduces bf16 casts (do, p before the dV dot, dS before the dQ/dK dots) at points the contract does not declare (R5), plus a silent dy->bf16 cast in the direct entry; they are standard FA2 and are listed in trace(), but the contract must be amended or a CUDA twin will not match bitwise.",
+  "evidence": "gated_attention_bwd.py:108 `do_bf = do.to(tl.bfloat16)`, :211 `tl.dot(pT.to(tl.bfloat16), do_tile)`, :214 `tl.dot(dST.to(tl.bfloat16), q_tile)`, :310 `tl.dot(dS.to(tl.bfloat16), k_blk)`; contract O5 backward paragraph (lines 111-117) only says 'fp32 accumulation'. REPORT deviation 1 (lines 87-91) discloses it. Also :407 `dy = dy.to(torch.bfloat16).contiguous()` casts an fp32 dy silently in `gated_attention_backward` (not listed in cast_points).",
+  "failure_scenario": "A sibling CUDA/ROCm backward written from the contract text (e.g. fp32 dS) produces different dq/dk/dv bits than this Triton kernel; an fp32 dy passed to the direct entry is rounded without notice.",
+  "suggested_fix": "Add the three casts (and delta from bf16 o) to contract O5 as the forward author also requested; in the direct entry reject non-bf16 dy with a ValueError instead of casting."
+ },
+ {
+  "id": "gated_attention_bwd:8",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "line": 372,
+  "claim": "cu_seqlens_k[-1] == Tk and the device of q_pos/cu_seqlens are never validated, so an inconsistent cu_seqlens_k leads to out-of-bounds reads of k/v and out-of-bounds stores into the partials instead of a clear error.",
+  "evidence": "_sequence_meta validates `cu_q[-1] == q_pos.numel()` (line 372-373) but has no counterpart for `cu_k[-1] == k.shape[0]`; _check_inputs (325-354) checks numel/dtype only. The kernels index `k_rows = (k_start + kpos)` masked only by `kpos < Lk` (lines 165-169, 291-293) and store partials at `(k_start + kpos)` (218-220). The forward wrapper by contrast checks q_pos/cu_seqlens devices (ops/gated_attention.py:85-86, 219-223).",
+  "failure_scenario": "A binding that builds cu_seqlens_k for the full KV cache but passes a truncated k/v (or vice versa) silently reads garbage / corrupts memory beyond dk_part; CPU cu_seqlens produce an opaque Triton pointer error.",
+  "suggested_fix": "Add `if int(cu_k[-1]) != k.shape[0]: raise ValueError(...)` and device checks for q_pos/cu_seqlens_q/cu_seqlens_k against q.device in _check_inputs."
+ },
+ {
+  "id": "gated_attention_bwd:9",
+  "severity": "nit",
+  "category": "integration_hazard",
+  "file": "rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "line": 366,
+  "claim": "Every backward call performs two device->host copies (cu_seqlens and the full q_pos) plus a Python per-sequence loop, with no way to pass precomputed metadata, unlike the forward wrapper's max_seqlen_q kwarg.",
+  "evidence": "_sequence_meta lines 366-387: `cu_seqlens_q.to('cpu')`, `cu_seqlens_k.to('cpu')`, `q_pos.to('cpu', torch.int64)`, `for b in range(batch)` with torch.equal per segment; called from strict_gated_attention_bwd_partials line 458 on every call. REPORT open issues (line 203-204) discloses it. 52 layers -> >=104 host syncs per training step.",
+  "failure_scenario": "Megatron Bridge training step serialises on these syncs every layer; CUDA-graph capture of the backward is impossible.",
+  "suggested_fix": "Accept optional `qpos0`, `max_seqlen_q`, `max_seqlen_k` kwargs (validated once by the caller) and skip the host round-trip when provided; keep the validating path as default."
+ }
+]

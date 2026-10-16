@@ -1,0 +1,13 @@
+poc(muse_glimmer): cp attention on the real strict kernels, TP head-shard launcher, report
+
+* forward resolves to ops/gated_attention.strict_gated_attention_fwd_varlen; TP
+  head shards launch the same kernel body with H_Q/H_KV constexprs (WS1 wrapper
+  pins 32/2 heads) so TP2 x CP2 is bitwise against the single-GPU run.
+* check_cp_parity.py pins its own repo root (editable rl_kernel install in the
+  shared env resolves elsewhere under torchrun).
+* REPORT_ws2_cp.md: equality matrix CP1/2/4 x global/local x {2048,4096,8192},
+  TP2xCP2 result, AG timing at T=8192 (0.23 ms for K+V), RFC feedback (canonical
+  query-chunk rule for dK/dV, gate sentence, zigzag fail-closed rule).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

@@ -1,0 +1,5 @@
+native tp1 exit=0
+strict tp1 exit=0
+native tp2 exit=0
+strict tp2 exit=0
+ALL_DONE

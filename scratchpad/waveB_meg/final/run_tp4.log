@@ -1,0 +1,51 @@
+[gpu-lease] using GPUs [0, 1, 2, 3]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/models/mimo/config/base_configs.py:12: UserWarning: MimoModelConfig is experimental and still under active development. The API may change without notice in future releases.
+  class MimoModelConfig:
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+INFO:megatron.core.models.hybrid.hybrid_layer_allocation:HybridModel: pp_rank=0/1, vp_stage=0, segment_index=0/1, layers='****************************************************' (52 layers), layer_offset=0
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/modelopt/torch/__init__.py:55: UserWarning: transformers 5.17.0 is not tested with current version of modelopt and may cause issues. Please install recommended version with `pip install -U nvidia-modelopt[hf]` if working with HF models.
+  _warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM/megatron/core/transformer/transformer_config.py:3406: UserWarning: full scope is deprecated. Use empty cuda_graph_modules to capture the whole layer.
+  warnings.warn(
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (2, 0, 0): 8886584320
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (3, 0, 0): 8886584320
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (1, 0, 0): 8886584320
+Loading from /home/ubuntu/models/Muse-Glimmer-3… 10… (1228/122… MuseGlimmerBrid…
+ > number of parameters on (tensor, gtp_remat, pipeline) model parallel rank (0, 0, 0): 8886584320
+[load] {'init_seconds': 256.6813591109967, 'bridge_load_seconds': 163.21456122398376, 'memory_after_load': [{'rank': 0, 'peak_allocated_gib': 28.845365047454834, 'allocated_gib': 24.053080081939697, 'peak_reserved_gib': 29.16015625}, {'rank': 1, 'peak_allocated_gib': 28.845365047454834, 'allocated_gib': 24.053080081939697, 'peak_reserved_gib': 29.16015625}, {'rank': 2, 'peak_allocated_gib': 28.845365047454834, 'allocated_gib': 24.053080081939697, 'peak_reserved_gib': 29.16015625}, {'rank': 3, 'peak_allocated_gib': 28.845365047454834, 'allocated_gib': 24.053080081939697, 'peak_reserved_gib': 29.16015625}]}
+[identity] 626/627 equal; mismatches=['model.language_model.norm.weight']
+[xrt] strict scored 933 tokens in 3.82s
+[repeat] mismatches 0/933
+[lora_noop] mismatches 0/933
+[grad_repeat] pass 0: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 23.861336100999324}
+[grad_repeat] pass 1: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 10.327331002001301}
+[grad_repeat] mismatching elements 0/104792064
+[packing] budget 4096: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 9.072822889997042}
+[packing] budget 512: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 6, 'fwd_bwd_s': 18.765249766001943}
+[packing] budget 8192: {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 1, 'fwd_bwd_s': 8.221839949997957}
+[packing] bitwise invariant: True
+[step] {'recompute_logp_mismatches': 0, 'recompute_logp_checked': 933, 'micro_batches': 2, 'fwd_bwd_s': 9.699862004999886, 'grad_norm': 7.0176005363464355, 'lr': 1e-05, 'step': 1, 'optimizer': 'AdamW(betas=(0.9,0.999), eps=1e-8, foreach=False)', 'optimizer_s': 0.4422578899975633, 'num_lora_params_local': 59424768, 'loss': 0.3581377863883972} sha 04c604ff2f24 -> 69968212be47
+[run] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveB_meg/final/run_tp4.json

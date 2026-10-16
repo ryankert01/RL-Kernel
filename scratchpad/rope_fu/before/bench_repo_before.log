@@ -1,0 +1,5 @@
+device: NVIDIA A100-SXM4-80GB  T=4096 q(4096, 32, 128) k(4096, 2, 128) bf16
+pass                strict Triton ms  torch-native HF ms  native/strict
+forward                       0.0708              0.9536          13.46x
+forward+backward              0.3267              2.4613           7.53x
+strict forward effective bandwidth: 1066 GB/s (75.5 MB moved)

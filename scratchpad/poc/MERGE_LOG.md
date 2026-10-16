@@ -1,0 +1,9 @@
+# POC merge log (branch feat/museglimmer-arch-fingerprint)
+
+| When (UTC) | Row / agent | Branch → merged HEAD | Verification from POC checkout | Notes |
+|---|---|---|---|---|
+| 2026-10-15 ~14:10 | gated_attention backward (global/local) | worktree-agent-af326aad086c40686 → 55afbd7 (ff) | tests/models/muse_glimmer/test_gated_attention_bwd.py: 24 passed (30.9 s, GPU 0) | forward is the fp32 fallback until the fwd row lands; deviations: bf16 casts of do/p/dS declared, gradient tolerance applied scale-free (ws1 bf16 gradient atol 5e-2 unmeetable at |dK|≈26); bwd 5.78 ms global / 4.47 ms local vs SDPA 2.43 ms @4096 |
+| 14:03 | norms + normalized_embedding | worktree-agent-ae93c2f69853aebf8 → 27171c3 | test_norms.py: see above | rsqrt form = IEEE-RN 1/sqrt (contract should name it so O4 matches); fused op keeps fp32 residual grad; strict 0.13–0.31x of eager time |
+| 14:03 | dense_gemm_qualification (fast tree GEMM) | worktree-agent-a36c9d51e305a64a2 → 33757a5 | test_det_gemm.py: see above | 108–134 TFLOP/s @M=4096 (1.9–2.5x cuBLAS time), decode floor ~0.07 ms/GEMM; tiles are perf-only (bitwise invariant); K must be multiple of 256; dY→bf16 cast declared; not bit-compatible with repo det_gemm |
+| 15:33 | qknorm_scaled_rope + lm_head_softcap_logprob + swiglu_ffn | 3 branches → 20ea60f | combined pytest: see above (now using fast_det_gemm) | qknorm: kernel==golden bitwise, 12.6x eager; HF double-rounding q̂ max diff 0.25; lm_head: 9.7x slower than native with legacy gemm (fast_det_gemm untested by agent); swiglu: GEMMs 99% of FFN time |
+| 15:39 | gated_attention forward (train/prefill/decode/paged) + lm_head K%256 fix | worktree-agent-a753a1fe25f1d2402 → 88a56a4 | fwd+bwd 87 passed (60 s); lm_head tests pass after fix | num_warps pinned across tiles (rowsum tree depends on warps in Triton 3.7.1); prefill 4096 1.31x SDPA, paged decode 1.6x; lm_head op used fast_det_gemm with K=64 shapes → fallback added |

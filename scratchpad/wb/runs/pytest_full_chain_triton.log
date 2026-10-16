@@ -1,0 +1,18 @@
+INFO 10-15 22:16:55 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+prompt 256 + completion 32 tokens, backend `triton`, all paths byte-equal to train: **True**
+
+| path | chunk sizes | equal to train | equal tokens | max abs diff | seconds | peak GiB |
+|---|---|---|---|---|---|---|
+| train | - | (reference) | 32/32 | 0 | 1.13 | 52.20 |
+| prefill | - | yes | 32/32 | 0.000e+00 | 0.29 | 52.19 |
+| chunked:prompt_boundary | [256, 31] | yes | 32/32 | 0.000e+00 | 0.33 | 52.18 |
+| chunked:halves | [143, 144] | yes | 32/32 | 0.000e+00 | 0.44 | 52.15 |
+| chunked:block64 | [64, 64, 64, 64, 31] | yes | 32/32 | 0.000e+00 | 0.76 | 52.13 |
+| chunked:ragged | [1, 63, 100, 7, 116] | yes | 32/32 | 0.000e+00 | 0.85 | 52.14 |
+| decode | - | yes | 32/32 | 0.000e+00 | 4.67 | 52.18 |
+..
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/models/muse_glimmer/test_full_model_chain.py::test_full_model_chain_prompt256_completion32
+PASSED tests/models/muse_glimmer/test_full_model_chain.py::test_batched_decode_is_batch_invariant_with_eviction
+2 passed in 39.10s

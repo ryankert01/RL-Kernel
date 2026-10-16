@@ -1,0 +1,9 @@
+[gpu-lease] using GPUs [5]
+GPU: 5
+bits_before 0
+bits_after 0
+extra 0
+bench before_1 0
+bench after_1 0
+bench before_2 0
+bench after_2 0

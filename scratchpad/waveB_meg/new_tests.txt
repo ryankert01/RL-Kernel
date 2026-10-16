@@ -1,0 +1,545 @@
+def _attn_inputs(lens, *, seed=0, hq=32, hkv=2):
+    gen = torch.Generator().manual_seed(seed)
+    t = sum(lens)
+
+    def rnd(*shape, scale=1.0):
+        return (torch.randn(*shape, generator=gen) * scale).to(device="cuda", dtype=torch.bfloat16)
+
+    cu = torch.tensor([0, *torch.cumsum(torch.tensor(lens), 0).tolist()], dtype=torch.int32,
+                      device="cuda")
+    pos = torch.cat([torch.arange(n) for n in lens]).to(device="cuda", dtype=torch.int32)
+    return {
+        "q": rnd(t, hq, 128).requires_grad_(True),
+        "k": rnd(t, hkv, 128).requires_grad_(True),
+        "v": rnd(t, hkv, 128).requires_grad_(True),
+        "g": rnd(t, hq * 128).requires_grad_(True),
+        "dy": rnd(t, hq * 128),
+        "cu": cu,
+        "pos": pos,
+    }
+
+
+def _normalized_err(got, ref):
+    scale = float(ref.abs().max())
+    return float((got.double() - ref.double()).abs().max()) / max(scale, 1e-30)
+
+
+@requires_cuda
+@pytest.mark.parametrize("window", [None, 64], ids=["global", "local"])
+def test_rank_attention_tp1_equals_sibling_autograd_and_fp64_golden(window):
+    """At TP1 the binding's per-rank attention (sibling fwd + preprocess + partials + subtree)
+    equals the sibling autograd op bit for bit, and its gradients are within the attention row's
+    normalized bound (max|err|/max|ref| <= 1e-2) of the FP64 autograd golden."""
+    ops = sk.resolve_ops()
+    from rl_engine.models.muse_glimmer.ops.attention_golden_bwd import reference_backward
+    from rl_engine.models.muse_glimmer.ops.gated_attention_autograd import gated_attention
+
+    inp = _attn_inputs([70, 130], seed=3)
+    leaves = (inp["q"], inp["k"], inp["v"], inp["g"])
+    comm = sk.TPComm(None)
+    y = rank_gated_attention(*leaves, inp["cu"], inp["cu"], inp["pos"], window=window, comm=comm,
+                             kernels=ops.attention)
+    grads = torch.autograd.grad(y, leaves, inp["dy"])
+    y_sib = gated_attention(*leaves, inp["cu"], inp["cu"], inp["pos"], window)
+    grads_sib = torch.autograd.grad(y_sib, leaves, inp["dy"])
+    assert torch.equal(y, y_sib)
+    for got, want in zip(grads, grads_sib, strict=True):
+        assert torch.equal(got, want)
+    ref = reference_backward(*(t.detach() for t in leaves), inp["cu"], inp["cu"], inp["pos"],
+                             inp["dy"], window=window)
+    for name, got, want in zip(("dq", "dk", "dv", "dgate"), grads, ref, strict=True):
+        assert _normalized_err(got, want) <= 1e-2, name
+
+
+def _attention_block_case(device, seed=11):
+    hidden, r = 512, 4
+    lens = [96, 160]
+    t = sum(lens)
+    gen = torch.Generator().manual_seed(seed)
+
+    def rnd(*shape, scale=1.0):
+        return (torch.randn(*shape, generator=gen) * scale).to(device=device, dtype=torch.bfloat16)
+
+    case = {"t": t, "hidden": hidden, "x": rnd(t, hidden)}
+    fused = rnd(2 * (2 * 16 + 2) * 128, hidden, scale=0.05)  # the FUSED Bridge linear_qkv
+    case["hf"] = fused_qkv_to_hf(fused, 32, 2, 128)  # un-fused exactly as the binding does
+    case["w_o"] = rnd(hidden, 4096, scale=0.02)
+    case["gy"] = rnd(t, hidden)
+    case["cu"] = torch.tensor([0, lens[0], t], dtype=torch.int32, device=device)
+    case["pos"] = torch.cat([torch.arange(n) for n in lens]).to(device=device, dtype=torch.int32)
+    case["lora"] = {
+        name: (
+            (torch.randn(r, k_in, generator=gen) * 0.05).to(device),
+            (torch.randn(n_out, r, generator=gen) * 0.05).to(device),
+        )
+        for name, n_out, k_in in (
+            ("q_proj", 4096, hidden), ("gate_proj", 4096, hidden), ("k_proj", 256, hidden),
+            ("v_proj", 256, hidden), ("o_proj", hidden, 4096),
+        )
+    }
+    return case
+
+
+def _attention_block(comm, case, ops, layer):
+    """The binding's attention half on one rank: four column projections (canonical row shards,
+    LoRA), ``attention_core`` (per-rank heads, KV head gathered at TP4/8, replica fold), the
+    row-parallel ``o_proj`` (LoRA). Returns the output and every gradient."""
+    w, rank = comm.world, comm.rank
+    t = case["t"]
+
+    def rows(tensor):
+        n_l = tensor.shape[0] // w
+        return tensor[rank * n_l : (rank + 1) * n_l]
+
+    device = case["x"].device
+    if layer == "local":
+        cos, sin = ops.rope_rows(case["pos"].long(), device=device)
+        window = 64
+    else:
+        cos = sin = None
+        window = None
+    xg = case["x"].clone().requires_grad_(True)
+    params, outs = {}, {}
+    for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+        a, b = case["lora"][name]
+        params[name] = (a.clone().requires_grad_(True), rows(b).clone().requires_grad_(True))
+        n_total = case["hf"][name].shape[0]
+        outs[name] = StrictColumnLinear.apply(
+            xg, *params[name], comm, n_total, rows(case["hf"][name]).contiguous(),
+            segments=((0, 96), (96, t)),
+        )
+    y_local = attention_core(
+        outs["q_proj"], outs["k_proj"], outs["v_proj"], outs["gate_proj"], ops=ops, comm=comm,
+        cos=cos, sin=sin, cu_seqlens=case["cu"], positions=case["pos"], window=window,
+        rms_eps=1e-5, qk_scale=3.87,
+    )
+    k_l = 4096 // w
+    cols = slice(rank * k_l, (rank + 1) * k_l)
+    a_o, b_o = case["lora"]["o_proj"]
+    params["o_proj"] = (a_o[:, cols].clone().requires_grad_(True), b_o.clone().requires_grad_(True))
+    o = StrictRowLinear.apply(y_local, case["w_o"][:, cols].contiguous(), *params["o_proj"], comm,
+                              4096, segments=((0, 96), (96, t)))
+    (dx,) = torch.autograd.grad((o.float() * case["gy"].float()).sum(), (xg,))
+    named = {"dx": dx}
+    for name, (a, b) in params.items():  # segment mode: the op accumulated into .grad
+        named[f"{name}.A"], named[f"{name}.B"] = a.grad, b.grad
+    return o, named
+
+
+def _check_block_parity(o1, g1, outs):
+    for o_w, g_w in outs:
+        assert torch.equal(o_w, o1)
+        assert torch.equal(g_w["dx"], g1["dx"])
+    for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+        for _o, g_w in outs:
+            assert torch.equal(g_w[f"{name}.A"], g1[f"{name}.A"]), name  # replicated A
+        assert torch.equal(torch.cat([g[f"{name}.B"] for _, g in outs], 0), g1[f"{name}.B"]), name
+    assert torch.equal(torch.cat([g["o_proj.A"] for _, g in outs], 1), g1["o_proj.A"])
+    for _o, g_w in outs:
+        assert torch.equal(g_w["o_proj.B"], g1["o_proj.B"])
+
+
+@requires_cuda
+@pytest.mark.parametrize("layer", ["local", "global"])
+@pytest.mark.parametrize("world", [2, 4, 8])
+def test_attention_block_per_rank_heads_tp_equals_tp1(world, layer):
+    """TP2: 16 Q / 1 KV head per rank; TP4: 8 / 1 (KV head replicated on 2 ranks); TP8: 4 / 1
+    (4 replicas). Output, dX and every TP-gathered LoRA gradient equal TP1 bitwise."""
+    ops = sk.resolve_ops()
+    case = _attention_block_case("cuda")
+    o1, g1 = _simulate(1, lambda c: _attention_block(c, case, ops, layer))[0]
+    outs = _simulate(world, lambda c: _attention_block(c, case, ops, layer), max_passes=12)
+    _check_block_parity(o1, g1, outs)
+
+
+# ===SPLIT===
+# --------------------------------------------------------------------------------------
+# Real NCCL TP2 / TP4: the simulated parity above, on real collectives
+# --------------------------------------------------------------------------------------
+
+
+def _nccl_tp_worker(rank: int, world: int, port: int, out_dir: str) -> None:
+    import torch.distributed as dist
+
+    torch.cuda.set_device(rank)
+    dist.init_process_group(
+        "nccl", rank=rank, world_size=world, init_method=f"tcp://127.0.0.1:{port}",
+        device_id=torch.device("cuda", rank),
+    )
+    sk.set_deterministic_torch()
+    comm1, comm_w = sk.TPComm(None), sk.TPComm(dist.group.WORLD)
+    gen = torch.Generator().manual_seed(0)
+
+    def rnd(*shape, scale=1.0):
+        return (torch.randn(*shape, generator=gen) * scale).to(device="cuda", dtype=torch.bfloat16)
+
+    res: dict[str, bool] = {}
+    # LM head (canonical tiles, rank owns 8/world of 8)
+    vocab, padded, hidden, m = 2000, 2048, 256, 24
+    tile_rows = padded // 8
+    h, w = rnd(m, hidden), rnd(vocab, hidden, scale=0.05)
+    w_pad = torch.nn.functional.pad(w, (0, 0, 0, padded - vocab))
+    targets = torch.randint(0, vocab, (m,), generator=gen).cuda()
+
+    def lm(comm):
+        ids = sk.local_chunk_ids(comm.rank, comm.world)
+        tiles = w_pad[ids[0] * tile_rows : (ids[-1] + 1) * tile_rows].contiguous()
+        hg = h.clone().requires_grad_(True)
+        lp = StrictLMHeadLogprob.apply(
+            hg, targets, tiles, tuple(ids), comm, vocab, tile_rows, 0.19611613513818404, 20.0
+        )
+        (dh,) = torch.autograd.grad(lp.sum(), (hg,))
+        return lp, dh
+
+    lp1, dh1 = lm(comm1)
+    lp2, dh2 = lm(comm_w)
+    res["lm_logp"] = torch.equal(lp1, lp2)
+    res["lm_dh"] = torch.equal(dh1, dh2)
+    # column linear with LoRA
+    mm, k, n, r = 64, 512, 512, 16
+    x, wc = rnd(mm, k), rnd(n, k, scale=0.05)
+    a = torch.randn(r, k, generator=gen).cuda() * 0.02
+    b = torch.randn(n, r, generator=gen).cuda() * 0.02
+    gy = rnd(mm, n)
+    n_l = n // world
+    sl = slice(rank * n_l, (rank + 1) * n_l)
+
+    def col(comm):
+        nl = n // comm.world
+        s = slice(comm.rank * nl, (comm.rank + 1) * nl)
+        xg = x.clone().requires_grad_(True)
+        ag = a.clone().requires_grad_(True)
+        bg = b[s].clone().requires_grad_(True)
+        y = StrictColumnLinear.apply(xg, ag, bg, comm, n, wc[s])
+        return (y, *torch.autograd.grad(y, (xg, ag, bg), gy[:, s]))
+
+    c1, c2 = col(comm1), col(comm_w)
+    res["col_y"] = torch.equal(c1[0][:, sl], c2[0])
+    res["col_dx"] = torch.equal(c1[1], c2[1])
+    res["col_da"] = torch.equal(c1[2], c2[2])
+    res["col_db"] = torch.equal(c1[3][sl], c2[3])
+    # row linear with LoRA
+    k2 = 1024
+    xr, wr = rnd(mm, k2), rnd(n, k2, scale=0.05)
+    ar = torch.randn(r, k2, generator=gen).cuda() * 0.02
+    k_l = k2 // world
+    s = slice(rank * k_l, (rank + 1) * k_l)
+
+    def row(comm):
+        kl = k2 // comm.world
+        ss = slice(comm.rank * kl, (comm.rank + 1) * kl)
+        xg = xr[:, ss].clone().requires_grad_(True)
+        ag = ar[:, ss].clone().requires_grad_(True)
+        bg = b.clone().requires_grad_(True)
+        y = StrictRowLinear.apply(xg, wr[:, ss], ag, bg, comm, k2)
+        return (y, *torch.autograd.grad(y, (xg, ag, bg), gy))
+
+    r1, r2 = row(comm1), row(comm_w)
+    res["row_y"] = torch.equal(r1[0], r2[0])
+    res["row_dx"] = torch.equal(r1[1][:, s], r2[1])
+    res["row_da"] = torch.equal(r1[2][:, s], r2[2])
+    res["row_db"] = torch.equal(r1[3], r2[3])
+    # attention block with per-rank heads (TP4: replicated KV head, replica tree on NCCL)
+    ops = sk.resolve_ops()
+    case = _attention_block_case(torch.device("cuda", rank))
+    for layer in ("local", "global"):
+        o1, g1 = _attention_block(comm1, case, ops, layer)
+        o2, g2 = _attention_block(comm_w, case, ops, layer)
+        res[f"attn_{layer}_o"] = torch.equal(o1, o2)
+        res[f"attn_{layer}_dx"] = torch.equal(g1["dx"], g2["dx"])
+        for name in ("q_proj", "gate_proj", "k_proj", "v_proj"):
+            nl = g1[f"{name}.B"].shape[0] // world
+            res[f"attn_{layer}_{name}_A"] = torch.equal(g1[f"{name}.A"], g2[f"{name}.A"])
+            res[f"attn_{layer}_{name}_B"] = torch.equal(
+                g1[f"{name}.B"][rank * nl : (rank + 1) * nl], g2[f"{name}.B"]
+            )
+        kl = 4096 // world
+        res[f"attn_{layer}_o_proj_A"] = torch.equal(
+            g1["o_proj.A"][:, rank * kl : (rank + 1) * kl], g2["o_proj.A"]
+        )
+        res[f"attn_{layer}_o_proj_B"] = torch.equal(g1["o_proj.B"], g2["o_proj.B"])
+    torch.save(res, f"{out_dir}/rank{rank}.pt")
+    dist.destroy_process_group()
+
+
+@pytest.mark.parametrize("world", [2, 4])
+def test_nccl_tp_equals_tp1_lm_head_column_row_attention(world, tmp_path):
+    if not CUDA or torch.cuda.device_count() < world:
+        pytest.skip(f"needs {world} GPUs")
+    import socket
+
+    import torch.multiprocessing as mp
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    mp.spawn(_nccl_tp_worker, args=(world, port, str(tmp_path)), nprocs=world, join=True)
+    for rank in range(world):
+        res = torch.load(tmp_path / f"rank{rank}.pt")
+        assert all(res.values()), {k: v for k, v in res.items() if not v}
+
+
+# ===SPLIT===
+# --------------------------------------------------------------------------------------
+# Fail-closed resolution (review megatron_runtime:R1)
+# --------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fresh_resolution():
+    sk.reset_resolution()
+    yield
+    sk.reset_resolution()
+
+
+def test_resolve_ops_fails_closed_when_a_strict_module_is_missing(monkeypatch, fresh_resolution):
+    real = sk._optional_module
+
+    def fake(path):
+        if path.endswith("ops.norms"):
+            sk._IMPORT_ERRORS[path] = "ImportError: simulated broken sibling"
+            return None
+        return real(path)
+
+    monkeypatch.setattr(sk, "_optional_module", fake)
+    with pytest.raises(sk.StrictOpsUnavailable, match="centered_rmsnorm.*simulated broken"):
+        sk.resolve_ops()
+    prov = sk.resolve_ops(allow_fallback=True).provenance()  # tests only: labelled fallbacks
+    assert prov["all_strict"] is False
+    assert prov["centered_rmsnorm"].startswith("fallback:")
+    from rl_engine.models.muse_glimmer.runtime.megatron_strict import (
+        install_museglimmer_megatron_strict,
+    )
+
+    # the binding (and so StrictTrainer(strict=True)) refuses before touching the model
+    with pytest.raises(sk.StrictOpsUnavailable):
+        install_museglimmer_megatron_strict(object(), hf_path=None)
+
+
+def test_strict_mode_env_values_are_validated(monkeypatch, fresh_resolution):
+    monkeypatch.setenv("MUSE_STRICT_ATTN", "off")
+    with pytest.raises(ValueError, match="MUSE_STRICT_ATTN"):
+        sk.resolve_ops()
+    sk.reset_resolution()
+    monkeypatch.setenv("MUSE_STRICT_ATTN", "fallback")  # explicit fallback is still refused
+    with pytest.raises(sk.StrictOpsUnavailable, match="gated_attention"):
+        sk.resolve_ops()
+    sk.reset_resolution()
+    monkeypatch.setenv("MUSE_STRICT_ATTN", "auto")
+    monkeypatch.setenv("MUSE_STRICT_GEMM", "bogus")
+    with pytest.raises(ValueError, match="MUSE_STRICT_GEMM"):
+        sk.resolve_ops()
+    sk.reset_resolution()
+    monkeypatch.setenv("MUSE_STRICT_GEMM", "cublas")
+    with pytest.raises(sk.StrictOpsUnavailable, match="gemm"):
+        sk.resolve_ops()
+
+
+def test_tree_accumulator_equals_canonical_combine_tree():
+    from rl_engine.models.muse_glimmer.ops.canonical_tree import combine_tree
+
+    gen = torch.Generator().manual_seed(1)
+    parts = [torch.randn(5, 7, generator=gen) * 10.0**i for i in range(8)]
+    for n in (1, 2, 4, 8):
+        acc = sk.TreeAccumulator()
+        for p in parts[:n]:
+            acc.push(p)
+        assert torch.equal(acc.result(), combine_tree(parts[:n]))
+    acc = sk.TreeAccumulator()
+    for p in parts[:3]:
+        acc.push(p)
+    with pytest.raises(ValueError):
+        acc.result()
+
+
+# --------------------------------------------------------------------------------------
+# LoRA token-axis gradients: the det_gemm dW rule (kernels_gemm:R1) and packing
+# invariance (megatron_runtime:R2); binding dX vs ops autograd (kernels_gemm:R2)
+# --------------------------------------------------------------------------------------
+
+
+@requires_cuda
+@pytest.mark.parametrize("t", [1, 200, 300, 513])
+def test_lora_token_grad_uses_the_det_gemm_dw_rule(t):
+    """T_pad = roundup(T, 256), 8 chunks of T_pad/8 (not the old 512 rule): bitwise the det_gemm
+    dW kernel call, and one rounding of it is exactly ops fast_det_gemm's autograd dW."""
+    from rl_engine.models.muse_glimmer.ops.det_gemm import fast_det_gemm
+    from rl_engine.models.muse_glimmer.runtime.megatron_lora import _token_grad_gemm
+    from rl_engine.models.muse_glimmer.triton.det_gemm_tree import tree_gemm
+
+    gen = torch.Generator().manual_seed(t)
+    lhs = torch.randn(t, 48, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    rhs = torch.randn(t, 512, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    got = _token_grad_gemm(lhs, rhs)
+    assert got.dtype == torch.float32 and got.shape == (48, 512)
+    assert torch.equal(got, tree_gemm(lhs.t(), rhs, out_dtype=torch.float32, allow_pad=True))
+    w = (torch.randn(48, 512, generator=gen) * 0.05).to(device="cuda", dtype=torch.bfloat16)
+    w.requires_grad_(True)
+    fast_det_gemm(rhs, w).backward(lhs)  # dW[n, k] = sum_t lhs[t, n] * rhs[t, k]
+    assert torch.equal(w.grad, got.to(torch.bfloat16))
+    ref = (lhs.double().t() @ rhs.double()).float()
+    assert torch.allclose(got, ref, atol=1e-3, rtol=1e-4)
+
+
+@requires_cuda
+@pytest.mark.parametrize("kind", ["column", "row"])
+def test_lora_grads_are_packing_invariant(kind):
+    """The same three sequences packed as one, two or three micro-batches give bitwise the same
+    LoRA gradients (per-sequence dW partials, left fold in sample order); before the fix the
+    token reduction spanned the whole micro-batch, so the bits depended on the packing."""
+    lens = [70, 200, 330]
+    offs = [0, 70, 270, 600]
+    k, n, r = 1024, 256, 16
+    gen = torch.Generator().manual_seed(5)
+    x = torch.randn(600, k, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    w = (torch.randn(n, k, generator=gen) * 0.05).to(device="cuda", dtype=torch.bfloat16)
+    a0 = (torch.randn(r, k, generator=gen) * 0.02).cuda()
+    b0 = (torch.randn(n, r, generator=gen) * 0.02).cuda()
+    gy = torch.randn(600, n, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    comm = sk.TPComm(None)
+
+    def run(packing):
+        a = a0.clone().requires_grad_(True)
+        b = b0.clone().requires_grad_(True)
+        for group in packing:
+            rows = torch.cat([torch.arange(offs[i], offs[i + 1]) for i in group]).cuda()
+            segs, pos = [], 0
+            for i in group:
+                segs.append((pos, pos + lens[i]))
+                pos += lens[i]
+            xs = x.index_select(0, rows)
+            if kind == "column":
+                y = StrictColumnLinear.apply(xs, a, b, comm, n, w, segments=segs)
+            else:
+                y = StrictRowLinear.apply(xs, w, a, b, comm, k, segments=segs)
+            (y.float() * gy.index_select(0, rows).float()).sum().backward()
+        return a.grad.clone(), b.grad.clone()
+
+    ref = run([[0, 1, 2]])
+    for packing in ([[0, 1], [2]], [[0], [1, 2]], [[0], [1], [2]]):
+        got = run(packing)
+        assert torch.equal(got[0], ref[0]) and torch.equal(got[1], ref[1]), packing
+    singles = [run([[i]]) for i in range(3)]
+    fold_a = (singles[0][0] + singles[1][0]) + singles[2][0]
+    fold_b = (singles[0][1] + singles[1][1]) + singles[2][1]
+    assert torch.equal(ref[0], fold_a) and torch.equal(ref[1], fold_b)
+
+
+@requires_cuda
+@pytest.mark.parametrize("m", [1, 64, 300])
+@pytest.mark.parametrize(
+    "name,n,k", [("k_proj", 256, 6656), ("q_proj", 4096, 6656), ("o_proj", 6656, 4096)]
+)
+def test_binding_dx_equals_ops_fast_det_gemm_autograd(m, name, n, k):
+    """The binding's own StrictColumnLinear / StrictRowLinear input gradient (single-chunk
+    leaves + canonical tree, simulated TP 1/2/4/8 with a list-returning gather) equals the ops
+    ``fast_det_gemm`` autograd dA bitwise (no LoRA)."""
+    from rl_engine.models.muse_glimmer.ops.det_gemm import fast_det_gemm
+
+    gen = torch.Generator().manual_seed(m + n)
+    x = torch.randn(m, k, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    w = (torch.randn(n, k, generator=gen) * 0.02).to(device="cuda", dtype=torch.bfloat16)
+    dy = torch.randn(m, n, generator=gen).to(device="cuda", dtype=torch.bfloat16)
+    xr = x.clone().requires_grad_(True)
+    fast_det_gemm(xr, w).backward(dy)
+    want = xr.grad
+    for world in (1, 2, 4, 8):
+        if name == "o_proj":  # row-parallel: K split, dX_local = the rank's columns of dA
+
+            def run(comm):
+                kl = k // comm.world
+                cols = slice(comm.rank * kl, (comm.rank + 1) * kl)
+                xg = x[:, cols].clone().requires_grad_(True)
+                y = StrictRowLinear.apply(xg, w[:, cols], None, None, comm, k)
+                return torch.autograd.grad(y, (xg,), dy)[0]
+
+            outs = _simulate(world, run)
+            assert torch.equal(torch.cat(outs, dim=1), want), (name, m, world)
+        else:  # column-parallel: N split, dX on every rank = the full dA
+
+            def run(comm):
+                nl = n // comm.world
+                rows = slice(comm.rank * nl, (comm.rank + 1) * nl)
+                xg = x.clone().requires_grad_(True)
+                y = StrictColumnLinear.apply(xg, None, None, comm, n, w[rows])
+                return torch.autograd.grad(y, (xg,), dy[:, rows])[0]
+
+            for got in _simulate(world, run):
+                assert torch.equal(got, want), (name, m, world)
+
+
+# --------------------------------------------------------------------------------------
+# StrictTrainer recompute check (review megatron_runtime:R3) and vision memory (R7)
+# --------------------------------------------------------------------------------------
+
+
+def test_recompute_mismatch_fails_closed_in_strict_mode():
+    from rl_engine.models.muse_glimmer.runtime.strict_trainer import (
+        StrictRecomputeMismatch,
+        _RankState,
+    )
+
+    lora = torch.nn.Linear(2, 1, bias=False)
+    state = _RankState.__new__(_RankState)  # no model: only the backward protocol is exercised
+    state.device = torch.device("cpu")
+    state.binding = None
+    state.native_lora = [lora]
+    stored = torch.tensor([-1.0, -2.0])
+
+    def pending():
+        return {"token_ids": [[1, 2, 3]], "starts": [1], "groups": [[0]], "values": [stored]}
+
+    def recompute_differs(_ids, _starts, _groups, *, grad):
+        leaf = torch.tensor([-1.0, -2.5], requires_grad=grad)
+        return [leaf * 1.0]
+
+    state._values = recompute_differs
+    for strict in (True, False):
+        state.strict = strict
+        state._pending = pending()
+        lora.weight.grad = torch.ones_like(lora.weight)  # an earlier micro-batch's gradient
+        if strict:
+            with pytest.raises(StrictRecomputeMismatch, match="1 of 2"):
+                state.cmd_backward(torch.ones(2))
+            assert lora.weight.grad is None  # the whole step's gradients are discarded
+        else:  # native mode makes no bitwise promise: counted, not raised
+            info = state.cmd_backward(torch.ones(2))
+            assert info["recompute_logp_mismatches"] == 1
+            assert lora.weight.grad is not None
+
+
+@requires_cuda
+def test_drop_vision_modules_releases_memory_held_by_setattr_cycles():
+    """Bridge's ``hook_hf_module_setattr_for_tp_grad_sync`` leaves a bound ``__setattr__`` in
+    each vision submodule (a reference cycle), so ``delattr`` alone freed nothing (review R7)."""
+    import gc
+    import types
+
+    from rl_engine.models.muse_glimmer.runtime.megatron_strict import drop_vision_modules
+
+    class Toy(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.vision_tower = torch.nn.Sequential(
+                torch.nn.Linear(1024, 1024, device="cuda"), torch.nn.Linear(1024, 1024, device="cuda")
+            )
+            self.decoder = torch.nn.Linear(4, 4, device="cuda")
+
+    model = Toy()
+    for sub in model.vision_tower.modules():
+        original = sub.__setattr__
+
+        def wrapped(self, name, value, _orig=original):
+            _orig(name, value)
+
+        sub.__setattr__ = types.MethodType(wrapped, sub)
+    gc.collect()
+    before = torch.cuda.memory_allocated()
+    info = drop_vision_modules(model)
+    expected = 2 * (1024 * 1024 + 1024) * 4
+    assert info["dropped"] == ["vision_tower"] and not hasattr(model, "vision_tower")
+    assert abs(info["vision_param_gib"] * 2**30 - expected) < 1
+    assert before - torch.cuda.memory_allocated() >= expected
+    assert info["allocated_drop_gib"] * 2**30 >= expected
+
+

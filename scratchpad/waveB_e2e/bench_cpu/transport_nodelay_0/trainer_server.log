@@ -1,0 +1,31 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 22:06:51] start pid=439215 world=1 launcher=process CUDA_VISIBLE_DEVICES='' tcp_nodelay=False
+[trainer_server rank0 22:06:51] client connected
+[trainer_server rank0 22:06:53] trainer MockTrainer built in 1.2 s
+[trainer_server rank0 22:06:53] ping id=1 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=2 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=3 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=4 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=5 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=6 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=7 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=8 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=9 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=10 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=11 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:53] ping id=12 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:54] ping id=13 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:54] ping id=14 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:54] ping id=15 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:56] ping id=16 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:57] ping id=17 ok=True compute=0.0 ms
+[trainer_server rank0 22:06:58] ping id=18 ok=True compute=0.0 ms
+[trainer_server rank0 22:07:01] ping id=19 ok=True compute=0.1 ms
+[trainer_server rank0 22:07:03] ping id=20 ok=True compute=0.0 ms
+[trainer_server rank0 22:07:05] ping id=21 ok=True compute=0.1 ms
+[trainer_server rank0 22:07:08] ping id=22 ok=True compute=0.1 ms
+[trainer_server rank0 22:07:10] ping id=23 ok=True compute=0.0 ms
+[trainer_server rank0 22:07:12] ping id=24 ok=True compute=0.1 ms
+[trainer_server rank0 22:07:12] close id=25 ok=True compute=0.1 ms
+[trainer_server rank0 22:07:12] bye

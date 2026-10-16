@@ -1,0 +1,1 @@
+~/bin/gpu-lease -n 1 --pool 3 --timeout 14400 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_baseline_gpu3.json   # at b71de7a

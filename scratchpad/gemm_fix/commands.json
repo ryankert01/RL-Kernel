@@ -1,0 +1,18 @@
+{
+ "scratch": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/gemm_fix",
+ "worktree": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-4",
+ "before_tree": "git archive 6a61f6e rl_engine tests/models/muse_glimmer extracted to $SCRATCH/before_tree (base commit code)",
+ "probe_det_gemm_1_before": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 600 -- ~/envs/vllm/bin/python $SCRATCH/probe_iters.py $SCRATCH/probe_before.json $SCRATCH/ir_before   (at 6a61f6e)",
+ "probe_det_gemm_1_after": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1800 -- ~/envs/vllm/bin/python $SCRATCH/probe_iters.py $SCRATCH/probe_after.json $SCRATCH/ir_after",
+ "probe_det_gemm_2_tp": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 3000 -- ~/envs/vllm/bin/python $SCRATCH/probe_tp.py $SCRATCH/probe_tp.json",
+ "probe_lm_head_syncs": "PYTHONPATH=<before_tree|$WT> ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 600 -- ~/envs/vllm/bin/python $SCRATCH/probe_syncs.py $SCRATCH/syncs_<before|after>.json",
+ "bit_ledger": "PYTHONPATH=<before_tree|$WT> ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 3000 -- ~/envs/vllm/bin/python $SCRATCH/probe_bits.py $SCRATCH/bits_<before|after>.json",
+ "bench_before": "BENCH_COMMIT=6a61f6e PYTHONPATH=$SCRATCH/before_tree ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1800 -- ~/envs/vllm/bin/python $SCRATCH/bench_rows.py $SCRATCH/bench_before.json",
+ "bench_after": "BENCH_COMMIT=87cba55 PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 3000 -- ~/envs/vllm/bin/python $SCRATCH/bench_rows.py $SCRATCH/bench_after.json",
+ "bench_decode_latency": "PYTHONPATH=<before_tree|$WT> ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1200 -- ~/envs/vllm/bin/python $SCRATCH/bench_small.py $SCRATCH/small_<before|after>_<i>.json  (alternated twice)",
+ "profile_lm_head_decode_gpu": "PYTHONPATH=<before_tree|$WT> ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1200 -- ~/envs/vllm/bin/python $SCRATCH/prof_lm_gpu.py",
+ "tests_owned_after": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1800 -- ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_det_gemm.py tests/models/muse_glimmer/test_swiglu_ffn.py tests/models/muse_glimmer/test_lm_head_softcap_logprob.py -q -p no:cacheprovider -rfs",
+ "tests_new_on_base_commit": "cp the three new test files into $SCRATCH/before_tree/tests/models/muse_glimmer/; cd $SCRATCH/before_tree; PYTHONPATH=$SCRATCH/before_tree ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1800 -- ~/envs/vllm/bin/python -m pytest <same three files> -q -p no:cacheprovider --tb=line --rootdir=$SCRATCH/before_tree",
+ "suite_after": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 1800 -- ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed -q -p no:cacheprovider --tb=line -rfs",
+ "megatron_helper_probe": "PYTHONPATH=$WT ~/bin/gpu-lease -n 1 --pool 4-5 --timeout 900 -- ~/envs/vllm/bin/python $SCRATCH/probe_megatron_lmhead.py"
+}

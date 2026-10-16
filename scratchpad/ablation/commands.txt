@@ -1,0 +1,9 @@
+# All run from the worktree root WT=/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-7 ; S=<session scratchpad>/ablation
+~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --out $S/parts/part_hf.json
+~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --out $S/parts/part_strict.json
+~/bin/gpu-lease -n 1 --pool 6-7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-layers --out $S/parts/part_hf_layers.json
+~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py strict --settings repeat_immediate --out $S/parts/part_strict_gpu7.json
+~/bin/gpu-lease -n 1 --pool 6 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf-baseline --out $S/parts/part_hf_gpu6.json
+~/bin/gpu-lease -n 1 --pool 7 --timeout 7200 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py hf --settings rollout_like_batched_decode rollout_like_batched_decode_sdpa --out $S/parts/part_hf_rollout_like.json
+PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/ablation/run_ablation.py merge --parts $S/parts/part_hf.json $S/parts/part_strict.json $S/parts/part_strict_gpu7.json $S/parts/part_hf_layers.json $S/parts/part_hf_gpu6.json $S/parts/part_hf_rollout_like.json --commands-file $S/commands.txt --out reports/muse_glimmer_poc/data/ablation.json
+~/bin/gpu-lease -n 1 --pool 7 --timeout 1800 -- env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer/test_ablation.py -q

@@ -1,0 +1,13 @@
+{
+ "label": "head",
+ "module": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_7b064961-36f-11/rl_engine/models/muse_glimmer/ops/swiglu_ffn.py",
+ "ffn_bwd_T64": "ok",
+ "ffn_bwd_T300": "ok",
+ "has_validate_targets": true,
+ "syncs_validated": 2,
+ "syncs_unvalidated": 0,
+ "unvalidated_padded_target_logp": NaN,
+ "unvalidated_negative_target_logp": NaN,
+ "lm_T1_event_ms": 2.7758249918619793,
+ "lm_T1_wall_ms": 2.7771173833267917
+}

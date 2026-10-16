@@ -1,0 +1,8 @@
+[gpu-lease] using GPUs [4]
+{
+ "canonical_built_before_capture": false,
+ "capture": "ok (no error)",
+ "canonical_built_during_capture": true,
+ "table_restored_by_replay (build captured into graph)": false,
+ "verify_after": "RuntimeError: canonical RoPE table sha256 2736fc18ed803a69cc1fb5fb0235278f4a8070aff5e169534127657cd9434699 != pinned 088dbb8c93a55ce79d189181c46ac06fbdb61dab6c39142"
+}

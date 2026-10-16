@@ -1,0 +1,9 @@
+[gpu-lease] using GPUs [3]
+CUDA_VISIBLE_DEVICES=3
+USDT:2026-10-15 23:29:07 540009:540009 SyncActivityProfilerHandler.cpp:59] profiler_stop
+no_meta: DtoH_events=3 HtoD_events=1 cudaStreamSynchronize=4 item_calls=60
+meta: DtoH_events=0 HtoD_events=0 cudaStreamSynchronize=0 item_calls=0
+base bench 1 rc=0
+head bench 1 rc=0
+base bench 2 rc=0
+head bench 2 rc=0

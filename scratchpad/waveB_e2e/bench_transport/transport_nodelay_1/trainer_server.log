@@ -1,0 +1,47 @@
+/home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+[trainer_server rank0 22:12:23] start pid=453749 world=1 launcher=process CUDA_VISIBLE_DEVICES='' tcp_nodelay=True
+[trainer_server rank0 22:12:23] client connected
+[trainer_server rank0 22:12:25] trainer MockTrainer built in 1.5 s
+[trainer_server rank0 22:12:30] ping id=1 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=2 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=3 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=4 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=5 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=6 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=7 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=8 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=9 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=10 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=11 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=12 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=13 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=14 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:30] ping id=15 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:31] ping id=16 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:31] ping id=17 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:31] ping id=18 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:31] ping id=19 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:31] ping id=20 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:32] ping id=21 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:33] ping id=22 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:34] ping id=23 ok=True compute=0.1 ms
+[trainer_server rank0 22:12:35] ping id=24 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:35] ping id=25 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:38] ping id=26 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:43] ping id=27 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:44] ping id=28 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:50] ping id=29 ok=True compute=0.1 ms
+[trainer_server rank0 22:12:51] ping id=30 ok=True compute=0.0 ms
+[trainer_server rank0 22:12:58] ping id=31 ok=True compute=0.2 ms
+[trainer_server rank0 22:13:07] ping id=32 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:10] ping id=33 ok=True compute=0.1 ms
+[trainer_server rank0 22:13:20] ping id=34 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:23] ping id=35 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:33] ping id=36 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:40] ping id=37 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:43] ping id=38 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:50] ping id=39 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:52] ping id=40 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:55] close id=41 ok=True compute=0.0 ms
+[trainer_server rank0 22:13:55] bye

@@ -1,0 +1,164 @@
+[gpu-lease] using GPUs [4]
+fwd_bf16/q_proj/M1 4ebac89473012896
+fwd_fp32/q_proj/M1 bffa56894fae3e59
+fwd_bf16/q_proj/M16 5918d465bfaf017b
+fwd_fp32/q_proj/M16 5b9be758cb75d71d
+fwd_bf16/q_proj/M64 fc6ddd19104235af
+fwd_fp32/q_proj/M64 c24dc1991c487b29
+fwd_bf16/q_proj/M300 4e7b078ed68979a7
+fwd_fp32/q_proj/M300 e76aff8feeae31ed
+fwd_bf16/q_proj/M4096 e244808bee78d5c7
+fwd_fp32/q_proj/M4096 8879d20a12e80334
+autograd/q_proj/T1 {'dA': 'a395a6cdc24c4d93', 'dW': '2d43332f29f3b71e'}
+autograd/q_proj/T64 {'dA': 'bf86c0c24c976e1e', 'dW': 'd0a129aada96f8b6'}
+autograd/q_proj/T256 {'dA': '7a7426311ea7ad57', 'dW': '552233c1bba7a70f'}
+autograd/q_proj/T300 {'dA': 'f29c0aa3e05d93ea', 'dW': 'fbace243bc660240'}
+autograd/q_proj/T512 {'dA': 'ecf914446cce8122', 'dW': 'bf035a39202e5e10'}
+autograd/q_proj/T1024 {'dA': '6c8c37a4f59a6f7f', 'dW': '67889ac6cd1ecbc1'}
+autograd/q_proj/T4096 {'dA': '05a63f337beb731e', 'dW': 'edfd0b10289975b2'}
+fwd_bf16/k_proj/M1 b20fe1e62ca5e2d1
+fwd_fp32/k_proj/M1 98eede9319136a47
+fwd_bf16/k_proj/M16 bfe02e33c46f217f
+fwd_fp32/k_proj/M16 fb59ee2a4f0745ee
+fwd_bf16/k_proj/M64 248e4280f2dcb40d
+fwd_fp32/k_proj/M64 daee225d9cf683f7
+fwd_bf16/k_proj/M300 68c943127505e142
+fwd_fp32/k_proj/M300 3ac600524e4eeac8
+fwd_bf16/k_proj/M4096 d1de8253ac4c5e9d
+fwd_fp32/k_proj/M4096 d183d24e9bf4673c
+autograd/k_proj/T1 {'dA': 'a7e4633aa529589d', 'dW': '6dbfc010ddd2c46b'}
+autograd/k_proj/T64 {'dA': 'f69b4ba4a11c48cb', 'dW': '23a22b8ad2a30e36'}
+autograd/k_proj/T256 {'dA': '96e6200e70d1c9b6', 'dW': 'e16d50395b45f5c0'}
+autograd/k_proj/T300 {'dA': '8b74fceb31be11b8', 'dW': '883a6841cc4bcc28'}
+autograd/k_proj/T512 {'dA': '47081fefb9ea12df', 'dW': 'a93a6a85209602e9'}
+autograd/k_proj/T1024 {'dA': 'd46398d27032025d', 'dW': 'a0c604139291ee40'}
+autograd/k_proj/T4096 {'dA': '04deebd59eb57f3b', 'dW': 'c39ae57bc93d76d2'}
+fwd_bf16/v_proj/M1 6604908d7d499a6a
+fwd_fp32/v_proj/M1 cc52624214b76a9f
+fwd_bf16/v_proj/M16 657a842a391903ca
+fwd_fp32/v_proj/M16 ace9effc0c946160
+fwd_bf16/v_proj/M64 e97e14f483ed52f8
+fwd_fp32/v_proj/M64 6d9f42fa13206fe5
+fwd_bf16/v_proj/M300 c94349fa4f0e5682
+fwd_fp32/v_proj/M300 1ae69cd6efd1bba7
+fwd_bf16/v_proj/M4096 68690d90b0f0c57e
+fwd_fp32/v_proj/M4096 3633c687a1b97453
+autograd/v_proj/T1 {'dA': '0ccf4ce6bd7d412c', 'dW': '6dbfc010ddd2c46b'}
+autograd/v_proj/T64 {'dA': 'c73d6564472ca5e5', 'dW': '23a22b8ad2a30e36'}
+autograd/v_proj/T256 {'dA': 'b19b69510528f20a', 'dW': 'e16d50395b45f5c0'}
+autograd/v_proj/T300 {'dA': '500d58511cd339a7', 'dW': '883a6841cc4bcc28'}
+autograd/v_proj/T512 {'dA': '57d55549e9f94a57', 'dW': 'a93a6a85209602e9'}
+autograd/v_proj/T1024 {'dA': 'b204c12afe4309f8', 'dW': 'a0c604139291ee40'}
+autograd/v_proj/T4096 {'dA': 'ee07fc3bc36a30bc', 'dW': 'c39ae57bc93d76d2'}
+fwd_bf16/attn_gate/M1 c3e4c0e135cca512
+fwd_fp32/attn_gate/M1 3aef9a7825ebbd8a
+fwd_bf16/attn_gate/M16 ba663ed0c41d94ac
+fwd_fp32/attn_gate/M16 39cfb8a7182ea6ca
+fwd_bf16/attn_gate/M64 be5d451f6bfe6d3b
+fwd_fp32/attn_gate/M64 d27fdaf79b763874
+fwd_bf16/attn_gate/M300 08cddbb4271226c3
+fwd_fp32/attn_gate/M300 5cf034400e565355
+fwd_bf16/attn_gate/M4096 3879982006a16d57
+fwd_fp32/attn_gate/M4096 790d07b8a00f7963
+autograd/attn_gate/T1 {'dA': '8482b381f865f30c', 'dW': '2d43332f29f3b71e'}
+autograd/attn_gate/T64 {'dA': 'bb9d301934465675', 'dW': 'd0a129aada96f8b6'}
+autograd/attn_gate/T256 {'dA': '383775774df2d2c3', 'dW': '552233c1bba7a70f'}
+autograd/attn_gate/T300 {'dA': '0978a48684f429e5', 'dW': 'fbace243bc660240'}
+autograd/attn_gate/T512 {'dA': '80ed6b96aa7ff25d', 'dW': 'bf035a39202e5e10'}
+autograd/attn_gate/T1024 {'dA': '573641568452795c', 'dW': '67889ac6cd1ecbc1'}
+autograd/attn_gate/T4096 {'dA': 'd7690448fbd47b2c', 'dW': 'edfd0b10289975b2'}
+fwd_bf16/o_proj/M1 bad9dae977592714
+fwd_fp32/o_proj/M1 dc08cb19e30169eb
+fwd_bf16/o_proj/M16 038b89306a2fe474
+fwd_fp32/o_proj/M16 ac9cb03e1af4482e
+fwd_bf16/o_proj/M64 8e1f9592d4f07905
+fwd_fp32/o_proj/M64 5ad096acfac96a47
+fwd_bf16/o_proj/M300 fa269143217e146b
+fwd_fp32/o_proj/M300 10c1d47c3381625c
+fwd_bf16/o_proj/M4096 9075ff6ec50ce64c
+fwd_fp32/o_proj/M4096 41b49525f5e18acf
+tp_partial/o_proj/TP2 68c015b2548f3109
+tp_partial/o_proj/TP4 9b76b5b2b42c0272
+tp_partial/o_proj/TP8 15c0dad0faa2cc02
+autograd/o_proj/T1 {'dA': '3275c67474674e3d', 'dW': 'f9cbe935bff52a33'}
+autograd/o_proj/T64 {'dA': 'f28160611f6d5e35', 'dW': '266d6d4cb9137fe5'}
+autograd/o_proj/T256 {'dA': 'dc1d633d7784bbb3', 'dW': '48e5b6366d45afdb'}
+autograd/o_proj/T300 {'dA': 'fe539d37b030fe16', 'dW': '04e030ca4055735d'}
+autograd/o_proj/T512 {'dA': 'c3570ac59db16977', 'dW': '8a2d48f396a9fe51'}
+autograd/o_proj/T1024 {'dA': '42f1490881e04d5a', 'dW': '85e01535cde5a3e7'}
+autograd/o_proj/T4096 {'dA': 'bec169368b20542b', 'dW': '4e6e55634c7a38c3'}
+fwd_bf16/mlp_gate/M1 9a88ea4e1f75ac92
+fwd_fp32/mlp_gate/M1 120b4574aaaa2aab
+fwd_bf16/mlp_gate/M16 dc05688f1d57f517
+fwd_fp32/mlp_gate/M16 a47912c50cb81ae9
+fwd_bf16/mlp_gate/M64 b7a585f9298ed650
+fwd_fp32/mlp_gate/M64 5693bdbcd7eb50fc
+fwd_bf16/mlp_gate/M300 d28814aecf5d3dcc
+fwd_fp32/mlp_gate/M300 dbbec769cd67dd42
+fwd_bf16/mlp_gate/M4096 a424af7c7c651048
+fwd_fp32/mlp_gate/M4096 97920890a8575190
+autograd/mlp_gate/T1 {'dA': 'ff143713417bf9d6', 'dW': 'd29d7ce71d721d8d'}
+autograd/mlp_gate/T64 {'dA': 'ec85373a9395a52b', 'dW': '0301016604c29523'}
+autograd/mlp_gate/T256 {'dA': 'a24c9d3797b46c68', 'dW': '350a7c650c1ff8d9'}
+autograd/mlp_gate/T300 {'dA': '37fce9f64a1cc04b', 'dW': 'cebbdde2b074f7e1'}
+autograd/mlp_gate/T512 {'dA': 'e5fd5a40c64f9caa', 'dW': '1b4fa2a5904c00b3'}
+autograd/mlp_gate/T1024 {'dA': '69f0be7d92a7d8d1', 'dW': '5f6ffe820966ce32'}
+autograd/mlp_gate/T4096 {'dA': 'a70e8c26c065cc4d', 'dW': 'c23b8e4dbc15647e'}
+fwd_bf16/up_proj/M1 9825f2c0e4ab9aea
+fwd_fp32/up_proj/M1 3c33a431aa992951
+fwd_bf16/up_proj/M16 800b2c13660edbad
+fwd_fp32/up_proj/M16 635a70b40259b919
+fwd_bf16/up_proj/M64 46d1f75b30bf2ca2
+fwd_fp32/up_proj/M64 33753106cc634141
+fwd_bf16/up_proj/M300 721e751516c2a950
+fwd_fp32/up_proj/M300 dd166f3cb25cacfc
+fwd_bf16/up_proj/M4096 ef3b0e9b4c9ab568
+fwd_fp32/up_proj/M4096 b5e435f72287b852
+autograd/up_proj/T1 {'dA': '7cc1884b8e61ded7', 'dW': 'd29d7ce71d721d8d'}
+autograd/up_proj/T64 {'dA': '427b2a944c10403c', 'dW': '0301016604c29523'}
+autograd/up_proj/T256 {'dA': 'f3bbaf86324d01ad', 'dW': '350a7c650c1ff8d9'}
+autograd/up_proj/T300 {'dA': 'c0a40fb3cd0ec51a', 'dW': 'cebbdde2b074f7e1'}
+autograd/up_proj/T512 {'dA': '2eaa951f69ab77cf', 'dW': '1b4fa2a5904c00b3'}
+autograd/up_proj/T1024 {'dA': 'dc6aed5021d97eb2', 'dW': '5f6ffe820966ce32'}
+autograd/up_proj/T4096 {'dA': 'f66a93e72fc5812b', 'dW': 'c23b8e4dbc15647e'}
+fwd_bf16/down_proj/M1 30a2d11d18a34a5b
+fwd_fp32/down_proj/M1 c8302f730d19ba31
+fwd_bf16/down_proj/M16 daaf57c526d48eb3
+fwd_fp32/down_proj/M16 d4fc96f1bdf675ef
+fwd_bf16/down_proj/M64 6e838889803bcfa1
+fwd_fp32/down_proj/M64 cc8894393b3c4bb0
+fwd_bf16/down_proj/M300 14a32fefaf025a74
+fwd_fp32/down_proj/M300 3100e0d1ee8fad79
+fwd_bf16/down_proj/M4096 abed679d46872d1a
+fwd_fp32/down_proj/M4096 3e7e6c29bd9d59ae
+tp_partial/down_proj/TP2 2ae0ab8f8a97ce03
+tp_partial/down_proj/TP4 2cc7d6f101c7628d
+tp_partial/down_proj/TP8 45f93646fc5c6ef7
+autograd/down_proj/T1 {'dA': 'ead2fed9eb40ebbb', 'dW': 'bb7accea6e532d5a'}
+autograd/down_proj/T64 {'dA': '6922f41272bdc34e', 'dW': '03f122bcd48f025a'}
+autograd/down_proj/T256 {'dA': 'd170606eda140b2e', 'dW': '364a8035839d1ce0'}
+autograd/down_proj/T300 {'dA': 'de50bac095c23aa6', 'dW': 'fb8f586c0ae7048e'}
+autograd/down_proj/T512 {'dA': 'e907d9941fed75ea', 'dW': '97469d2dbdfc91a4'}
+autograd/down_proj/T1024 {'dA': '9e93fc4c6a9176f0', 'dW': 'f4d7cd6eca62a10c'}
+autograd/down_proj/T4096 {'dA': '532f8abb6bf0aa70', 'dW': '0f83ee0fa0ad4f7b'}
+fwd_bf16/lm_head/M1 81c65bac5e31e2f6
+fwd_fp32/lm_head/M1 4ea3fd4999953af4
+fwd_bf16/lm_head/M16 8615044c33b91fc5
+fwd_fp32/lm_head/M16 ca558d3913506bab
+fwd_bf16/lm_head/M64 ffbab04d2137aac3
+fwd_fp32/lm_head/M64 18d7edbad06b2204
+fwd_bf16/lm_head/M300 c7d06bf215f632d3
+fwd_fp32/lm_head/M300 46b81de7a99d9ade
+ffn_fwd/T1 0794a25866cf8783
+ffn_fwd/T64 8f4ca50f58f638f3
+ffn_fwd/T300 4b2e6ae522af84ac
+ffn_fwd/T4096 9c8e3129ba3e2e5f
+ffn_bwd/T64 ERROR ValueError: reduction length 64 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM
+ffn_bwd/T256 {'dx': '4eec2f94391a0630', 'dw_gate': '4bbf06379adef524', 'dw_up': '02081f1d680cfb53', 'dw_down': 'cfb843d75ac9d014'}
+ffn_bwd/T300 ERROR ValueError: reduction length 300 is not a multiple of 256 (8 chunks x 32); out of contract for the forward GEMM
+ffn_bwd/T4096 {'dx': '5c11af346ff7de2f', 'dw_gate': '4eb7a29a34dd1fe8', 'dw_up': '768bd20e33172091', 'dw_down': '6dd1060e614b9cc6'}
+lm_head_fwd/T1 fd6eae98db6ed3fd
+lm_head_fwd/T64 4d3545fd910a3716
+lm_head_fwd/T300 f2fd462e81a65304
+lm_head_bwd/T256 {'dh': '77d58f338a43f968', 'dW': '4c0cb56da42ed29b'}
+lm_head_bwd/T300 {'dh': '3f71347d7dd3e90d', 'dW': 'a7439ae2a0111d91'}

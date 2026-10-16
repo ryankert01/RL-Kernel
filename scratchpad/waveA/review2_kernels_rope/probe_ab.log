@@ -1,0 +1,117 @@
+[gpu-lease] using GPUs [5]
+{
+ "bitwise": [
+  {
+   "T": 1,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 1,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 3,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 3,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 33,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 33,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 256,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 256,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 1000,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 1000,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 4096,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 4096,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 8192,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 8192,
+   "local": false,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 32768,
+   "local": true,
+   "fwd_bwd_equal": true
+  },
+  {
+   "T": 32768,
+   "local": false,
+   "fwd_bwd_equal": true
+  }
+ ],
+ "timing_us": [
+  {
+   "T": 4096,
+   "impl": "old",
+   "fwd_median_us": 55.04
+  },
+  {
+   "T": 4096,
+   "impl": "new",
+   "fwd_median_us": 54.58
+  },
+  {
+   "T": 8192,
+   "impl": "old",
+   "fwd_median_us": 101.17
+  },
+  {
+   "T": 8192,
+   "impl": "new",
+   "fwd_median_us": 101.22
+  },
+  {
+   "T": 32768,
+   "impl": "old",
+   "fwd_median_us": 379.85
+  },
+  {
+   "T": 32768,
+   "impl": "new",
+   "fwd_median_us": 381.29
+  }
+ ]
+}

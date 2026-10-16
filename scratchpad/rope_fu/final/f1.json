@@ -1,0 +1,39 @@
+{
+ "probe": "f1",
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "python": "/home/ubuntu/envs/vllm/bin/python"
+ },
+ "cpu_build_accepted": false,
+ "cpu_build_error": "RuntimeError: contract O4: the RoPE table is built by a fixed fp32 torch-CUDA function; got device cpu. CPU/other-device builds differ in the last bits (~19% of cos/sin elements). Build on the CUDA device that runs the kernel (canonical_rope_table).",
+ "cuda_cross_impl_vs_ops_rope_table": {
+  "reference.golden_ops.rope_table": {
+   "cos_mismatch": 0,
+   "sin_mismatch": 0,
+   "elements": 16777216
+  },
+  "runtime.fallback_ops.rope_table": {
+   "cos_mismatch": 0,
+   "sin_mismatch": 0,
+   "elements": 16777216
+  },
+  "runtime.strict_kernels._fb_rope_table": {
+   "cos_mismatch": 0,
+   "sin_mismatch": 0,
+   "elements": 16777216
+  },
+  "ops.qknorm_rope.rope_table(int32 positions)": {
+   "cos_mismatch": 0,
+   "sin_mismatch": 0,
+   "elements": 16777216
+  }
+ },
+ "canonical_table_sha256": {
+  "positions": 131072,
+  "sha256(cos||sin)": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c"
+ },
+ "wall_s": 1.07
+}

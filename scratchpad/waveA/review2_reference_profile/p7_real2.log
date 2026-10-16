@@ -1,0 +1,17 @@
+[gpu-lease] using GPUs [6]
+INFO 10-15 20:45:49 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[20:45:49] loaded 16.6s; golden nodes []
+[20:45:49] xrt rescore: 0/0 equal to committed
+[20:46:37] prefilled 256 seqs in 47.8s
+[20:46:40] B=256 step 2.51s
+[20:46:47] B=256 part 1: {'b1_vs_b256': 10, 'reversed_b256_vs_b256': 256, 'sub_len2': 2, 'sub_len3': 3, 'sub_len17': 17, 'sub_len255': 255, 'b256_vs_train_forward': 3, 'targets_none': 'ok: [nan, nan]', 'duplicate_seq': {'raised': False, 'row0_equals_single': False, 'values': [-13.978163719177246, -13.695491790771484], 'single': [-14.20985221862793]}}
+[20:46:57] B=256: {'b1_vs_b256': 10, 'reversed_b256_vs_b256': 256, 'sub_len2': 2, 'sub_len3': 3, 'sub_len17': 17, 'sub_len255': 255, 'b256_vs_train_forward': 3, 'targets_none': 'ok: [nan, nan]', 'duplicate_seq': {'raised': False, 'row0_equals_single': False, 'values': [-13.978163719177246, -13.695491790771484], 'single': [-14.20985221862793]}, 'step2_b1_vs_b256': 10, 'step2_vs_train_seq7': True}
+[20:47:10] B=4 window: {'evictions_after_prefill': 507, 'step0_b1_vs_b4': 4, 'step1_b1_vs_b4': 4, 'step2_b1_vs_b4': 4, 'evictions_after_decode': 507, 'b4_vs_train_forward_seqs': 0}
+[20:47:29] T=8192: {'train': {'s': 4.04, 'peak_gib': 53.83, 'equal_to_train': 192, 'n': 192}, 'prefill': {'s': 3.94, 'peak_gib': 54.24, 'equal_to_train': 192, 'n': 192}, 'chunked:4096/4095': {'s': 3.95, 'peak_gib': 53.36, 'equal_to_train': 192, 'n': 192}, 'chunked:2047/2049/4095': {'s': 4.08, 'peak_gib': 53.34, 'equal_to_train': 192, 'n': 192}, 'T2_modes_equal': True}
+[20:47:29] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review2_reference_profile/p7_real.json
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [0,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [1,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [2,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+/__w/pytorch/pytorch/aten/src/ATen/native/cuda/Indexing.cu:1524: indexSelectSmallIndex: block: [0,0,0], thread: [3,0,0] Assertion `srcIndex < srcSelectDimSize` failed.
+[20:47:29] negative seq: AcceleratorError: CUDA error: device-side assert triggered
+Search for `cudaErrorAssert' in https://docs.nvidia.com/cuda/cuda-runtime-api/g

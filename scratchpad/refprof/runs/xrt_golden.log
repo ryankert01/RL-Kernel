@@ -1,0 +1,17 @@
+[gpu-lease] using GPUs [6]
+[16:41:21] loading strict weights from /home/ubuntu/models/Muse-Glimmer-30B (layout for backend golden)
+[16:41:21] loading 541 text tensors from model-00001-of-00002.safetensors
+[16:41:30] loading 86 text tensors from model-00002-of-00002.safetensors
+[16:41:34] weights ready in 13.0s: 51.9 GiB on cuda:0; checkpoint a4e59da52a7bc87ae7251dd5545c0dd437c44b68
+INFO 10-15 16:41:34 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[16:41:34] ops: golden=['attention_paged', 'attention_varlen', 'centered_rmsnorm', 'fused_post_norm_residual_pre_norm', 'gemm', 'lm_head_softcap_logprob', 'normalized_embedding', 'pad_lm_head_weight', 'qknorm_scaled_rope', 'rope_table', 'swiglu_ffn', 'weighted_rmsnorm'] sibling=[]
+[16:42:14] [score] gsm8k_test_0: 55 tokens, sum logp -98.8572, train 1.88s; prefill: 55/55 (1.2s), decode: 55/55 (34.5s), chunked:prompt_boundary: 55/55 (1.9s)
+[16:42:45] [score] gsm8k_test_1: 47 tokens, sum logp -87.3018, train 1.22s; prefill: 47/47 (1.2s), decode: 47/47 (27.3s), chunked:prompt_boundary: 47/47 (1.4s)
+[16:44:19] [score] gsm8k_test_2: 129 tokens, sum logp -128.2294, train 1.50s; prefill: 129/129 (1.5s), decode: 129/129 (89.0s), chunked:prompt_boundary: 129/129 (2.1s)
+[16:44:45] [score] gsm8k_test_3: 39 tokens, sum logp -88.5461, train 1.16s; prefill: 39/39 (1.1s), decode: 39/39 (22.1s), chunked:prompt_boundary: 39/39 (1.6s)
+[16:45:51] [score] gsm8k_test_4: 92 tokens, sum logp -123.0703, train 2.11s; prefill: 92/92 (2.1s), decode: 92/92 (59.7s), chunked:prompt_boundary: 92/92 (2.5s)
+[16:47:37] [score] gsm8k_test_5: 149 tokens, sum logp -174.9904, train 2.12s; prefill: 149/149 (2.1s), decode: 149/149 (99.3s), chunked:prompt_boundary: 149/149 (2.3s)
+[16:49:07] [score] gsm8k_test_6: 88 tokens, sum logp -102.2273, train 1.50s; prefill: 88/88 (1.6s), decode: 88/88 (84.5s), chunked:prompt_boundary: 88/88 (2.6s)
+[16:51:27] [score] gsm8k_test_7: 156 tokens, sum logp -169.9581, train 2.63s; prefill: 156/156 (2.5s), decode: 156/156 (131.9s), chunked:prompt_boundary: 156/156 (2.6s)
+[17:01:10] [score] gsm8k_long_window: 178 tokens, sum logp -133.6298, train 44.75s; prefill: 178/178 (43.9s), decode: 178/178 (415.6s), chunked:prompt_boundary: 178/178 (39.7s), chunked:window_boundary_2048: 178/178 (39.5s)
+[17:01:10] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/xrt_reference_golden.json: 933 tokens; ['prefill', 'decode', 'chunked:prompt_boundary', 'chunked:window_boundary_2048'] byte-equal to train: True

@@ -1,0 +1,151 @@
+{
+ "label": "base",
+ "module": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/waveA/review_kernels_gemm/base_tree/rl_engine/models/muse_glimmer/ops/det_gemm.py",
+ "triton": "3.7.1",
+ "rows": [
+  {
+   "kind": "fwd",
+   "K": 256,
+   "M": 1,
+   "N": 384,
+   "numel": 384,
+   "chunk_len": 32,
+   "block_k": 32,
+   "mismatch_vs_tree": 186,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 186
+  },
+  {
+   "kind": "fwd",
+   "K": 256,
+   "M": 64,
+   "N": 384,
+   "numel": 24576,
+   "chunk_len": 32,
+   "block_k": 32,
+   "mismatch_vs_tree": 11953,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 11953
+  },
+  {
+   "kind": "fwd",
+   "K": 256,
+   "M": 256,
+   "N": 384,
+   "numel": 98304,
+   "chunk_len": 32,
+   "block_k": 32,
+   "mismatch_vs_tree": 48065,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 48065
+  },
+  {
+   "kind": "fwd",
+   "K": 512,
+   "M": 1,
+   "N": 384,
+   "numel": 384,
+   "chunk_len": 64,
+   "block_k": 64,
+   "mismatch_vs_tree": 276,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 276
+  },
+  {
+   "kind": "fwd",
+   "K": 512,
+   "M": 64,
+   "N": 384,
+   "numel": 24576,
+   "chunk_len": 64,
+   "block_k": 64,
+   "mismatch_vs_tree": 16370,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 16370
+  },
+  {
+   "kind": "fwd",
+   "K": 512,
+   "M": 256,
+   "N": 384,
+   "numel": 98304,
+   "chunk_len": 64,
+   "block_k": 64,
+   "mismatch_vs_tree": 65430,
+   "mismatch_vs_folded": 0,
+   "tree_vs_folded": 65430
+  },
+  {
+   "kind": "fwd",
+   "K": 1024,
+   "M": 1,
+   "N": 384,
+   "numel": 384,
+   "chunk_len": 128,
+   "block_k": 64,
+   "mismatch_vs_tree": 0,
+   "mismatch_vs_folded": 315,
+   "tree_vs_folded": 315
+  },
+  {
+   "kind": "fwd",
+   "K": 1024,
+   "M": 64,
+   "N": 384,
+   "numel": 24576,
+   "chunk_len": 128,
+   "block_k": 64,
+   "mismatch_vs_tree": 0,
+   "mismatch_vs_folded": 19879,
+   "tree_vs_folded": 19879
+  },
+  {
+   "kind": "fwd",
+   "K": 1024,
+   "M": 256,
+   "N": 384,
+   "numel": 98304,
+   "chunk_len": 128,
+   "block_k": 64,
+   "mismatch_vs_tree": 0,
+   "mismatch_vs_folded": 80102,
+   "tree_vs_folded": 80102
+  },
+  {
+   "kind": "dA_kproj",
+   "M": 256,
+   "numel": 1703936,
+   "mismatch_vs_tree": 98,
+   "mismatch_vs_folded": 0
+  },
+  {
+   "kind": "dW_T300",
+   "numel": 393216,
+   "mismatch_vs_tree": 30,
+   "mismatch_vs_folded": 0
+  }
+ ],
+ "ir_K512_M256": {
+  "block_k": 64,
+  "ttir_addf": 3,
+  "ttgir_addf": 3,
+  "ttir_scf_for": 0,
+  "ttir_dot": 8,
+  "ptx_add_f32": 96,
+  "ptx_mma": 256
+ },
+ "fwd_hashes": {
+  "q_proj/M1": "1ebcb69d5c90d51e",
+  "q_proj/M64": "4f3095e64bf5030a",
+  "q_proj/M300": "31421c65080a9621",
+  "k_proj/M1": "5da16f23e226b735",
+  "k_proj/M64": "4fc3fc6f72af562d",
+  "k_proj/M300": "53e098cf1d832c45",
+  "o_proj/M1": "f7fb5ae0f3aa2b3d",
+  "o_proj/M64": "331ae03376bdaed7",
+  "o_proj/M300": "7212b9871e61c7a0",
+  "down_proj/M1": "e0b3ca9942378224",
+  "down_proj/M64": "e5e7c729b198e63a",
+  "down_proj/M300": "d6e80103c0d3d2d3"
+ }
+}

@@ -1,0 +1,44 @@
+[gpu-lease] using GPUs [3]
+........................................................................ [ 10%]
+......................s................................................. [ 21%]
+........................................................................ [ 31%]
+.....s.................................................................. [ 42%]
+........................................................................ [ 52%]
+........................................................................ [ 63%]
+.....ss...........................s..........s.......................... [ 73%]
+........................................................................ [ 84%]
+........................................................................ [ 95%]
+.............................F
+=================================== FAILURES ===================================
+___ TestStrictSiblings.test_probe_keeps_strict_ops_under_cuda_default_device ___
+
+self = <tests.models.muse_glimmer.test_vllm_strict_binding.TestStrictSiblings object at 0x75fcc543af90>
+
+    def test_probe_keeps_strict_ops_under_cuda_default_device(self):
+        """vLLM builds the model under a CUDA default device and bf16 default dtype; the probe must
+        not demote any strict op there."""
+    
+        previous = torch.get_default_dtype()
+        torch.set_default_dtype(torch.bfloat16)
+        try:
+            with torch.device(DEVICE):
+                ops = probe_ops(resolve_ops(), DEVICE)
+        finally:
+            torch.set_default_dtype(previous)
+>       assert ops.demotions == [], ops.demotions
+E       AssertionError: [{'op': 'gated_attention_paged', 'from': 'strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attent...ndex is on cpu, different from other tensors on cuda:0 (when checking argument in method wrapper_CUDA__index_select)'}]
+E       assert [{'op': 'gate...dex_select)'}] == []
+E         
+E         Left contains 2 more items, first extra item: {'op': 'gated_attention_paged', 'from': 'strict:rl_engine.models.muse_glimmer.ops.gated_attention.strict_gated_attenti...index is on cpu, different from other tensors on cuda:0 (when checking argument in method wrapper_CUDA__index_select)'}
+E         Use -v to get more diff
+
+tests/models/muse_glimmer/test_vllm_strict_binding.py:395: AssertionError
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_gated_attention_bwd.py::test_seq_meta_removes_host_sync[global]
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/__init__.py:1333: UserWarning: Synchronization debug mode is a prototype feature and does not yet detect all synchronizing operations (Triggered internally at /__w/pytorch/pytorch/torch/csrc/cuda/Module.cpp:1028.)
+    torch._C._cuda_set_sync_debug_mode(debug_mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/models/muse_glimmer/test_vllm_strict_binding.py::TestStrictSiblings::test_probe_keeps_strict_ops_under_cuda_default_device
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -1,0 +1,8 @@
+[gpu-lease] using GPUs [4]
+== old backward
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/bench_old_bwd.json in 7.6s
+rc=0
+== new full
+wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn/bench_new.json in 39.7s
+rc=0
+== done

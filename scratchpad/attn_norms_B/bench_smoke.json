@@ -1,0 +1,363 @@
+{
+ "prefill_forward": [
+  {
+   "T": 1024,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.015625,
+   "flash_max_abs_diff_y": 0.015625,
+   "strict_ms": 0.27596799532572425,
+   "strict_ms_rounds": [
+    0.2805759906768799,
+    0.27135999997456867
+   ],
+   "strict_ms_range": [
+    0.27135999997456867,
+    0.2805759906768799
+   ],
+   "sdpa_ms": 0.265557328859965,
+   "sdpa_ms_rounds": [
+    0.26282666126887005,
+    0.26828799645106
+   ],
+   "sdpa_ms_range": [
+    0.26282666126887005,
+    0.26828799645106
+   ],
+   "flash_ms": 0.2467840015888214,
+   "flash_ms_rounds": [
+    0.24576000372568765,
+    0.24780799945195517
+   ],
+   "flash_ms_range": [
+    0.24576000372568765,
+    0.24780799945195517
+   ],
+   "ratio": 1.0392030847367388,
+   "flash_ratio": 1.1182572352705735,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal + the same gate"
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.015625,
+   "flash_max_abs_diff_y": 0.015625,
+   "strict_ms": 2.1232639948527017,
+   "strict_ms_rounds": [
+    2.1032959620157876,
+    2.1432320276896157
+   ],
+   "strict_ms_range": [
+    2.1032959620157876,
+    2.1432320276896157
+   ],
+   "sdpa_ms": 1.5761066277821858,
+   "sdpa_ms_rounds": [
+    1.5810559590657551,
+    1.5711572964986165
+   ],
+   "sdpa_ms_range": [
+    1.5711572964986165,
+    1.5810559590657551
+   ],
+   "flash_ms": 1.4446933269500732,
+   "flash_ms_rounds": [
+    1.4513492584228516,
+    1.438037395477295
+   ],
+   "flash_ms_range": [
+    1.438037395477295,
+    1.4513492584228516
+   ],
+   "ratio": 1.347157582758501,
+   "flash_ratio": 1.4696987625291904,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal + the same gate"
+  },
+  {
+   "T": 1024,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.015625,
+   "flash_max_abs_diff_y": 0.015625,
+   "strict_ms": 0.29166932900746667,
+   "strict_ms_rounds": [
+    0.28433066606521606,
+    0.2990079919497172
+   ],
+   "strict_ms_range": [
+    0.28433066606521606,
+    0.2990079919497172
+   ],
+   "sdpa_ms": 2.5256959597269697,
+   "sdpa_ms_rounds": [
+    2.5402026176452637,
+    2.5111893018086753
+   ],
+   "sdpa_ms_range": [
+    2.5111893018086753,
+    2.5402026176452637
+   ],
+   "flash_ms": 0.2571946680545807,
+   "flash_ms_rounds": [
+    0.24985599517822266,
+    0.2645333409309387
+   ],
+   "flash_ms_range": [
+    0.24985599517822266,
+    0.2645333409309387
+   ],
+   "ratio": null,
+   "baseline_not_comparable": "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel",
+   "flash_ratio": 1.1340411184012957,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal, window_size=[2047, 0] + the same gate"
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.0234375,
+   "flash_max_abs_diff_y": 0.0234375,
+   "strict_ms": 1.5477759838104248,
+   "strict_ms_rounds": [
+    1.6943786938985188,
+    1.4011732737223308
+   ],
+   "strict_ms_range": [
+    1.4011732737223308,
+    1.6943786938985188
+   ],
+   "sdpa_ms": 30.08238855997721,
+   "sdpa_ms_rounds": [
+    30.083412170410156,
+    30.08136494954427
+   ],
+   "sdpa_ms_range": [
+    30.08136494954427,
+    30.083412170410156
+   ],
+   "flash_ms": 1.1791359980901084,
+   "flash_ms_rounds": [
+    1.1758933067321777,
+    1.1823786894480388
+   ],
+   "flash_ms_range": [
+    1.1758933067321777,
+    1.1823786894480388
+   ],
+   "ratio": null,
+   "baseline_not_comparable": "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel",
+   "flash_ratio": 1.3126356809709963,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal, window_size=[2047, 0] + the same gate"
+  }
+ ],
+ "decode_forward": [
+  {
+   "B": 1,
+   "ctx": 4096,
+   "window": null,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.00390625,
+   "flash_max_abs_diff_y": 0.00390625,
+   "strict_ms": 0.24217599630355835,
+   "strict_ms_rounds": [
+    0.2321066657702128,
+    0.25224532683690387
+   ],
+   "strict_ms_range": [
+    0.2321066657702128,
+    0.25224532683690387
+   ],
+   "sdpa_ms": 0.1353386640548706,
+   "sdpa_ms_rounds": [
+    0.1365333298842112,
+    0.13414399822553
+   ],
+   "sdpa_ms_range": [
+    0.13414399822553,
+    0.1365333298842112
+   ],
+   "flash_ms": 0.2007039984067281,
+   "flash_ms_rounds": [
+    0.2136746644973755,
+    0.18773333231608072
+   ],
+   "flash_ms_range": [
+    0.18773333231608072,
+    0.2136746644973755
+   ],
+   "ratio": 1.7894073212173314,
+   "flash_ratio": 1.2066326442225976,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2) on the same paged cache (block_table, page 16, seqused_k), causal + the same gate"
+  },
+  {
+   "B": 64,
+   "ctx": 4096,
+   "window": null,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.0078125,
+   "flash_max_abs_diff_y": 0.0078125,
+   "strict_ms": 0.3235840002695719,
+   "strict_ms_rounds": [
+    0.32494932413101196,
+    0.3222186764081319
+   ],
+   "strict_ms_range": [
+    0.3222186764081319,
+    0.32494932413101196
+   ],
+   "sdpa_ms": 0.253440002600352,
+   "sdpa_ms_rounds": [
+    0.2802346746126811,
+    0.22664533058802286
+   ],
+   "sdpa_ms_range": [
+    0.22664533058802286,
+    0.2802346746126811
+   ],
+   "flash_ms": 0.2658986647923788,
+   "flash_ms_rounds": [
+    0.26897066831588745,
+    0.26282666126887005
+   ],
+   "flash_ms_range": [
+    0.26282666126887005,
+    0.26897066831588745
+   ],
+   "ratio": 1.2767676647314021,
+   "flash_ratio": 1.2169448106188705,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2) on the same paged cache (block_table, page 16, seqused_k), causal + the same gate"
+  },
+  {
+   "B": 1,
+   "ctx": 4096,
+   "window": 2048,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.0078125,
+   "flash_max_abs_diff_y": 0.0078125,
+   "strict_ms": 0.1706666648387909,
+   "strict_ms_rounds": [
+    0.15974400440851846,
+    0.18158932526906332
+   ],
+   "strict_ms_range": [
+    0.15974400440851846,
+    0.18158932526906332
+   ],
+   "sdpa_ms": 0.5092693368593852,
+   "sdpa_ms_rounds": [
+    0.5048319896062216,
+    0.5137066841125488
+   ],
+   "sdpa_ms_range": [
+    0.5048319896062216,
+    0.5137066841125488
+   ],
+   "flash_ms": 0.17254400253295898,
+   "flash_ms_rounds": [
+    0.17271467049916586,
+    0.1723733345667521
+   ],
+   "flash_ms_range": [
+    0.1723733345667521,
+    0.17271467049916586
+   ],
+   "ratio": null,
+   "baseline_not_comparable": "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel",
+   "flash_ratio": 0.9891196583676707,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2) on the same paged cache (block_table, page 16, seqused_k), causal, window_size=[2047, 0] + the same gate"
+  },
+  {
+   "B": 64,
+   "ctx": 4096,
+   "window": 2048,
+   "iters": 3,
+   "rounds": 2,
+   "sdpa_max_abs_diff_y": 0.0078125,
+   "flash_max_abs_diff_y": 0.0078125,
+   "strict_ms": 0.20241066813468933,
+   "strict_ms_rounds": [
+    0.2034346659978231,
+    0.20138667027155557
+   ],
+   "strict_ms_range": [
+    0.20138667027155557,
+    0.2034346659978231
+   ],
+   "sdpa_ms": 18.9257386525472,
+   "sdpa_ms_rounds": [
+    19.76251729329427,
+    18.08896001180013
+   ],
+   "sdpa_ms_range": [
+    18.08896001180013,
+    19.76251729329427
+   ],
+   "flash_ms": 0.9786026875178019,
+   "flash_ms_rounds": [
+    1.0656426747639973,
+    0.8915627002716064
+   ],
+   "flash_ms_range": [
+    0.8915627002716064,
+    1.0656426747639973
+   ],
+   "ratio": null,
+   "baseline_not_comparable": "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel",
+   "flash_ratio": 0.2068364114634697,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2) on the same paged cache (block_table, page 16, seqused_k), causal, window_size=[2047, 0] + the same gate"
+  }
+ ],
+ "backward": [],
+ "tp_shard_forward": [],
+ "tp_shard_backward": [],
+ "sections": [
+  "prefill",
+  "decode"
+ ],
+ "iters": 3,
+ "rounds": 2,
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "triton": "3.7.1",
+  "cuda": "13.0",
+  "python": "3.12.15"
+ },
+ "modules": {
+  "forward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "backward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "backward_kernel_id": "muse_glimmer.triton.gated_attention_bwd.v2"
+ },
+ "argv": [
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
+  "bench",
+  "--quick",
+  "--iters",
+  "3",
+  "--rounds",
+  "2",
+  "--sections",
+  "prefill",
+  "decode",
+  "--out",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn_norms_B/bench_smoke.json"
+ ],
+ "head_count_params": true,
+ "wall_s": 12.474353075027466
+}

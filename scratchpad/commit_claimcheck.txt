@@ -1,0 +1,20 @@
+poc(muse_glimmer): blog claim-check fixes (79 problems) before publication
+
+Captions, tiles and row cards are now computed from data/*.json where the data exists:
+strict train step 3.1-9.7x native fwd+bwd; native drift 921-927/933 on the same weights
+(921-930 with HF bf16, the LoRA dump excluded); GEMM 38-52% of cuBLAS, legacy GEMM 1-6
+TFLOP/s; attention ratios from the wave B paired runs (local layers vs FA2 only); e2e drift
+55-71%; ablation magnitudes, layer spread and profile captions; RoPE review verdicts mapped.
+xrt_diff.py picks a hero token where the strict dumps agree and the native dumps all differ
+(gsm8k_long_window index 1) and records the same-weight native dumps (native_base).
+HF anchors labelled wave A / wave B; contract text, NCCL control runs, CP/TP captions,
+system diagram (rollout TP1, process launcher, trainer logprobs) corrected; ablation scoped to HF.
+RFC findings F1/F2/F6/F7/F8/F9/F10/F13/F15/F16/F17/F20, timeline and community list updated;
+final_regression.json used for the test counts. B1/B5/D5 audit text corrected via
+blog/audit_fixes.py (B1 renumbered to transformers 5.17.0); rfc_audit.json itself unchanged.
+Layout: heatmap rotated labels no longer clipped, log-axis tick labels thinned, distinct
+colours for the NCCL runs and the L-1 layer line, per-step LoRA hash table fits phones.
+Also commits the pending per-step LoRA hash table and its collector field.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U3SxjVAWpLJB5L47T5WgDc

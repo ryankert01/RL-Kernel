@@ -1,0 +1,10 @@
+[gpu-lease] using GPUs [4, 5]
+............s.s...s.s.s                                                  [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:132: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:146: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:78: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:92: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_tp_topology.py:44: requires 4 CUDA GPUs
+18 passed, 5 skipped in 44.69s
+exit=0

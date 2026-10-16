@@ -1,0 +1,32 @@
+[gpu-lease] using GPUs [6]
+[17:02:23] loading strict weights from /home/ubuntu/models/Muse-Glimmer-30B (layout for backend golden)
+[17:02:23] loading 541 text tensors from model-00001-of-00002.safetensors
+[17:02:31] loading 86 text tensors from model-00002-of-00002.safetensors
+[17:02:37] weights ready in 14.0s: 51.9 GiB on cuda:0; checkpoint a4e59da52a7bc87ae7251dd5545c0dd437c44b68
+INFO 10-15 17:02:37 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[17:02:37] ops: golden=['attention_paged', 'attention_varlen', 'centered_rmsnorm', 'fused_post_norm_residual_pre_norm', 'gemm', 'lm_head_softcap_logprob', 'normalized_embedding', 'pad_lm_head_weight', 'qknorm_scaled_rope', 'rope_table', 'swiglu_ffn', 'weighted_rmsnorm'] sibling=[]
+[17:03:18] [train] 40.98s peak 54.24 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:03:50] [prefill] 32.08s peak 54.32 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:04:22] [chunked:prompt_boundary] 32.35s peak 54.29 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:04:58] [chunked:halves] 35.86s peak 53.22 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:05:51] [chunked:block64] 52.69s peak 52.26 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:07:06] [chunked:ragged] 75.11s peak 52.27 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:07:40] [chunked:window_boundary_2047] 34.06s peak 54.23 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:08:16] [chunked:window_boundary_2048] 35.97s peak 54.23 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:08:53] [chunked:window_boundary_2049] 36.50s peak 54.23 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+[17:10:37] [decode] 103.88s peak 54.29 GiB logp[:3]=[-12.97302, -12.405334, -12.690639]
+prompt 2100 + completion 32 tokens, backend `golden`, all paths byte-equal to train: **True**
+
+| path | chunk sizes | equal to train | equal tokens | max abs diff | seconds | peak GiB |
+|---|---|---|---|---|---|---|
+| train | - | (reference) | 32/32 | 0 | 40.98 | 54.24 |
+| prefill | - | yes | 32/32 | 0.000e+00 | 32.08 | 54.32 |
+| chunked:prompt_boundary | [2100, 31] | yes | 32/32 | 0.000e+00 | 32.35 | 54.29 |
+| chunked:halves | [1065, 1066] | yes | 32/32 | 0.000e+00 | 35.86 | 53.22 |
+| chunked:block64 | [64, 64, 64]…[64, 19] (34 chunks) | yes | 32/32 | 0.000e+00 | 52.69 | 52.26 |
+| chunked:ragged | [1, 63, 100]…[63, 87] (39 chunks) | yes | 32/32 | 0.000e+00 | 75.11 | 52.27 |
+| chunked:window_boundary_2047 | [2047, 84] | yes | 32/32 | 0.000e+00 | 34.06 | 54.23 |
+| chunked:window_boundary_2048 | [2048, 83] | yes | 32/32 | 0.000e+00 | 35.97 | 54.23 |
+| chunked:window_boundary_2049 | [2049, 82] | yes | 32/32 | 0.000e+00 | 36.50 | 54.23 |
+| decode | - | yes | 32/32 | 0.000e+00 | 103.88 | 54.29 |
+[17:10:37] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/refprof/runs/chain_golden_2100.json

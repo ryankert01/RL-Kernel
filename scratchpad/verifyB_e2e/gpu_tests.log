@@ -1,0 +1,10 @@
+[gpu-lease] using GPUs [3]
+CUDA_VISIBLE_DEVICES=3
+...                                                                      [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/models/muse_glimmer/test_e2e_bridge_gpu.py::test_surrogate_gradient_exact_on_cuda
+PASSED tests/models/muse_glimmer/test_e2e_bridge_gpu.py::test_cuda_trainer_through_bridge_sees_exactly_the_leased_gpu[megatron_env]
+PASSED tests/models/muse_glimmer/test_e2e_bridge_gpu.py::test_cuda_trainer_through_bridge_sees_exactly_the_leased_gpu[same_env]
+3 passed in 15.25s
+exit=0

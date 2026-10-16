@@ -1,0 +1,16 @@
+{
+  "protocol": "muse_glimmer_trainer_bridge_v1",
+  "factory": "rl_engine.models.muse_glimmer.runtime.strict_trainer:StrictTrainer",
+  "factory_kwargs": {},
+  "model_path": "/home/ubuntu/models/Muse-Glimmer-30B",
+  "tensor_parallel_size": 2,
+  "num_visible_gpus": 2,
+  "lora_rank": 16,
+  "lr": 1e-05,
+  "strict": false,
+  "seed": 1234,
+  "launcher": "process",
+  "dist_init": "after_build",
+  "handshake_path": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/e2e/native_strict/trainer_server/handshake.json",
+  "tcp_nodelay": true
+}

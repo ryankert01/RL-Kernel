@@ -1,0 +1,77 @@
+{
+ "A_overlap": {
+  "ok": true,
+  "blocked_s": 0.28619692500069505,
+  "build_s": 7.132616861003044,
+  "startup": {
+   "launch_unix": 1792103542.2289486,
+   "server_start_after_launch_s": 1.5327889919281006,
+   "server_build_start_after_launch_s": 1.5336599349975586,
+   "server_build_end_after_launch_s": 8.666277408599854,
+   "client_connected_after_launch_s": 10.003154993057251,
+   "wait_ready_called_after_launch_s": 10.000146263002534,
+   "ready_after_launch_s": 10.286318341000879,
+   "wait_ready_blocked_s": 0.2861720779983443
+  },
+  "log": [
+   "[trainer_server rank0 22:32:23] start pid=470719 world=1 launcher=process CUDA_VISIBLE_DEVICES='' tcp_nodelay=True",
+   "[trainer_server rank0 22:32:32] client connected",
+   "[trainer_server rank0 22:32:32] trainer MockTrainer built in 7.1 s"
+  ],
+  "pass": true,
+  "wall_s": 11.106671733003168
+ },
+ "B_build_fail_wait_false": {
+  "ok": true,
+  "alive_before_connect": true,
+  "raised": "RemoteTrainerError: trainer server failed to build the trainer (rl_engine.models.muse_glimmer.e2e.mocks:FaultyMockTrainer):\nTraceback (most recent call last):\n  File \"/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-7/rl_engine/models/muse_glimmer/e2e/trainer_server.py\", line 512, in main\n    trainer = build_tr",
+  "server_alive_after": false,
+  "log": [
+   "[trainer_server rank0 22:32:34] start pid=471292 world=1 launcher=process CUDA_VISIBLE_DEVICES='' tcp_nodelay=True",
+   "[trainer_server rank0 22:32:34] trainer construction failed:",
+   "    raise RuntimeError(\"injected fault: trainer construction failed\")",
+   "RuntimeError: injected fault: trainer construction failed",
+   "[trainer_server rank0 22:32:37] client connected"
+  ],
+  "pass": true,
+  "wall_s": 4.570264173999021
+ },
+ "C_torchrun_late_connect": {
+  "ok": true,
+  "world": 2,
+  "rank_sha256": [
+   "4850d1da11dd623081368966240273443a46d0d9958d16b0a7910b1a2854bbed",
+   "4850d1da11dd623081368966240273443a46d0d9958d16b0a7910b1a2854bbed"
+  ],
+  "sha": "4850d1da11dd623081368966240273443a46d0d9958d16b0a7910b1a2854bbed",
+  "startup": {
+   "launch_unix": 1792103557.9068575,
+   "server_start_after_launch_s": 3.989551544189453,
+   "server_build_start_after_launch_s": 3.9904611110687256,
+   "server_build_end_after_launch_s": 5.171109914779663,
+   "client_connected_after_launch_s": 8.001476287841797,
+   "wait_ready_called_after_launch_s": 8.000143322002259,
+   "ready_after_launch_s": 8.247373420002987,
+   "wait_ready_blocked_s": 0.2472300980007276
+  },
+  "pass": true,
+  "wall_s": 11.010121873994649
+ },
+ "D_torchrun_diverge_second_export": {
+  "ok": true,
+  "first_ok": true,
+  "second": "RemoteWeightSyncError: remote export_lora raised:\ntrainer ranks hold different LoRA weights (rank 0: 39f8e421604f9eb02c7c9c022784192dc8ae816e3693b7913f6fb723556f95a1, rank 1: 15b0927edbab49d5843b3c0938e927f093094fa39abb7f80b278209a5d03fe35)\n(the trainer server was stopped; the bridge refuses further calls)",
+  "after": "refused: trainer bridge unusable after an earlier failure: remote export_lora failed; trainer state is undefined",
+  "alive": false,
+  "pass": true,
+  "wall_s": 5.811443339996913
+ },
+ "E_stateful_export_raise": {
+  "ok": true,
+  "first": "RemoteTrainerError: remote export_lora raised:",
+  "after": "refused: trainer bridge unusable after an earlier failure: remote export_lora failed; trainer state is undefined",
+  "alive": false,
+  "pass": true,
+  "wall_s": 3.2281317109955125
+ }
+}

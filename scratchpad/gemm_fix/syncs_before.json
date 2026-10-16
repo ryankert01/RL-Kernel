@@ -1,0 +1,1 @@
+{"bool_any_single_check": 2, "forward_validated_warn_count": 2, "forward_validated_profiler": {"cudaStreamSynchronize": 2, "_local_scalar_dense": 2}, "forward_unvalidated": "n/a (lm_head_softcap_logprob() got an unexpected keyword argument 'validate_targets')"}

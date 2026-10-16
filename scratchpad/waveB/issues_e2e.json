@@ -1,0 +1,110 @@
+[
+ {
+  "id": "e2e_bridge:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/e2e/REPORT_e2e_loop.md",
+  "line": 3,
+  "claim": "The diff adds the bridge, trainer server, timeline, 21 new tests and a results JSON but never updates the row's REPORT. The REPORT is now stale and partly wrong.",
+  "evidence": "`git diff 307fcf2...3c04c8f --stat` does not touch REPORT_e2e_loop.md (last commit to it: c60316d). The REPORT still says the sibling engines 'do not exist in this checkout' (line 3-6), but runtime/strict_trainer.py and strict_rollout_engine.py exist at 307fcf2. It still describes 'vLLM TP2 + Megatron Bridge TP4'. Its integrator command (line 133: --train-tp 4 --train-gpus 4,5,6,7) fails at startup because StrictTrainer raises for TP not in (1,2) (strict_trainer.py:200), and run_poc_grpo's defaults changed to rollout TP1 / train TP2. There is no mention of the bridge, F1-F6, the 58 CPU + 3 GPU tests, or the fact that with real engines no mode can run today (strict trainer is blocked by F1, native trainer by F2, native rollout by F3).",
+  "suggested_fix": "Rewrite STATUS/Summary/Commands. Describe the bridge (process/torchrun launchers, surrogate hand-off, failure handling), list F1-F6 and state plainly that all four modes are blocked with real engines until F1-F3 are fixed. Give working commands (rollout TP1 + train TP1/TP2, --trainer-python) and quote the test tails (61 passed)."
+ },
+ {
+  "id": "e2e_bridge:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/e2e/bench_bridge.py",
+  "line": 708,
+  "claim": "real_trainer_smoke_tp1 is recorded as 'NOT RUN ... the 30B smoke is for the integrator's lease'. It was cheap and fit in the agent's own pool, so the most important integration claim (the bridge driving the REAL Megatron StrictTrainer) went untested.",
+  "evidence": "I ran it with the implementer's own command: `~/bin/gpu-lease -n 1 --pool 6-7 -- ... bench_bridge --real-trainer-smoke --train-tp 1 --out <scratch>/real_smoke.json`. Results: the server built StrictTrainer in the megatron env in 82.3 s on one A100 (peak 58.1 GiB, 29.78 B params). token_logprobs for 102 tokens took 2.85 s (finite). step took 9.95 s (grad_norm 1.807, 104,792,064 LoRA params). export_lora (209.8 MB reply) failed closed with 'WeightSyncError: LoRA hash mismatch across the trainer bridge: trainer reported 1260340d..., server recomputed 5b28ab49..., client recomputed 5b28ab49...'. Total about 100 s. The run proves the bridge works with the real trainer for scoring and stepping, and confirms F1 with a real run (the JSON only has hash_schema_check).",
+  "suggested_fix": "Run the TP1 smoke (and TP2 when two GPUs are free). Store the result in e2e_bridge.json in place of the NOT RUN stub, and cite it as F1's evidence. Drop the 'integrator only' reason."
+ },
+ {
+  "id": "e2e_bridge:R3",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/e2e/trainer_server.py",
+  "line": 430,
+  "claim": "The server only starts building the trainer after the client connects, and the client connects only in wait_ready(). So the documented overlap of trainer loading with vLLM start-up does not happen: the two loads run one after the other.",
+  "evidence": "In trainer_server.main, `conn = listener.accept()` (line 430) blocks before `build_trainer` (line 442). RemoteTrainer connects only inside wait_ready() (bridge.py:470-472). build_engines (run_poc_grpo.py:234, docstring 'the trainer server is launched first ... and loads while vLLM starts') calls wait_ready() only after the rollout engine is built. My probe (probe_startup_overlap.py: wait=False, 10 s of other work, then wait_ready, with a 6 s trainer build) gave: wait_ready blocked 7.46 s; server log 'start 20:41:30', 'client connected 20:41:38', 'built 20:41:45'. With the real trainer this adds the measured 82 s build after vLLM start-up. The start-up deadline also silently includes the vLLM build time.",
+  "suggested_fix": "Build the trainer before (or concurrently with) accept(): accept in a background thread, or have the client connect from a background thread as soon as the handshake file appears. Send hello after the build as now. Add a test asserting build_s overlaps a sleep in the caller."
+ },
+ {
+  "id": "e2e_bridge:R5",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/e2e/bridge.py",
+  "line": 697,
+  "claim": "Under torchrun the per-rank LoRA hashes are gathered but never checked. A TP rank holding divergent LoRA weights would be accepted silently; only rank 0's tensors and hash are used.",
+  "evidence": "trainer_server.py:363-364 puts rank_sha256 into the reply. RemoteTrainer.export_lora (bridge.py:686-704) checks reported == server_sha == client_sha (rank 0 only) and just stores rank_sha256 in last_export. Only the test asserts agreement (test_e2e_bridge.py `remote.last_export['rank_sha256'] == [sha_r, sha_r]`); production code does not. The same gap exists for token_logprobs, where only rank 0's tensors are returned.",
+  "suggested_fix": "In export_lora, if rank_sha256 is present and any entry != server_sha, raise WeightSyncError. Optionally have each rank return a sha256 of its logprob bytes and fail on disagreement."
+ },
+ {
+  "id": "e2e_bridge:R6",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/e2e/bridge.py",
+  "line": 652,
+  "claim": "RemoteTrainer.token_logprobs marks every returned tensor requires_grad=True and ignores the server's requires_grad flags. This defeats the loop's fail-closed guard for forward-only trainers.",
+  "evidence": "The server sends 'requires_grad': [...] (trainer_server.py:222); the client does `[t.requires_grad_(True) for t in tensors]`. loop._check_train_logps (loop.py:229-230) is meant to reject logprobs without autograd history, so through the bridge the error only appears later, at step (surrogate_loss on the server), after rollout, drift and sidecar have already run.",
+  "suggested_fix": "Use `t.requires_grad_(bool(flag))` from result['requires_grad'] so a forward-only trainer is rejected at scoring time."
+ },
+ {
+  "id": "e2e_bridge:R7",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_e2e_bridge_gpu.py",
+  "line": 96,
+  "claim": "For the megatron_env variant the GPU test's numeric check is a tautology. Meanwhile the JSON reports all_bit_exact_vs_inprocess_cuda=true for that variant, which no test gates.",
+  "evidence": "In the else branch the only assertion is `len(lp_r) == len(lp_l)`, which is always 4. bench_bridge.gpu_smoke measures bit-equality, but nothing enforces it.",
+  "suggested_fix": "Either assert bit equality (it currently holds) or mark that variant report-only in the JSON. Do not present a measured-but-ungated equality as a tested claim."
+ },
+ {
+  "id": "e2e_bridge:R8",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/e2e/bench_bridge.py",
+  "line": 226,
+  "claim": "'megatron_env_torchrun_tp2' is not tensor parallel. Every torchrun rank builds a full replica MockTrainer, so the 'TP2 bit-exact' row validates only the control plane (broadcast/gather), not any TP numerics.",
+  "evidence": "build_trainer under torchrun passes gpu_ids=[] (CPU) and the full MockTrainer on every rank; rank 0's own replica produces every reply.",
+  "suggested_fix": "Rename it to something like 'torchrun_2rank_replicated_control_plane' and add a note in the JSON that no TP sharding is involved."
+ },
+ {
+  "id": "e2e_bridge:R9",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/e2e/bridge.py",
+  "line": 632,
+  "claim": "After a remote exception in a stateful op (step/export_lora) the bridge stays usable. With StrictTrainer TP2, rank 0 can fail after broadcasting 'backward' to the workers, which leaves the TP ranks divergent while the client keeps calling.",
+  "evidence": "`if not reply.get('ok'): raise RemoteTrainerError(...)` without setting _broken. failure_handling reports server_usable_after_error=true for remote_exception_in_step as a feature.",
+  "suggested_fix": "Set self._broken for non-idempotent ops (step, export_lora, token_logprobs) when ok is False; keep ping/provenance retryable."
+ },
+ {
+  "id": "e2e_bridge:R10",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/e2e/loop.py",
+  "line": 606,
+  "claim": "For the real engine the rollout profile captures only the orchestrator process. vLLM V1 runs the model in EngineCore/worker subprocesses, and StrictRolloutEngine has no start_profile/stop_profile, so the 'rollout top-ops' table will contain no GPU work.",
+  "evidence": "There is no start_profile in rl_engine/models/muse_glimmer/runtime/ (grep). profiled() enables CUDA activity only if CUDA is initialized in the calling process, and the orchestrator never initializes it.",
+  "suggested_fix": "Add start_profile/stop_profile to StrictRolloutEngine (LLM.start_profile with VLLM_TORCH_PROFILER_DIR) or document that the rollout table is orchestrator-only."
+ },
+ {
+  "id": "e2e_bridge:R11",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/e2e_bridge.json",
+  "line": 1,
+  "claim": "F1's proposed patch makes runtime/megatron_lora import the e2e package (dependency inversion) and drops megatron_lora's bf16 dtype guard.",
+  "evidence": "megatron_lora.lora_state_bytes raises TypeError for non-bf16 (megatron_lora.py:276-277); e2e.sync.lora_sha256 hashes any dtype.",
+  "suggested_fix": "Move muse_glimmer_lora_sha256_v1 into a shared module (e.g. rl_engine/models/muse_glimmer/lora_hash.py) used by e2e/sync, megatron_lora and vllm_strict, and keep the bf16 check at export/import."
+ },
+ {
+  "id": "e2e_bridge:R12",
+  "severity": "nit",
+  "file": "reports/muse_glimmer_poc/data/e2e_bridge.json",
+  "line": 1,
+  "claim": "transport_before_tcp_nodelay is a single hand-copied repeat from a run whose JSON was replaced, so it is not raw or reproducible data. Summary weight_sync.transport says 'memory' even when the LoRA crossed the bridge socket.",
+  "evidence": "source: 'repeat index 1 of 3, copied from that run's output'. I reproduced the effect: with client-side Nagle, 16 KiB echo median RTT is 49.4 ms vs 5.3 ms with NODELAY (probe_transport.py). Bridged mock run summary: weight_sync.transport='memory'.",
+  "suggested_fix": "Add a bench flag that disables set_nodelay and store raw before/after rows for all repeats. Record 'bridge' in the sync transport when the trainer is remote."
+ },
+ {
+  "id": "e2e_bridge:R13",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/e2e/run_poc_grpo.py",
+  "line": 14,
+  "claim": "Placement flags take physical GPU ids that must be known before leasing, and the docstring recommends leasing the whole node (`-n 8 --pool 0-7`) to use 3 GPUs. That is wasteful on a shared node.",
+  "evidence": "plan_gpu_placement requires --rollout-gpus/--train-gpus to be inside the lease's CUDA_VISIBLE_DEVICES, but gpu-lease picks ids dynamically.",
+  "suggested_fix": "Accept lease-relative indices (or default to the first rollout_tp + train_tp ids of the lease) so `gpu-lease -n 3` works."
+ }
+]

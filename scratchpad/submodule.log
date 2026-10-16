@@ -1,0 +1,4 @@
+Submodule '3rdparty/Megatron-LM' (https://github.com/NVIDIA/Megatron-LM.git) registered for path '3rdparty/Megatron-LM'
+Cloning into '/home/ubuntu/src/Megatron-Bridge/3rdparty/Megatron-LM'...
+Submodule path '3rdparty/Megatron-LM': checked out '9131593673d037d360d252904f9198d36bc0c246'
+exit=0

@@ -1,0 +1,84 @@
+[gpu-lease] using GPUs [0]
+[14:02:06] loading strict weights from /home/ubuntu/models/Muse-Glimmer-30B (layout for backend golden)
+[14:02:06] loading 541 text tensors from model-00001-of-00002.safetensors
+[14:02:13] loading 86 text tensors from model-00002-of-00002.safetensors
+[14:02:18] weights ready in 11.4s: 51.9 GiB on cuda:0; checkpoint a4e59da52a7bc87ae7251dd5545c0dd437c44b68
+INFO 10-15 14:02:18 [RL-Kernel]: TritonDetGemmOp ready (deterministic, autotune disabled).
+[14:02:18] ops: golden=['attention_paged', 'attention_varlen', 'centered_rmsnorm', 'fused_post_norm_residual_pre_norm', 'gemm', 'lm_head_softcap_logprob', 'normalized_embedding', 'pad_lm_head_weight', 'qknorm_scaled_rope', 'rope_table', 'swiglu_ffn', 'weighted_rmsnorm'] sibling=[]
+[14:02:19] [train] 1.58s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:20] [prefill] 0.94s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:21] [chunked:prompt_boundary] 1.08s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:22] [chunked:halves] 1.07s peak 52.09 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:24] [chunked:block64] 1.07s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:25] [chunked:ragged] 1.56s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+[14:02:29] [decode] 4.23s peak 52.11 GiB logp[:3]=[-13.159947, -13.146164, -15.926412]
+prompt 64 + completion 8 tokens, backend `golden`, all paths byte-equal to train: **True**
+
+| path | chunk sizes | equal to train | equal tokens | max abs diff | seconds | peak GiB |
+|---|---|---|---|---|---|---|
+| train | - | (reference) | 8/8 | 0 | 1.58 | 52.11 |
+| prefill | - | yes | 8/8 | 0.000e+00 | 0.94 | 52.11 |
+| chunked:prompt_boundary | [64, 7] | yes | 8/8 | 0.000e+00 | 1.08 | 52.11 |
+| chunked:halves | [35, 36] | yes | 8/8 | 0.000e+00 | 1.07 | 52.09 |
+| chunked:block64 | [64, 7] | yes | 8/8 | 0.000e+00 | 1.07 | 52.11 |
+| chunked:ragged | [1, 63, 7] | yes | 8/8 | 0.000e+00 | 1.56 | 52.11 |
+| decode | - | yes | 8/8 | 0.000e+00 | 4.23 | 52.11 |
+[14:02:29] strict reference outputs (train forward with capture) for the HF anchor
+[14:02:36] freeing strict model before loading HF on the same device
+Loading weights:   0%|          | 0/1436 [00:00<?, ?it/s]Loading weights:  32%|███▏      | 462/1436 [00:00<00:00, 4619.37it/s]Loading weights:  64%|██████▍   | 924/1436 [00:00<00:00, 3883.25it/s]Loading weights:  92%|█████████▏| 1320/1436 [00:00<00:00, 3829.38it/s]Loading weights: 100%|██████████| 1436/1436 [00:00<00:00, 4146.44it/s]
+[14:02:51] [hf] loaded in 12.3s; running 72 tokens
+[14:02:54] HF anchor: logits(all) max|Δ|=0.4424  logits(completion) max|Δ|=0.3272  logp(completion) max|Δ|=0.04204 mean|Δ|=0.01815 argmax agree=1.0000
+[14:02:54]   layer  embedding: max|Δ|=0.0000e+00 mean|Δ|=0.0000e+00 rms(hf)=9.9981e-01 max/rms=0.000e+00
+[14:02:54]   layer          0: max|Δ|=3.1250e-01 mean|Δ|=3.8593e-03 rms(hf)=1.1889e+00 max/rms=2.628e-01
+[14:02:54]   layer          1: max|Δ|=3.1250e-01 mean|Δ|=8.6129e-03 rms(hf)=1.3260e+00 max/rms=2.357e-01
+[14:02:54]   layer          2: max|Δ|=3.1250e-01 mean|Δ|=1.1779e-02 rms(hf)=1.4014e+00 max/rms=2.230e-01
+[14:02:54]   layer          3: max|Δ|=3.1250e-01 mean|Δ|=1.3906e-02 rms(hf)=1.5342e+00 max/rms=2.037e-01
+[14:02:54]   layer          4: max|Δ|=3.7500e-01 mean|Δ|=1.6113e-02 rms(hf)=1.6482e+00 max/rms=2.275e-01
+[14:02:54]   layer          5: max|Δ|=8.1250e-01 mean|Δ|=1.8176e-02 rms(hf)=1.7559e+00 max/rms=4.627e-01
+[14:02:54]   layer          6: max|Δ|=5.1562e-01 mean|Δ|=2.1991e-02 rms(hf)=1.9023e+00 max/rms=2.711e-01
+[14:02:54]   layer          7: max|Δ|=3.9844e-01 mean|Δ|=2.3325e-02 rms(hf)=1.9553e+00 max/rms=2.038e-01
+[14:02:54]   layer          8: max|Δ|=3.7500e-01 mean|Δ|=2.5403e-02 rms(hf)=2.0517e+00 max/rms=1.828e-01
+[14:02:54]   layer          9: max|Δ|=4.3750e-01 mean|Δ|=2.6982e-02 rms(hf)=2.1270e+00 max/rms=2.057e-01
+[14:02:54]   layer         10: max|Δ|=5.0000e-01 mean|Δ|=2.7878e-02 rms(hf)=2.2108e+00 max/rms=2.262e-01
+[14:02:54]   layer         11: max|Δ|=6.2500e-01 mean|Δ|=2.8902e-02 rms(hf)=2.4070e+00 max/rms=2.597e-01
+[14:02:54]   layer         12: max|Δ|=6.2500e-01 mean|Δ|=2.9946e-02 rms(hf)=2.4698e+00 max/rms=2.531e-01
+[14:02:54]   layer         13: max|Δ|=7.5000e-01 mean|Δ|=2.9825e-02 rms(hf)=2.4483e+00 max/rms=3.063e-01
+[14:02:54]   layer         14: max|Δ|=8.7500e-01 mean|Δ|=2.9389e-02 rms(hf)=2.4452e+00 max/rms=3.578e-01
+[14:02:54]   layer         15: max|Δ|=8.8281e-01 mean|Δ|=3.0767e-02 rms(hf)=2.5011e+00 max/rms=3.530e-01
+[14:02:54]   layer         16: max|Δ|=1.2344e+00 mean|Δ|=3.1498e-02 rms(hf)=2.5053e+00 max/rms=4.927e-01
+[14:02:54]   layer         17: max|Δ|=1.1875e+00 mean|Δ|=3.1744e-02 rms(hf)=2.5162e+00 max/rms=4.719e-01
+[14:02:54]   layer         18: max|Δ|=1.3750e+00 mean|Δ|=3.2941e-02 rms(hf)=2.5976e+00 max/rms=5.293e-01
+[14:02:54]   layer         19: max|Δ|=1.5000e+00 mean|Δ|=3.5018e-02 rms(hf)=2.7847e+00 max/rms=5.387e-01
+[14:02:54]   layer         20: max|Δ|=2.0000e+00 mean|Δ|=3.5781e-02 rms(hf)=2.9519e+00 max/rms=6.775e-01
+[14:02:54]   layer         21: max|Δ|=2.0000e+00 mean|Δ|=3.7518e-02 rms(hf)=2.9397e+00 max/rms=6.803e-01
+[14:02:54]   layer         22: max|Δ|=2.0000e+00 mean|Δ|=3.7473e-02 rms(hf)=2.9063e+00 max/rms=6.882e-01
+[14:02:54]   layer         23: max|Δ|=1.5000e+00 mean|Δ|=3.7683e-02 rms(hf)=2.8138e+00 max/rms=5.331e-01
+[14:02:54]   layer         24: max|Δ|=1.5000e+00 mean|Δ|=3.7517e-02 rms(hf)=2.7893e+00 max/rms=5.378e-01
+[14:02:54]   layer         25: max|Δ|=1.5000e+00 mean|Δ|=3.6710e-02 rms(hf)=2.8053e+00 max/rms=5.347e-01
+[14:02:54]   layer         26: max|Δ|=2.0000e+00 mean|Δ|=3.7647e-02 rms(hf)=2.9056e+00 max/rms=6.883e-01
+[14:02:54]   layer         27: max|Δ|=2.0000e+00 mean|Δ|=3.8440e-02 rms(hf)=3.1177e+00 max/rms=6.415e-01
+[14:02:54]   layer         28: max|Δ|=2.0000e+00 mean|Δ|=3.7226e-02 rms(hf)=3.0412e+00 max/rms=6.576e-01
+[14:02:54]   layer         29: max|Δ|=4.0000e+00 mean|Δ|=3.5022e-02 rms(hf)=3.1383e+00 max/rms=1.275e+00
+[14:02:54]   layer         30: max|Δ|=4.0000e+00 mean|Δ|=3.4049e-02 rms(hf)=3.0213e+00 max/rms=1.324e+00
+[14:02:54]   layer         31: max|Δ|=4.0000e+00 mean|Δ|=3.3236e-02 rms(hf)=3.0488e+00 max/rms=1.312e+00
+[14:02:54]   layer         32: max|Δ|=3.0000e+00 mean|Δ|=3.0979e-02 rms(hf)=3.1508e+00 max/rms=9.521e-01
+[14:02:54]   layer         33: max|Δ|=2.5000e+00 mean|Δ|=2.9293e-02 rms(hf)=3.2543e+00 max/rms=7.682e-01
+[14:02:54]   layer         34: max|Δ|=2.0000e+00 mean|Δ|=2.9082e-02 rms(hf)=3.2612e+00 max/rms=6.133e-01
+[14:02:54]   layer         35: max|Δ|=2.5000e+00 mean|Δ|=2.9886e-02 rms(hf)=3.3976e+00 max/rms=7.358e-01
+[14:02:54]   layer         36: max|Δ|=2.5000e+00 mean|Δ|=3.1111e-02 rms(hf)=3.4601e+00 max/rms=7.225e-01
+[14:02:54]   layer         37: max|Δ|=2.5000e+00 mean|Δ|=3.1643e-02 rms(hf)=3.5438e+00 max/rms=7.055e-01
+[14:02:54]   layer         38: max|Δ|=2.5000e+00 mean|Δ|=3.2059e-02 rms(hf)=3.7365e+00 max/rms=6.691e-01
+[14:02:54]   layer         39: max|Δ|=2.5000e+00 mean|Δ|=3.3873e-02 rms(hf)=3.8377e+00 max/rms=6.514e-01
+[14:02:54]   layer         40: max|Δ|=2.5000e+00 mean|Δ|=3.6324e-02 rms(hf)=3.9913e+00 max/rms=6.264e-01
+[14:02:54]   layer         41: max|Δ|=3.0000e+00 mean|Δ|=3.8257e-02 rms(hf)=4.1203e+00 max/rms=7.281e-01
+[14:02:54]   layer         42: max|Δ|=3.0000e+00 mean|Δ|=4.1184e-02 rms(hf)=4.4175e+00 max/rms=6.791e-01
+[14:02:54]   layer         43: max|Δ|=3.0000e+00 mean|Δ|=4.4668e-02 rms(hf)=4.5737e+00 max/rms=6.559e-01
+[14:02:54]   layer         44: max|Δ|=3.0000e+00 mean|Δ|=4.7472e-02 rms(hf)=4.7099e+00 max/rms=6.370e-01
+[14:02:54]   layer         45: max|Δ|=3.0000e+00 mean|Δ|=5.0375e-02 rms(hf)=4.9162e+00 max/rms=6.102e-01
+[14:02:54]   layer         46: max|Δ|=3.0000e+00 mean|Δ|=5.3222e-02 rms(hf)=5.0211e+00 max/rms=5.975e-01
+[14:02:54]   layer         47: max|Δ|=2.5000e+00 mean|Δ|=6.0254e-02 rms(hf)=5.2866e+00 max/rms=4.729e-01
+[14:02:54]   layer         48: max|Δ|=3.5000e+00 mean|Δ|=6.5551e-02 rms(hf)=5.6107e+00 max/rms=6.238e-01
+[14:02:54]   layer         49: max|Δ|=4.0000e+00 mean|Δ|=7.0183e-02 rms(hf)=5.9745e+00 max/rms=6.695e-01
+[14:02:54]   layer         50: max|Δ|=4.0000e+00 mean|Δ|=7.7635e-02 rms(hf)=7.2891e+00 max/rms=5.488e-01
+[14:02:54]   layer final_norm: max|Δ|=8.7500e-01 mean|Δ|=2.2639e-02 rms(hf)=1.1737e+00 max/rms=7.455e-01
+[14:02:54] wrote /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/chain_agent/runs/smoke_64_8.json

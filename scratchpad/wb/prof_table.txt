@@ -1,0 +1,10 @@
+| config | strict clean ms | HF clean ms | strict/HF | strict GPU-busy ms (3 profiler runs) | HF GPU-busy ms (3 runs) | strict peak GiB | HF peak GiB |
+|---|---|---|---|---|---|---|---|
+| forward T=512 | 266.2 | 146.2 | 1.82 | 251.1–251.2 | 139.5–169.5 | 52.22 | 56.52 |
+| paged prefill T=512 (strict only) | 307.8 | – | – | 255.0–255.2 | – | 52.25 (one KV cache 0.026) | – |
+| forward T=2048 | 949.6 | 590.5 | 1.61 | 940.7–940.9 | 584.8–613.5 | 52.57 | 59.41 |
+| paged prefill T=2048 (strict only) | 985.4 | – | – | 947.3–947.7 | – | 52.67 (one KV cache 0.102) | – |
+| forward T=4096 | 1901.3 | 1220.2 | 1.56 | 1893.4–1896.7 | 1222.7–1248.8 | 53.03 | 63.26 |
+| paged prefill T=4096 (strict only) | 1962.6 | – | – | 1911.6–1932.1 | – | 53.23 (one KV cache 0.204) | – |
+| decode B=1, ctx 2048 (per step) | 149.0 | 259.8 | 0.57 | 50.0–50.1 | 56.1–56.1 | 53.75 | 55.71 |
+| decode B=16, ctx 2048 (per step) | 348.5 | 110.4 | 3.16 | 70.5–70.5 | 106.4–122.4 | 53.76 | 57.69 |

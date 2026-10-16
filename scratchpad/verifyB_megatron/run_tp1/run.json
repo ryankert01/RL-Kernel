@@ -1,0 +1,346 @@
+{
+ "row": "megatron_runtime",
+ "tp": 1,
+ "status": "complete",
+ "commit": "2447025787b16610e3a7a93e1e43d4995b2af777",
+ "dirty": false,
+ "env": {
+  "python": "3.12.15",
+  "torch": "2.13.0+cu129",
+  "cuda": "12.9",
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "triton": "3.7.1",
+  "transformer_engine": "2.20.2",
+  "megatron_core": "0.20.0+913159367",
+  "megatron_bridge": "0.7.0+d86a5c09b",
+  "transformers": "5.17.0"
+ },
+ "command": "/home/ubuntu/envs/megatron/bin/python -m rl_engine.models.muse_glimmer.runtime.run_megatron_strict --tp 1 --checks bench --bench-tokens 8192 --bench-warmup 0 --bench-repeats 1 --xrt-out-dir /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp1 --results /tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp1/run.json",
+ "cuda_visible_devices": "2",
+ "inputs": {
+  "xrt_file": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-11/reports/muse_glimmer_poc/data/xrt_tokens.json",
+  "sequences": [
+   {
+    "id": "gsm8k_test_0",
+    "len": 191,
+    "completion_start": 136
+   },
+   {
+    "id": "gsm8k_test_1",
+    "len": 146,
+    "completion_start": 99
+   },
+   {
+    "id": "gsm8k_test_2",
+    "len": 251,
+    "completion_start": 122
+   },
+   {
+    "id": "gsm8k_test_3",
+    "len": 146,
+    "completion_start": 107
+   },
+   {
+    "id": "gsm8k_test_4",
+    "len": 273,
+    "completion_start": 181
+   },
+   {
+    "id": "gsm8k_test_5",
+    "len": 274,
+    "completion_start": 125
+   },
+   {
+    "id": "gsm8k_test_6",
+    "len": 202,
+    "completion_start": 114
+   },
+   {
+    "id": "gsm8k_test_7",
+    "len": 294,
+    "completion_start": 138
+   },
+   {
+    "id": "gsm8k_long_window",
+    "len": 2439,
+    "completion_start": 2261
+   }
+  ],
+  "total_tokens": 4216,
+  "scored_tokens": 933
+ },
+ "config": {
+  "model": "/home/ubuntu/models/Muse-Glimmer-30B",
+  "tp": 1,
+  "xrt_file": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-11/reports/muse_glimmer_poc/data/xrt_tokens.json",
+  "xrt_out_dir": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp1",
+  "results": "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/verifyB_megatron/run_tp1/run.json",
+  "grads_out": null,
+  "checks": "bench",
+  "lora_rank": 16,
+  "lr": 1e-05,
+  "seed": 0,
+  "grad_b_std": 0.001,
+  "micro_batch_tokens": 4096,
+  "packing_budgets": "512,8192",
+  "bench_tokens": "8192",
+  "bench_warmup": 0,
+  "bench_repeats": 1,
+  "no_checkpoint": false
+ },
+ "checks": {
+  "bench": {
+   "rows": [
+    {
+     "tokens": 8192,
+     "warmup": 0,
+     "repeats": 1,
+     "samples": {
+      "strict_forward_ms": [
+       10256.821183000284
+      ],
+      "strict_train_logprobs_ms": [
+       9689.943163000862
+      ],
+      "strict_recompute_fwd_bwd_ms": [
+       30682.976586998848
+      ],
+      "strict_optimizer_ms": [
+       369.3822219938738
+      ],
+      "strict_step_total_ms": [
+       40803.899199003354
+      ],
+      "strict_recompute_mismatches": [
+       0
+      ]
+     },
+     "median": {
+      "strict_forward_ms": 10256.821183000284,
+      "strict_train_logprobs_ms": 9689.943163000862,
+      "strict_recompute_fwd_bwd_ms": 30682.976586998848,
+      "strict_optimizer_ms": 369.3822219938738,
+      "strict_step_total_ms": 40803.899199003354,
+      "strict_recompute_mismatches": 0
+     },
+     "peak_gib": {
+      "strict_forward": 55.213908195495605,
+      "strict_step": 66.6539568901062,
+      "native_forward": 62.03740167617798,
+      "native_fwd_bwd": 62.1389946937561
+     },
+     "errors": {
+      "native_forward": "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.40 GiB is free. Including non-PyTorch memory, this process has 73.84 GiB memory in use. Of the allocated memory 62.04 GiB is allocated by PyTorch, and 3.26 GiB is reserved by PyTorch ",
+      "native_fwd_bwd": "OutOfMemoryError('CUDA out of memory. Tried to allocate 8.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.40 GiB is free. Including non-PyTorch memory, this process has 73.84 GiB memory in use. Of the allocated memory 62.14 GiB is allocated by PyTorch, and 3.15 GiB is reserved by PyTorch "
+     }
+    }
+   ],
+   "commit": "2447025787b16610e3a7a93e1e43d4995b2af777",
+   "note": "every phase warmed up (bench_warmup runs) at each size, then bench_repeats timed runs: raw samples + median; strict_step_total = no-grad strict forward (token_logprobs) + recompute forward/backward with per-layer activation recompute + AdamW; native_fwd_bwd = Bridge forward + backward of activation grads through all layers with full per-layer recompute (frozen base weights, no LoRA); peak_gib = max over ranks of the phase's peak allocation"
+  }
+ },
+ "load": {
+  "init_seconds": 79.36919330999808,
+  "bridge_load_seconds": 53.52726674079895,
+  "memory_after_load": [
+   {
+    "rank": 0,
+    "peak_allocated_gib": 55.54134654998779,
+    "allocated_gib": 52.4999794960022,
+    "peak_reserved_gib": 55.900390625
+   }
+  ]
+ },
+ "provenance": {
+  "engine": "StrictTrainer",
+  "runtime": "megatron-bridge",
+  "strict": true,
+  "tp": 1,
+  "load_seconds": 53.52726674079895,
+  "step_count": 0,
+  "lr": 1e-05,
+  "micro_batch_tokens": 4096,
+  "packing_rule": "micro_batches(lengths, micro_batch_tokens): greedy, order-preserving packs of <= budget tokens (a longer sequence is its own pack); the logprob and LoRA-gradient bits do not depend on the packing (batch-invariant forward, per-sequence gradient fold)",
+  "torch_flags": {
+   "allow_tf32": false,
+   "cudnn_deterministic": true,
+   "cublas_workspace_config": ":4096:8",
+   "fp32_matmul_precision": "highest"
+  },
+  "binding": "megatron_bridge_native_hybridmodel_strict",
+  "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+  "tp_collective": "none",
+  "ops": {
+   "normalized_embedding": "strict:norms.normalized_embedding",
+   "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+   "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+   "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+   "rope_rows": "strict:qknorm_rope.rope_rows",
+   "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+   "silu_mul": "strict:swiglu_ffn.swiglu",
+   "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen(num_q_heads,num_kv_heads) + gated_attention_bwd.{gated_attention_bwd_preprocess,strict_gated_attention_bwd_partials,kv_partials_subtree} + canonical_tree.combine_tree (per-rank heads)",
+   "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+   "gemm_token_grad": "strict:ops.det_gemm.fast_det_gemm(ragged_k=True): T_pad=roundup(T,256), 8 chunks",
+   "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+   "all_strict": true
+  },
+  "allow_fallback": false,
+  "attention_heads_per_rank": {
+   "q_heads": 32,
+   "kv_heads": 2,
+   "q_head_start": 0,
+   "kv_head": 0,
+   "replicas": 1
+  },
+  "rope_table_sha256": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+  "lora": {
+   "rank": 16,
+   "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+   "grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+   "enabled": true,
+   "seed": 0
+  },
+  "vision_drop": {
+   "dropped": [
+    "vision_tower",
+    "vision_adapter",
+    "vision_projection"
+   ],
+   "vision_param_gib": 3.579716682434082,
+   "allocated_drop_gib": 3.579770088195801
+  },
+  "checkpoint_layers": true,
+  "canonical_chunks": 8,
+  "vocab_tiles": {
+   "rows": 25344,
+   "local": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "padded_vocab": 202752
+  },
+  "final_norm_roundtrip_mismatches": 1120,
+  "memory_gib": {
+   "bound_start": 55.54134654998779,
+   "after_vision_drop": 51.961575984954834,
+   "after_weight_views": 52.09440088272095,
+   "model_params": 51.883572578430176
+  },
+  "notes": [
+   "dropped ['vision_tower', 'vision_adapter', 'vision_projection'] (text-only trainer): 3.580 GiB of vision parameters, memory_allocated fell by 3.580 GiB",
+   "output_layer.weight re-pointed to a view of the padded tile tensor",
+   "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+  ],
+  "lora_grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+  "recompute_check": "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)",
+  "lora_sha256": "857c076eb67dcd332dc04906638bc62d134543e1e6c11c036c9d71fade53ddd9",
+  "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+  "gpu_ids": [
+   0
+  ],
+  "init_seconds": 79.36908078193665,
+  "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1"
+ },
+ "provenance_end": {
+  "engine": "StrictTrainer",
+  "runtime": "megatron-bridge",
+  "strict": true,
+  "tp": 1,
+  "load_seconds": 53.52726674079895,
+  "step_count": 1,
+  "lr": 1e-05,
+  "micro_batch_tokens": 4096,
+  "packing_rule": "micro_batches(lengths, micro_batch_tokens): greedy, order-preserving packs of <= budget tokens (a longer sequence is its own pack); the logprob and LoRA-gradient bits do not depend on the packing (batch-invariant forward, per-sequence gradient fold)",
+  "torch_flags": {
+   "allow_tf32": false,
+   "cudnn_deterministic": true,
+   "cublas_workspace_config": ":4096:8",
+   "fp32_matmul_precision": "highest"
+  },
+  "binding": "megatron_bridge_native_hybridmodel_strict",
+  "model_class": "megatron.bridge.models.muse_glimmer.modeling_muse_glimmer.MuseGlimmerModel",
+  "tp_collective": "none",
+  "ops": {
+   "normalized_embedding": "strict:norms.normalized_embedding",
+   "centered_rmsnorm": "strict:norms.centered_rmsnorm",
+   "weighted_rmsnorm": "strict:norms.weighted_rmsnorm",
+   "fused_post_norm_residual_pre_norm": "strict:norms.fused_post_norm_residual_pre_norm",
+   "rope_rows": "strict:qknorm_rope.rope_rows",
+   "qknorm_scaled_rope": "strict:qknorm_rope.qknorm_scaled_rope",
+   "silu_mul": "strict:swiglu_ffn.swiglu",
+   "gated_attention": "strict:gated_attention.strict_gated_attention_fwd_varlen(num_q_heads,num_kv_heads) + gated_attention_bwd.{gated_attention_bwd_preprocess,strict_gated_attention_bwd_partials,kv_partials_subtree} + canonical_tree.combine_tree (per-rank heads)",
+   "gemm": "strict:ops.det_gemm.fast_det_gemm_partial",
+   "gemm_token_grad": "strict:ops.det_gemm.fast_det_gemm(ragged_k=True): T_pad=roundup(T,256), 8 chunks",
+   "lm_head_tile_stats": "strict:lm_head_softcap_logprob.softcap_tile_stats+launch_dz+merge_tile_stats",
+   "all_strict": true
+  },
+  "allow_fallback": false,
+  "attention_heads_per_rank": {
+   "q_heads": 32,
+   "kv_heads": 2,
+   "q_head_start": 0,
+   "kv_head": 0,
+   "replicas": 1
+  },
+  "rope_table_sha256": "088dbb8c93a55ce79d189181c46ac06fbdb61dab6c3914218bbe40ed3ea56d9c",
+  "lora": {
+   "rank": 16,
+   "form": "unmerged: y = bf16(acc32(W x) + sum_k B[:,k] * bf16(A x)[k])",
+   "grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+   "enabled": true,
+   "seed": 0
+  },
+  "vision_drop": {
+   "dropped": [
+    "vision_tower",
+    "vision_adapter",
+    "vision_projection"
+   ],
+   "vision_param_gib": 3.579716682434082,
+   "allocated_drop_gib": 3.579770088195801
+  },
+  "checkpoint_layers": true,
+  "canonical_chunks": 8,
+  "vocab_tiles": {
+   "rows": 25344,
+   "local": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "padded_vocab": 202752
+  },
+  "final_norm_roundtrip_mismatches": 1120,
+  "memory_gib": {
+   "bound_start": 55.54134654998779,
+   "after_vision_drop": 51.961575984954834,
+   "after_weight_views": 52.09440088272095,
+   "model_params": 51.883572578430176
+  },
+  "notes": [
+   "dropped ['vision_tower', 'vision_adapter', 'vision_projection'] (text-only trainer): 3.580 GiB of vision parameters, memory_allocated fell by 3.580 GiB",
+   "output_layer.weight re-pointed to a view of the padded tile tensor",
+   "final_norm: Bridge (w-1)+1 differs from HF at 1120/6656 elements; strict path uses the HF tensor"
+  ],
+  "lora_grad_rule": "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, 256), 8 chunks of T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)",
+  "recompute_check": "bitwise; a mismatch raises StrictRecomputeMismatch (fail closed)",
+  "lora_sha256": "bf4e4ce21fae25b342e616e8ea652628328372ecc2ab45458d5e3e3d09792e88",
+  "lora_hash_schema": "muse_glimmer_lora_sha256_v1",
+  "gpu_ids": [
+   0
+  ],
+  "init_seconds": 79.36908078193665,
+  "process_model": "rank 0 = calling process (returns results); ranks 1..tp-1 = spawned workers; NCCL tcp://127.0.0.1"
+ }
+}

@@ -1,0 +1,18 @@
+[gpu-lease] using GPUs [3]
+........................................................................ [ 63%]
+.........................................                                [100%]
+=============================== warnings summary ===============================
+tests/models/muse_glimmer/test_qknorm_rope.py::TestG1Forward::test_vs_fp32_golden[1-1.0]
+  /home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-8/tests/models/muse_glimmer/test_qknorm_rope.py:149: RuntimeWarning: qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a sliding layer given no table silently runs NoPE. Pass local=True/False (set MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 to make it mandatory). Warned once; counted in runtime_provenance().
+    q_hat, k_hat = qknorm_scaled_rope(q, k, cos, sin)
+
+tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBLayerKind::test_env_var_makes_the_layer_kind_mandatory
+  /home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-8/tests/models/muse_glimmer/test_qknorm_rope.py:968: RuntimeWarning: qknorm_scaled_rope(local=None): the layer kind is implied by `cos is None`, so a sliding layer given no table silently runs NoPE. Pass local=True/False (set MUSEGLIMMER_O4_REQUIRE_LAYER_KIND=1 to make it mandatory). Warned once; counted in runtime_provenance().
+    qknorm_scaled_rope(q, k, None, None)
+
+tests/models/muse_glimmer/test_qknorm_rope.py::TestWaveBTableIntegrity::test_first_build_inside_cuda_graph_capture_raises
+  /home/ubuntu/envs/vllm/lib/python3.12/site-packages/torch/cuda/graphs.py:169: UserWarning: The CUDA Graph is empty. This usually means that the graph was attempted to be captured on wrong device or stream. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/cuda/CUDAGraph.cpp:210.)
+    super().capture_end()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+113 passed, 3 warnings in 42.83s

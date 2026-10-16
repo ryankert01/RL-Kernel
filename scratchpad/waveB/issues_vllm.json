@@ -1,0 +1,128 @@
+[
+ {
+  "id": "vllm_runtime:R1",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md",
+  "line": 3,
+  "claim": "The committed REPORT is stale and contradicts the results. The real report exists only as a string inside the results JSON.",
+  "evidence": "The REPORT_*.md at 5854014 is unchanged in 307fcf2...5854014. It still says 'STATUS: partial', 'the real-model vLLM runs (a)-(e) did NOT complete', '24 passed, 1 skipped' and 'Runs (NOT completed)'. The actual report is reports/muse_glimmer_poc/data/vllm_runtime.json -> report_markdown ('STATUS: complete', 27 passed/2 skipped), and report_markdown_note says the harness blocked writing REPORT files. The embedded report also lacks the briefing's 'Integration requests' section.",
+  "suggested_fix": "The integrator should write report_markdown into REPORT_vllm_runtime_adapter.md, add 'Integration requests' (the editable-install re-point; nothing else) and change the status line to 'complete except the TP4/TP8 engine runs'."
+ },
+ {
+  "id": "vllm_runtime:R2",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_strict.py",
+  "line": 632,
+  "claim": "Strict mode does not fail closed on vLLM features that address KV pages in the native layout. The backend docstring's safety argument is wrong.",
+  "evidence": "strict_kv_views (vllm_attention_backend.py:83-92) re-views each layer's region as (2,B,N,H,D), with K for all pages in the first half. A native page b (bytes [b*N*H*2D,(b+1)*N*H*2D) in LBNHC) is therefore NOT the strict page b. Docstring lines 73-75 claim 'page b keeps the same byte range in both views', which is false. vLLM 0.31 has native page-addressed writers: copy_kv_cache_blocks_inplace (partial prefix-cache-hit copy-on-write, model_runner.py ~1228), KVBlockZeroer (when needs_kv_cache_zeroing) and KV connectors. _bind_model checks eager mode and cache_dtype but not cache_config.enable_prefix_caching or kv_transfer_config. Only StrictRolloutEngine sets enable_prefix_caching=False. The plugin, however, activates for ANY vLLM engine started with RL_KERNEL_MUSEGLIMMER_STRICT=1, and prefix caching is on by default. A CoW copy would then silently move the wrong bytes.",
+  "suggested_fix": "In _bind_model, raise if vllm_config.cache_config.enable_prefix_caching, if vllm_config.kv_transfer_config is not None, or if the KV cache config reports needs_kv_cache_zeroing. Optionally also assert in the backend that no kv_cache_block_copies were scheduled. Rewrite the docstring to say that 'only the strict backend touches the region; prefix caching, zeroing and connectors are rejected at init'."
+ },
+ {
+  "id": "vllm_runtime:R3",
+  "severity": "should_fix",
+  "file": "reports/muse_glimmer_poc/data/vllm_runtime.json",
+  "line": 1,
+  "claim": "The committed decode==prefill and zero-LoRA evidence is weaker than the headline '0 / 512' suggests. The committed runs never cover the contract shapes (T>2048 decode with sliding-window eviction, chunked prefill, decode batch up to 256).",
+  "evidence": "In generate[] for strict TP1, 312/512 logprobs are exactly 0.0, 440/512 have |lp|<1e-4 and only 22 are < -0.1. The 64-token GSM8K completions mostly copy the question. T=1 differs from T=0 in only 3 of 8 sequences (88 tokens). Generation prompts are at most 294 tokens + 64 decode tokens, so no decode crosses the 2048 window. The null-block 0 -> -1 mapping under eviction is therefore never exercised in the engine, and the bench batch is only 32. I closed the gap myself and found no bug. At HEAD, run_vllm_strict --xrt-filter gsm8k --n 28 --max-num-seqs 256 --temperatures 1 --max-tokens 64 --prefill-check gave 252 concurrent sequences, including 28 copies of the 2261-token long-window prompt decoding at positions 2261-2324, with chunked prefill under max_num_batched_tokens=8192. Result: 0/16128 mismatches at TP1 AND TP2. TP2 tokens and logprob bits equal TP1 for 16128/16128. There were 844 non-zero logprobs in the window-crossing sequences.",
+  "suggested_fix": "Report how many compared tokens have non-zero logprobs (or have lp < -1e-3) next to every 'x/512'. Commit a decode run that crosses the window at decode batch ~256 (the command above) to the data JSON. Also extend the opt-in E2E test with one prompt longer than 2048 tokens."
+ },
+ {
+  "id": "vllm_runtime:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/run_vllm_strict.py",
+  "line": 339,
+  "claim": "The throughput table comes from one shot per config under heavy and very uneven host CPU load. The '+-15 %' error is not backed by any measurement, and the native baseline is eager mode.",
+  "evidence": "throughput[*].host_loadavg_1m_before_after was [167.6, 81.1] for native TP1, [29.0, 89.8] for strict TP1, [25.8, 45.6] for native TP2 and [18.6, 5.4] for strict TP2. The REPORT itself says eager decode is CPU-launch bound, so these loads bias the 0.46x/0.41x ratios by an unknown amount. Each config has n=1 (no repeats). The native baseline uses enforce_eager=True (no CUDA graphs), so the ratio understates the gap to production vLLM.",
+  "suggested_fix": "Repeat each bench at least 3 times while the host is idle and report median and spread. Add a native run with CUDA graphs (enforce_eager=False) as a second baseline. Drop '+-15 %' unless it is measured."
+ },
+ {
+  "id": "vllm_runtime:R5",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_strict.py",
+  "line": 856,
+  "claim": "Token selection still uses native cuBLAS bf16 logits (declared deviation). 'Generated tokens identical TP2 vs TP1' is not evidence for the strict path, because native also gives identical tokens.",
+  "evidence": "compute_logits returns native logits for sampling (state.cfg['sampling']='native'). In the committed data, native TP1 vs native TP2 generated tokens differ in 0 positions at both T=0 and T=1. The REPORT's 'identical TP2 vs TP1' row therefore does not separate strict from native. Rollout bit-reproducibility across batch composition and TP depends on cuBLAS lm_head bits at near-ties, which strict mode does not control.",
+  "suggested_fix": "Either sample from the strict fp32 tile logits (strict_selected_logp already computes every z tile with det_gemm), applying temperature and the per-request generator on them before the logp overwrite, or have the RFC state that token choice is native and remove the implication from the headline table."
+ },
+ {
+  "id": "vllm_runtime:R6",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_strict.py",
+  "line": 1033,
+  "claim": "Some strict-mode paths return native values silently instead of failing closed.",
+  "evidence": "PromptLogprobsWorker.compute_prompt_token_id_logprobs (prompt_logprob_token_ids) is not patched. It is listed under open issues but returns native numbers without error. Top-k logprob columns 1..k (logprobs>0, num_prompt_logprobs>0) are also native while column 0 is strict. StrictRolloutEngine only uses logprobs=0 and prompt_logprobs=0, so the POC is not affected.",
+  "suggested_fix": "In strict mode, wrap compute_prompt_token_id_logprobs and the sampler to raise when token-id scores or k>0 are requested, or overwrite those columns with strict values."
+ },
+ {
+  "id": "vllm_runtime:R7",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_collect_results.py",
+  "line": 76,
+  "claim": "Several labels and fields in the results JSON are wrong or missing for plotting.",
+  "evidence": "In xrt.comparisons.*_vs_reference_chain_*, 'b' reads 'strict tp1' instead of the reference chain. Pairs that involve LoRA ('strict_lora_tp1_vs_strict_tp1') have a='strict tp1', b='strict tp1'. decode_vs_prefill keeps abs_diff_per_token but drops the raw prefill_logprobs_hex that the run files contain. The lora_random generate records lack ids, prompt_lens and finish_reasons. worker_provenance for TP1 reports kv_heads_replicated=True. Everything else needed for plots is present: per-token xrt logprobs per sequence, per-token |d| series, a 257-step decode time series, TTFT runs, memory and top kernels.",
+  "suggested_fix": "Build a/b labels from the comparison key, including the lora and reference_chain markers. Keep prefill logprobs (as floats). Emit the same record schema for LoRA generates. Set kv_heads_replicated = tp > 1."
+ },
+ {
+  "id": "vllm_runtime:R8",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_strict.py",
+  "line": 1231,
+  "claim": "worker_check_lora_rule's 'formula' reference is not independent of the binding.",
+  "evidence": "y_formula reuses z = _padded_partial(...) and acc = state.ops.det_gemm(...): exactly the binding's own calls. binding_equals_formula therefore only checks small_k_fp32 against a Python loop. The meaningful cross-check is binding_equals_megatron. I verified that one: 24/24 in the committed data, plus layer 7 (8/8 slots) in my own LoRA run at HEAD.",
+  "suggested_fix": "Compute the formula's acc and z with the fp32 golden (fallback_ops.det_gemm(..., out_dtype=float32)), as the unit test test_zero_b_is_bitwise_noop_and_nonzero_b_changes already does."
+ },
+ {
+  "id": "vllm_runtime:R9",
+  "severity": "nit",
+  "file": "tests/models/muse_glimmer/test_vllm_strict_binding.py",
+  "line": 547,
+  "claim": "The protocol test was loosened to accept positive logprobs instead of keeping the O7 sign invariant. The defect is more common than the REPORT's sample suggests.",
+  "evidence": "The assertion changed from v <= 0.0 to v <= 1e-5. In my 252-sequence TP1 run, 768/16128 (4.8%) strict generated-token logprobs are > 0 (the data shows 48/1024). The defect is forwarded to the lm_head row and is deterministic: identical at TP1 and TP2.",
+  "suggested_fix": "Keep the relaxation tied to an issue id, and restore v <= 0.0 once softcap_tile_stats reuses the pass-1 zhat or runs with enable_fp_fusion=False."
+ },
+ {
+  "id": "vllm_runtime:R10",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/strict_rollout_engine.py",
+  "line": 415,
+  "claim": "In native mode, provenance()['lora_sha256'] only echoes the hash the driver computed. Nothing confirms vLLM installed all 416 slots.",
+  "evidence": "For native runs, worker_hashes=[] and lora_replies=[]. hash_identity is therefore true by construction. 'so the native mapping applies the same adapter' rests on the mean |d| argument (0.0148 vs 0.0138). I verified the name mapping statically: with vLLM 0.31's get_rename_mapper(), the 8 PEFT names map to 8 distinct correct modules (self_attn.gate_proj -> output_gate_proj; q/k/v and mlp gate/up stay separate; no collisions). The mapping is right, but it is not checked at runtime.",
+  "suggested_fix": "After loading, collective_rpc into worker.model_runner's LoRA manager, count the active LoRA modules with non-zero B per slot type and expect 416. Report native identity as 'driver-side' in provenance."
+ },
+ {
+  "id": "vllm_runtime:R11",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/run_vllm_strict.py",
+  "line": 70,
+  "claim": "Provenance gaps: the reference outputs were made by an uncommitted script, run records have no dirty-tree flag, and a stale editable install points at another worktree.",
+  "evidence": "The reference-chain files the JSON cites were written by scratchpad/scripts/ref_xrt.py: its backend string is 'logprobs(mode=train)', and they have commit=None and live only in the session scratchpad. The committed vllm_xrt_reference.py was never run. I ran it at HEAD: it works and its train and prefill outputs equal the committed vLLM strict TP1 and TP2 dumps 933/933. _git_head records HEAD without dirty state. The run commits I checked (e67b6a6..5854014) differ only cosmetically in binding code. ~/envs/vllm's __editable___rl_kernel_0_1_0_finder maps rl_engine to worktrees/agent-a7944ab684b3629cf. That only works out because PYTHONPATH wins (the finder is appended to meta_path).",
+  "suggested_fix": "Commit the reference xrt outputs under reports/muse_glimmer_poc/data with a commit field. Record `git status --porcelain` and the workers' rl_engine.__file__ in run meta and worker_provenance, and fail if the worker path differs from the driver's."
+ },
+ {
+  "id": "vllm_runtime:R12",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_strict.py",
+  "line": 448,
+  "claim": "The REPORT omits the strict LoRA cost and its memory headroom.",
+  "evidence": "Strict TP1 generation runs at 15.2 tok/s with the rank-16 LoRA vs 50.0 without (batch 8, committed data), a 3.3x slowdown. The cause is small_k_fp32: 16 elementwise launches per slot x 416 slots per step, plus fp32 base outputs. In my LoRA run with 8192-token prefill steps (36 sequences including 4 x 2261-token prompts), GPU0 reached about 78.6 of 80 GB. It did not OOM, and decode==prefill held at 0/864 with LoRA. LoRA tensors are not part of vLLM's memory profile.",
+  "suggested_fix": "Report LoRA throughput and peak memory. Fuse the rank loop into one Triton kernel with the same fixed order. Leave margin in gpu_memory_utilization for strict LoRA, or include a LoRA-enabled profile pass."
+ },
+ {
+  "id": "vllm_runtime:R13",
+  "severity": "nit",
+  "file": "rl_engine/models/muse_glimmer/runtime/vllm_tp_sim.py",
+  "line": 131,
+  "claim": "The TP4/TP8 evidence is a simulation that re-implements the layer wiring. The engine at TP4/TP8 was never run.",
+  "evidence": "rank_forward re-writes the head slicing and KV-replica selection (`y[:, rank*q_size:...]`, _rank_weights). It does not call the patched attention_forward or layer_forward, and it covers 1 layer, 19-37 tokens and random weights. The REPORT discloses this and gives the exact TP4 command (tp4_engine NOT RUN).",
+  "suggested_fix": "Run the listed TP4 command when 4 GPUs are free. Meanwhile, call the patched attention_forward on a mock module in the sim so the real slicing code is exercised."
+ },
+ {
+  "id": "e2e_bridge:R4",
+  "severity": "should_fix",
+  "file": "rl_engine/models/muse_glimmer/e2e/sync.py",
+  "line": 222,
+  "claim": "rollout_lora_sha256 now accepts provenance.workers[*].lora_sha256. On StrictRolloutEngine that value is the hash the orchestrator itself declared, never recomputed. weight_sync_identity therefore becomes an echo, yet it is still counted as a passed weight-sync check, which weakens a fail-closed strict check.",
+  "evidence": "vllm_strict.worker_load_lora stores `state.lora_sha256 = str(sha256)` (vllm_strict.py:1076) without hashing the received tensors. StrictRolloutEngine.load_lora (strict_rollout_engine.py:244-255) does not verify either. transfer_lora then compares package.sha256 with that same string. The implementer acknowledges this as F4 ('no hard failure'), but the new test test_rollout_hash_from_tp_workers_when_engine_level_key_is_absent makes the echo a requirement. summary.json weight_sync reports checks/passed with no source qualifier.",
+  "suggested_fix": "Make worker_load_lora recompute the canonical hash over the full received tensors (before sharding) and fail on mismatch. Until then, record such checks as identity='declared' and exclude them from weight_sync.passed (or fail closed unless --allow-declared-rollout-hash is set). Surface rollout_sha256_source in summary.json."
+ }
+]

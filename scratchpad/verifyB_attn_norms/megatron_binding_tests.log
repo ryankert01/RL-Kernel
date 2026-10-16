@@ -1,0 +1,12 @@
+[gpu-lease] using GPUs [7]
+................ss...................                                    [100%]
+=============================== warnings summary ===============================
+../../../../envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64
+  /home/ubuntu/envs/megatron/lib/python3.12/site-packages/torch/cuda/__init__.py:64: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+    import pynvml  # type: ignore[import]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:618: needs 2 GPUs
+SKIPPED [1] tests/models/muse_glimmer/test_megatron_strict_binding.py:638: set RL_KERNEL_MUSEGLIMMER_E2E=1
+35 passed, 2 skipped, 1 warning in 59.58s
