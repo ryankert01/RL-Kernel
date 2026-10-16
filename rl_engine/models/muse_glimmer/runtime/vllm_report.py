@@ -165,9 +165,9 @@ def headline(results: dict) -> list[str]:
             f"{gen_cell('native', temperature, True)} | {gen_cell('strict', temperature, True)} |"
         )
     rows.append(
-        f"| LoRA xrt scores TP2 vs TP1 / TP4 vs TP1 | | "
-        f"{_cell_cmp(results, 'strict_lora_tp2_vs_strict_lora_tp1')} / "
-        f"{_cell_cmp(results, 'strict_lora_tp4_vs_strict_lora_tp1')} |"
+        f"| LoRA xrt scores TP2 vs TP1; TP4 vs TP1 | | "
+        f"TP2 {_cell_cmp(results, 'strict_lora_tp2_vs_strict_lora_tp1')}; "
+        f"TP4 {_cell_cmp(results, 'strict_lora_tp4_vs_strict_lora_tp1')} |"
     )
     zero = results.get("lora_zero")
     if isinstance(zero, list) and zero:
@@ -313,6 +313,9 @@ def render(results: dict) -> str:
         "`reports/muse_glimmer_poc/data/xrt_vllm_{strict,native}[_lora]_tp{1,2,4}.json`."
     )
     lines.append("")
+    if results.get("commit_note"):
+        lines.append(results["commit_note"])
+        lines.append("")
     lines.append("## Headline results")
     lines.append("")
     lines.extend(headline(results))
@@ -326,15 +329,17 @@ def render(results: dict) -> str:
     lines.append("")
     lines.extend(throughput(results))
     lines.append("")
-    for key in ("throughput_notes", "profile_notes"):
-        if static.get(key):
-            lines.append(static[key])
-            lines.append("")
+    if static.get("throughput_notes"):
+        lines.append(static["throughput_notes"])
+        lines.append("")
     prof_rows = profiles(results)
     if prof_rows:
         lines.append("## Profiles")
         lines.append("")
         lines.extend(prof_rows)
+        lines.append("")
+    if static.get("profile_notes"):
+        lines.append(static["profile_notes"])
         lines.append("")
     for section in (
         "what_changed",
