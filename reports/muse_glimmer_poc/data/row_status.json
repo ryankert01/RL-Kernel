@@ -16,7 +16,7 @@
   "note": "22 个 HF 设置 + 13 个严格设置"
  },
  "final_e2e_lora（GRPO）": {
-  "status": "wave",
-  "note": "跨 env 桥完成；30B 四种模式运行中"
+  "status": "done",
+  "note": "30B 四种模式各 8 步；严格/严格 0/61139 漂移"
  }
 }

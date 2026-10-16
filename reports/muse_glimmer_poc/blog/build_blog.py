@@ -694,15 +694,15 @@ def sec_e2e() -> str:
         dt, ws, fd = m.get("drift_totals") or {}, m.get("weight_sync") or {}, m.get("first_drift")
         where = "无" if not fd else f'step {fd.get("step")}, 样本 {fd.get("sample")}, token {fd.get("token")}'
         cards.append(f'<div class="fact"><span class="fk">{esc(MODE_ZH.get(m["mode"], m["mode"]))}</span>'
-                     f'<span class="fnew">{dt.get("bitwise_mismatch_count", "?")}/{dt.get("token_count", "?")}</span>'
+                     f'<span class="fnew{"" if dt.get("bitwise_mismatch_count") == 0 else " fbad"}">{dt.get("bitwise_mismatch_count", "?")}/{dt.get("token_count", "?")}</span>'
                      f'<span class="fn">token bit 不同；最大 |Δ| {fmt(dt.get("max_abs_diff") or 0)}；第一次漂移：{esc(where)}；LoRA 同步校验 {ws.get("passed", "?")}/{ws.get("checks", "?")} 通过；{m.get("steps_completed", "?")} 步</span></div>')
-    setup = (f'rollout TP{cfg.get("rollout_tp")}（GPU {cfg.get("rollout_gpus")}）+ 训练 TP{cfg.get("train_tp")}（GPU {cfg.get("train_gpus")}），'
+    setup = (f'每种模式用 3 张卡：rollout TP{cfg.get("rollout_tp")}（1 张）+ 训练 TP{cfg.get("train_tp")}（2 张），两组同时在 GPU 0–2 和 4–6 上跑，rollout 和训练的 TP 度数不同；'
              f'{cfg.get("steps")} 步 × {cfg.get("prompts_per_step")} 道题 × {cfg.get("samples_per_prompt")} 个样本 × 最多 {cfg.get("max_tokens")} token，'
              f'LoRA r{cfg.get("lora_rank")}，lr {cfg.get("lr")}，温度 {cfg.get("temperature")}，seed {cfg.get("seed")}。')
     return head + f"""
   <div class="prose"><p>{esc(setup)}每一步：rollout 采样并记下 fp32 logprob → trainer 对同样的 token 重算 → 逐 bit 比较 → GRPO 更新 LoRA → 带哈希同步回 rollout。四种模式是训练侧 × rollout 侧的 严格/原生 组合。</p></div>
   <div class="facts">{''.join(cards)}</div>
-  {fig(drift, "只有两边都严格时，每一步都是 0；只要有一边是原生实现，几乎每个 token 都不同。")}
+  {fig(drift, "只有两边都严格时，每一步都是 0；只要有一边是原生实现，每一步都有 55–70% 的 token 不同。两种混合模式比原生/原生还高：严格侧用 fp32 logits，原生侧用 bf16 logits，差异是系统性的。")}
   {fig(ratio, "严格/严格下重要性比全部恰好是 1，clip 永远不会被“假偏移”触发。")}
   {fig(rech, "严格 rollout 的自检恒为 0：decode 时记下的数和事后 prefill 重算的数一样，所以 rollout 记下的 logprob 可以直接用。")}
   {fig(rew, "8 步的奖励只用来确认训练在动，POC 不评估学习效果。")}
@@ -955,6 +955,7 @@ svg .bracket { fill: none; stroke: var(--ink); stroke-width: 1.2; } svg .track {
 .fk { font: 600 0.78rem/1.3 var(--font-mono); color: var(--muted); }
 .fold s { color: var(--bad); font-family: var(--font-mono); }
 .fnew { font: 700 1.3rem/1.2 var(--font-display); color: var(--ok); }
+.fnew.fbad { color: var(--bad); }
 .fn { font-size: 0.88rem; color: var(--ink); }
 .rowgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.6rem; }
 .rowcell { display: grid; gap: 0.2rem; padding: 0.7rem 0.8rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; border-top-width: 4px; }
