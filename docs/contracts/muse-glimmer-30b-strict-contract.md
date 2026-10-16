@@ -39,7 +39,7 @@ eps = rms_norm_eps; → bf16. No weight, no sqrt(H) scaling.
 Backward: dE[token] rows via sorted-segment accumulation (reuse repo canonical embedding backward);
 the norm VJP is row-local fp32.
 
-### O2 `centered_rmsnorm` / `fused_add_rmsnorm`  (row: fused_add_rmsnorm)
+### O2 `centered_rmsnorm` / `fused_post_norm_residual_pre_norm`  (row: fused_post_norm_residual_pre_norm; RFC name fused_add_rmsnorm)
 Decoder layer has four norms: input (eps=1e-5), post_attention (eps=1e-8), pre_feedforward
 (eps=1e-5), post_feedforward (eps=1e-8); all are centered: y = x̂ * (1 + w), x̂ = x * rsqrt(mean(x²)+eps),
 computed in fp32 (x→fp32, w→fp32), → bf16. Residual stream r is kept in bf16 (as HF does):

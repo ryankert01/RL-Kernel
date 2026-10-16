@@ -446,7 +446,7 @@ def sec_ws1() -> str:
   <p class="eyebrow">WS1 · 单卡算子</p>
   <h2>每个算子都有一个“逐 bit 确定”的版本，速度够用</h2>
   <div class="prose"><p>仓库原有的严格内核（FA4 CuTe 注意力、线性 logp）只支持 Hopper，编译扩展 <code>rl_engine._C</code> 在这套环境里没有构建，所以这次全部算子都是 PyTorch golden + Triton 重写。判断标准：同一个输入，不论 batch 怎么拼、序列怎么切、在第几个位置，输出 bit 都一样；和 fp64 参考的误差在 ws1 容差内（门控注意力反向的梯度容差按量级缩放，已在报告中声明）。</p></div>
-  {fig(ratio, f"大多数逐元素/范数类算子比原生更快（原生是未融合的 eager PyTorch）；GEMM 在 M=4096 时慢 {min(gemm4096):.1f}–{max(gemm4096):.1f} 倍，这是“固定 K 树 + 固定 tile”的代价。注意力几行是 wave B 的交替计时：全局层对比 SDPA 和 vLLM FA2，局部层只用 vLLM FA2 的滑窗内核作基线；旧的 SDPA 整张 mask 基线已撤回。")}
+  {fig(ratio, f"大多数逐元素/范数类算子比原生更快（原生是未融合的 eager PyTorch）；GEMM 在 M=4096 时慢 {min(gemm4096):.1f}–{max(gemm4096):.1f} 倍，这是“固定 K 树 + 固定 tile”的代价。注意力前向几行是 wave B 的交替计时（5 轮中位数）；反向那行是单次序列的均值，两次运行分别是 2.54× 和 2.81×。全局层对比 SDPA 和 vLLM FA2，局部层只用 vLLM FA2 的滑窗内核作基线；旧的 SDPA 整张 mask 基线已撤回。")}
   {fig(tf, f"树形 GEMM 跑到 cuBLAS 的 {100 * min(frac):.0f}–{100 * max(frac):.0f}%{kg_txt}。decode 形状（M=16）下 FFN 和 LM head 的大 GEMM 是 cuBLAS 的 {100 * min(big16):.0f}–{100 * max(big16):.0f}%，基本持平。")}
   {fig(legacy, "新 GEMM 是这次的“必需行”：没有它，30B 前向一次要几分钟。")}
   {fig(mem, f"词表 tile 流式算 softcap 和 logsumexp，不物化 4096×{vocab} 的 logits：显存降到 1/{nat_mib / str_mib:.0f}。")}

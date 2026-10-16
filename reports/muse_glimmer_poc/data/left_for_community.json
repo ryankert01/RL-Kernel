@@ -1,6 +1,6 @@
 [
  "性能：严格 vLLM 只能 eager 运行，吞吐是原生 CUDA graph 的 9–29%、不随 TP 变快；把严格算子做成可被 CUDA graph 捕获，是最大的一块。",
- "性能：严格 LoRA 的 rank 循环未融合（只有不带 LoRA 时的约 0.3 倍）；树形 GEMM 在 M=4096 时只有 cuBLAS 的 36–52%；单卡参考实现（不是 vLLM 绑定）在 batch 16 decode 时，Python 逐序列写 paged KV 占约 59% 的墙钟时间（204.9/348.5 ms），这是参考 harness 的开销，改成每层一次 scatter 即可（未测）。",
+ "性能：严格 LoRA 的 rank 循环未融合（只有不带 LoRA 时的约 0.3 倍）；树形 GEMM 在 M=4096 时只有 cuBLAS 的 36–52%；单卡参考实现（不是 vLLM 绑定）在 batch 16 decode 时，Python 逐序列写 paged KV 占约 54% 的插桩墙钟时间（204.9/382 ms，GPU 上只有 21 ms）；这是参考 harness 的开销，改成每层一次 scatter 即可（未测）。",
  "性能：Megatron 绑定没有传 SequenceMeta，注意力每层前向都会做 host 同步（应每个 micro-batch 构造一次 SequenceMeta）；StrictTrainer.close() 在 TP2 下要等 127 秒。",
  "采样器自身的 kernel（温度除法、按 (seed, position) 生成的 Gumbel 噪声、argmax）仍是 vLLM 原生实现；是否纳入契约需要 RFC 决定。",
  "未在真实多进程下运行：vLLM/Megatron 运行时的 TP8（训练侧默认关闭；GEMM 树、vocab-parallel 和 KV 复制这几行的 TP8 只在 8 卡测试里跑过）；TP×CP 只跑了 4 卡 TP2×CP2 的前向；rollout 侧的 torch.profiler 只覆盖编排器进程。",

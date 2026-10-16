@@ -30,7 +30,7 @@ def main() -> None:
     ]
     for f in findings:
         out += [f"### {f['id']}. {f['title_en']}", "", f"*Where:* {f['area']}", "", f["body_en"], "", f"*Evidence:* {f['evidence']}", ""]
-    out += ["## Part 2 — line-by-line audit of the RFC text", ""]
+    out += ["## Part 2 — line-by-line audit of the RFC text", "", f"Evidence paths: {json.loads((POC / 'data/rfc_audit.json').read_text()).get('evidence_legend', '')}", "", json.loads((POC / 'data/rfc_audit.json').read_text()).get('note_semantics_source', ''), ""]
     section = None
     for it in audit:
         if it["section"] != section:
