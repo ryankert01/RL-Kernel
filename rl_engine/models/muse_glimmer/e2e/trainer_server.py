@@ -17,11 +17,18 @@ Launchers:
   counters) is gathered to rank 0 and returned with the reply.
 
 Protocol: the client writes ``spec.json`` and passes the authkey in the environment; rank 0
-listens on an ephemeral 127.0.0.1 port, publishes it in the handshake file (atomic rename), sends
-a hello once the trainer is built (or the traceback if building failed), then serves requests
-``{"op", "id", "args"}`` until ``close`` or EOF. Ops: ``token_logprobs``, ``step`` (surrogate
-gradient hand-off, see ``bridge.surrogate_loss``), ``export_lora``, ``provenance``,
-``profile_arm``, ``ping``, ``close``.
+listens on an ephemeral 127.0.0.1 port, publishes it in the handshake file (atomic rename) and
+accepts the client in a background thread while EVERY rank builds its trainer right away (the
+build overlaps the orchestrator's vLLM start-up; the client only connects in ``wait_ready``).
+Once the trainer is built and the client is connected, rank 0 sends a hello (or the traceback if
+building failed), then serves requests ``{"op", "id", "args"}`` until ``close`` or EOF. Ops:
+``token_logprobs``, ``step`` (surrogate gradient hand-off, see ``bridge.surrogate_loss``),
+``export_lora``, ``provenance``, ``profile_arm``, ``ping``, ``close``.
+
+Rank agreement (``torchrun``): ``export_lora`` reports every rank's canonical LoRA hash
+(``rank_sha256``) and ``token_logprobs`` every rank's sha256 of its logprob bytes; if any rank
+differs from rank 0 the reply is an error (``error_type`` ``WeightSyncError`` /
+``RankDivergenceError``), never a silent rank-0 answer.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from __future__ import annotations
 import torch  # noqa: I001 - must precede anything that imports transformer_engine
 
 import argparse
+import hashlib
 import importlib
 import json
 import os
@@ -168,6 +176,29 @@ def _cuda_active() -> bool:
     return bool(torch.cuda.is_available() and torch.cuda.is_initialized())
 
 
+def _logprob_digest(tensors: list[torch.Tensor]) -> str:
+    """sha256 over (dtype, shape, raw bytes) of each logprob tensor, in order."""
+
+    digest = hashlib.sha256()
+    for tensor in tensors:
+        cpu = wire_tensor(tensor)
+        shape = ",".join(str(int(d)) for d in cpu.shape)
+        digest.update(f"{cpu.dtype}|{shape}\n".encode("utf-8"))
+        flat = cpu.contiguous().reshape(-1)
+        if flat.numel():
+            digest.update(flat.view(torch.uint8).numpy().tobytes())
+    return digest.hexdigest()
+
+
+def _rank_disagreement(statuses: list[dict[str, Any]], key: str) -> str | None:
+    """A description of the ranks whose ``key`` differs from rank 0's (None if all agree)."""
+
+    values = [s.get(key) for s in statuses]
+    if values and all(v is not None and v == values[0] for v in values):
+        return None
+    return ", ".join(f"rank {s.get('rank')}: {s.get(key)}" for s in statuses)
+
+
 def _memory_gib() -> dict[str, float] | None:
     if not _cuda_active():
         return None
@@ -215,6 +246,7 @@ class TrainerServer:
         if len(logprobs) != len(token_ids):
             raise ValueError(f"trainer returned {len(logprobs)} tensors for {len(token_ids)} rows")
         self.last_logprobs = logprobs
+        self._rank_extra = {"logprobs_sha256": _logprob_digest(logprobs)}
         if self.rank != 0:
             return None
         return {
@@ -285,7 +317,7 @@ class TrainerServer:
         handler = self.OPS.get(op)
         status: dict[str, Any] = {"rank": self.rank, "compute_s": 0.0, "memory": None}
         if handler is None:
-            status.update(ok=False, error=f"unknown op {op!r}")
+            status.update(ok=False, error=f"unknown op {op!r}", error_type="KeyError")
             return False, None, status["error"], status
         armed = self.profile_armed
         profile_this = armed is not None and op in armed["ops"]
@@ -297,13 +329,15 @@ class TrainerServer:
         if _cuda_active():
             torch.cuda.reset_peak_memory_stats()
         prof: dict[str, Any] = {}
+        error_type = None
         t0 = time.perf_counter()
         try:
             with profiled(profile_this, out_path=out_path, label=f"trainer_server.{op}") as prof:
                 result = handler(self, args)
             ok, error = True, None
-        except Exception:  # noqa: BLE001 - reported to the client verbatim
+        except Exception as exc:  # noqa: BLE001 - reported to the client verbatim
             result, ok, error = None, False, traceback.format_exc()
+            error_type = type(exc).__name__
         if _cuda_active():
             torch.cuda.synchronize()
         status["compute_s"] = time.perf_counter() - t0
@@ -318,6 +352,7 @@ class TrainerServer:
                 self.profile_armed = None
         status["ok"] = ok
         status["error"] = error
+        status["error_type"] = error_type
         return ok, result, error, status
 
     def _broadcast(self, message: Any) -> Any:
@@ -352,6 +387,17 @@ class TrainerServer:
                 errors = [
                     f"rank {s['rank']}: {s.get('error')}" for s in statuses if not s.get("ok")
                 ]
+                error_types = [s.get("error_type") for s in statuses if not s.get("ok")]
+                if not errors and op == "export_lora":
+                    differ = _rank_disagreement(statuses, "sha256")
+                    if differ is not None:
+                        errors.append(f"trainer ranks hold different LoRA weights ({differ})")
+                        error_types.append("WeightSyncError")
+                if not errors and op == "token_logprobs":
+                    differ = _rank_disagreement(statuses, "logprobs_sha256")
+                    if differ is not None:
+                        errors.append(f"trainer ranks returned different logprobs ({differ})")
+                        error_types.append("RankDivergenceError")
                 all_ok = ok and not errors
                 server = {
                     "compute_s": status["compute_s"],
@@ -360,13 +406,16 @@ class TrainerServer:
                     "memory": status["memory"],
                     "profile": status.get("profile"),
                 }
-                if op == "export_lora" and self.world > 1 and all_ok:
+                if op == "export_lora" and all_ok:
                     result["rank_sha256"] = [s.get("sha256") for s in statuses]
+                if op == "token_logprobs" and all_ok:
+                    result["rank_logprobs_sha256"] = [s.get("logprobs_sha256") for s in statuses]
                 reply = {
                     "id": message.get("id"),
                     "ok": all_ok,
                     "result": result if all_ok else None,
                     "error": "\n".join(errors) if errors else None,
+                    "error_type": next((t for t in error_types if t), None) if errors else None,
                     "server": to_wire(server),
                 }
                 if not eof:
@@ -410,11 +459,15 @@ def main(argv: list[str] | None = None) -> int:
     world = int(os.environ.get("WORLD_SIZE", "1"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     authkey_hex = os.environ.pop(AUTHKEY_ENV, "")
+    stamps: dict[str, float] = {"start": time.time()}
     _start_client_watchdog(rank)
+    nodelay = bool(spec.get("tcp_nodelay", True))
     _log(rank, f"start pid={os.getpid()} world={world} launcher={spec.get('launcher')} "
-               f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r}")
+               f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r} "
+               f"tcp_nodelay={nodelay}")
 
-    conn: Connection | None = None
+    accepted: dict[str, Any] = {}
+    accept_thread: threading.Thread | None = None
     if rank == 0:
         if not authkey_hex:
             _log(rank, f"missing {AUTHKEY_ENV}; refusing to listen without authentication")
@@ -427,12 +480,29 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
         )
         tmp.replace(handshake)
-        conn = listener.accept()
-        set_nodelay(conn)
-        listener.close()
-        _log(rank, "client connected")
+
+        def accept() -> None:
+            # The client connects only in wait_ready(); the trainer builds meanwhile.
+            try:
+                client = listener.accept()
+                if nodelay:
+                    set_nodelay(client)
+                accepted["conn"] = client
+                stamps["client_connected"] = time.time()
+                _log(rank, "client connected")
+            except BaseException as exc:  # noqa: BLE001 - reported after the build
+                accepted["error"] = exc
+            finally:
+                listener.close()
+
+        accept_thread = threading.Thread(target=accept, name="bridge-accept", daemon=True)
+        accept_thread.start()
 
     t0 = time.perf_counter()
+    stamps["build_start"] = time.time()
+    build_error: str | None = None
+    trainer: Any = None
+    ctrl = None
     try:
         if world > 1 and spec.get("dist_init") == "before_build":
             _init_default_group(world, local_rank)
@@ -446,15 +516,26 @@ def main(argv: list[str] | None = None) -> int:
                 dist.init_process_group(backend="gloo", timeout=_LONG)
             ctrl = dist.new_group(backend="gloo", timeout=_LONG)
     except BaseException:  # noqa: BLE001 - shipped to the client, then exit non-zero
-        tb = traceback.format_exc()
-        _log(rank, f"trainer construction failed:\n{tb}")
+        build_error = traceback.format_exc()
+        _log(rank, f"trainer construction failed:\n{build_error}")
+    build_s = time.perf_counter() - t0
+    stamps["build_end"] = time.time()
+
+    conn: Connection | None = None
+    if accept_thread is not None:
+        accept_thread.join()  # until the client calls wait_ready (or dies: the watchdog exits)
+        if "error" in accepted:
+            exc = accepted["error"]
+            _log(rank, f"accepting the client failed: {type(exc).__name__}: {exc}")
+            return 2
+        conn = accepted["conn"]
+    if build_error is not None:
         if conn is not None:
             try:
-                conn.send_bytes(encode_message({"id": 0, "ok": False, "error": tb}))
+                conn.send_bytes(encode_message({"id": 0, "ok": False, "error": build_error}))
             except OSError:
                 pass
         return 1
-    build_s = time.perf_counter() - t0
     _log(rank, f"trainer {type(trainer).__name__} built in {build_s:.1f} s")
     if conn is not None:
         hello = {
@@ -464,6 +545,8 @@ def main(argv: list[str] | None = None) -> int:
             "launcher": spec.get("launcher"),
             "trainer_class": f"{type(trainer).__module__}.{type(trainer).__qualname__}",
             "build_s": build_s,
+            "server_unix": dict(stamps),
+            "tcp_nodelay": nodelay,
             "versions": _versions(),
             "devices": _device_info(),
             "memory": _memory_gib(),

@@ -10,7 +10,9 @@ skip without one; they never pick a GPU themselves):
 
 The real ``StrictTrainer`` is pinned to the 30B shapes (``megatron_strict._check_config``), so a
 toy-config StrictTrainer smoke is not possible; these tests drive the CUDA ``MockTrainer``
-through the real transport instead (placement, device round trips, surrogate exactness on CUDA).
+through the real transport instead (placement, device round trips, surrogate exactness on CUDA,
+bit equality with the in-process CUDA mock in both server environments). The real 30B trainer
+behind the bridge is covered by the integrator's one-step E2E smokes (REPORT_e2e_loop.md).
 """
 
 from __future__ import annotations
@@ -93,9 +95,8 @@ def test_cuda_trainer_through_bridge_sees_exactly_the_leased_gpu(tmp_path: Path,
         mocks.MockTrainer("mock", tensor_parallel_size=1, gpu_ids=[], lora_rank=4, lr=1e-3,
                           strict=True, seed=7, device="cuda")
     )
-    if which == "same_env":
-        assert got == want  # the bridge itself adds no numerical difference
-    else:
-        # Different torch builds (cu129 vs cu130): report-only, the bridge is not the variable.
-        for (lp_r, _, _), (lp_l, _, _) in zip(got, want):
-            assert len(lp_r) == len(lp_l)
+    # Logprob bits, grad norms and LoRA hashes are identical in both variants. same_env: the
+    # bridge adds no numerical difference. megatron_env: also a different torch build (cu129 vs
+    # cu130); the strict mock uses only exactly-rounded elementwise CUDA ops and sequential
+    # sums, so the two builds must agree bit for bit as well (gated, not report-only).
+    assert got == want

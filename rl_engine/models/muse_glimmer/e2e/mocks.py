@@ -650,7 +650,12 @@ class MockTrainer:
         seed: int,
         config: TinyLMConfig | None = None,
         device: str = "cpu",
+        build_delay_s: float = 0.0,
     ) -> None:
+        # ``build_delay_s`` stands in for the 30B checkpoint load (bridge start-up overlap tests).
+        self.build_delay_s = float(build_delay_s)
+        if self.build_delay_s > 0:
+            time.sleep(self.build_delay_s)
         self.model_path = str(model_path)
         self.tensor_parallel_size = int(tensor_parallel_size)
         self.gpu_ids = [int(g) for g in gpu_ids]
@@ -742,6 +747,7 @@ class MockTrainer:
             "tiny_config": asdict(self.cfg),
             "base_seed": self.model.base_seed,
             "lora_storage": "fp32 master -> bf16 at use and at export",
+            "build_delay_s": self.build_delay_s,
         }
 
     def close(self) -> None:
@@ -753,13 +759,26 @@ class FaultyMockTrainer(MockTrainer):
 
     ``fault`` is ``"exit"`` (the process dies with exit code 17, like a segfaulting rank),
     ``"hang"`` (the call never returns), ``"raise"`` (a Python exception), ``"build"`` (the
-    constructor raises) or ``"bad_hash"`` (``export_lora`` reports a hash that does not match
-    its tensors). ``fault_op`` names the method that misbehaves on its
-    ``fault_after + 1``-th call; ``fault_rank`` restricts the fault to one torchrun rank (``RANK``
-    environment variable; ``None`` = every rank).
+    constructor raises), ``"bad_hash"`` (``export_lora`` reports a hash that does not match
+    its tensors), ``"diverge_lora"`` (``export_lora`` returns a LoRA with one element changed,
+    with its honest hash: a TP rank holding different weights), ``"diverge_logprobs"``
+    (``token_logprobs`` adds 1e-3, autograd kept: a TP rank computing different values) or
+    ``"forward_only"`` (``token_logprobs`` returns detached tensors, like a forward-only
+    trainer). ``fault_op`` names the method that misbehaves on its ``fault_after + 1``-th call;
+    ``fault_rank`` restricts the fault to one torchrun rank (``RANK`` environment variable;
+    ``None`` = every rank).
     """
 
-    FAULTS = ("exit", "hang", "raise", "build", "bad_hash")
+    FAULTS = (
+        "exit",
+        "hang",
+        "raise",
+        "build",
+        "bad_hash",
+        "diverge_lora",
+        "diverge_logprobs",
+        "forward_only",
+    )
 
     def __init__(
         self,
@@ -785,13 +804,15 @@ class FaultyMockTrainer(MockTrainer):
     def _fault_active(self) -> bool:
         return self.fault_rank is None or int(os.environ.get("RANK", "0")) == self.fault_rank
 
-    def _maybe_fault(self, op: str) -> None:
+    def _maybe_fault(self, op: str) -> bool:
+        """Apply the fault of ``op``; return True when a data fault applies to this call."""
+
         if op != self.fault_op or not self._fault_active():
-            return
+            return False
         count = self._fault_calls.get(op, 0)
         self._fault_calls[op] = count + 1
         if count < self.fault_after:
-            return
+            return False
         if self.fault == "exit":
             os._exit(17)
         if self.fault == "hang":
@@ -799,23 +820,32 @@ class FaultyMockTrainer(MockTrainer):
                 time.sleep(3600.0)
         if self.fault == "raise":
             raise RuntimeError(f"injected fault in {op}")
-        if self.fault == "bad_hash":
-            self._lie_about_hash = True
+        return True
 
     def token_logprobs(
         self, token_ids: list[list[int]], completion_start: list[int]
     ) -> list[torch.Tensor]:
-        self._maybe_fault("token_logprobs")
-        return super().token_logprobs(token_ids, completion_start)
+        faulty = self._maybe_fault("token_logprobs")
+        out = super().token_logprobs(token_ids, completion_start)
+        if faulty and self.fault == "diverge_logprobs":
+            out = [t + 1e-3 for t in out]
+        if faulty and self.fault == "forward_only":
+            out = [t.detach() for t in out]
+        return out
 
     def step(self, loss: torch.Tensor) -> dict[str, Any]:
         self._maybe_fault("step")
         return super().step(loss)
 
     def export_lora(self) -> tuple[dict[str, torch.Tensor], str]:
-        self._lie_about_hash = False
-        self._maybe_fault("export_lora")
+        faulty = self._maybe_fault("export_lora")
         state_dict, sha = super().export_lora()
-        if self._lie_about_hash:
+        if faulty and self.fault == "bad_hash":
             sha = "0" * 64
+        if faulty and self.fault == "diverge_lora":
+            name = sorted(state_dict)[0]
+            changed = state_dict[name].clone()
+            changed.view(-1)[0] += 1.0
+            state_dict = {**state_dict, name: changed}
+            sha = lora_sha256(state_dict)  # honest hash of divergent weights
         return state_dict, sha

@@ -49,13 +49,14 @@ def _few_threads():
 
 def _remote(tmp_path: Path, *, python: Path | str = MEGATRON_PY, launcher: str = "process",
             tp: int = 1, factory: str = bridge.MOCK_TRAINER_FACTORY, factory_kwargs=None,
-            call_timeout_s: float = 120.0, startup_timeout_s: float = 120.0, name: str = "srv"):
+            call_timeout_s: float = 120.0, startup_timeout_s: float = 120.0, name: str = "srv",
+            **kwargs):
     return bridge.RemoteTrainer(
         "mock", tensor_parallel_size=tp, gpu_ids=[], lora_rank=4, lr=1e-3, strict=True, seed=7,
         python=str(python), launcher=launcher, factory=factory,
         factory_kwargs=factory_kwargs or {}, work_dir=tmp_path / name,
         call_timeout_s=call_timeout_s, startup_timeout_s=startup_timeout_s,
-        extra_env={"OMP_NUM_THREADS": "2"},
+        extra_env={"OMP_NUM_THREADS": "2"}, **kwargs,
     )
 
 
@@ -217,6 +218,44 @@ def test_plan_gpu_placement_validates_flags() -> None:
     assert bridge.parse_visible_devices("GPU-abc") is None
 
 
+def test_gpu_ids_default_to_the_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No placement flags: rollout = first rollout_tp leased ids, trainer = the next train_tp."""
+
+    assert bridge.default_gpu_ids(rollout_tp=2, train_tp=2, parent_visible="4,5,6,7") == (
+        [4, 5], [6, 7]
+    )
+    assert bridge.default_gpu_ids(rollout_tp=1, train_tp=2, parent_visible="3,7,1") == ([3], [7, 1])
+    # One side given (physical ids inside the lease): the other takes the remaining lease ids.
+    assert bridge.default_gpu_ids(
+        rollout_tp=1, train_tp=2, parent_visible="0,1,2,3", rollout_gpus=[2]
+    ) == ([2], [0, 1])
+    assert bridge.default_gpu_ids(
+        rollout_tp=2, train_tp=2, parent_visible=None, rollout_gpus=[0, 1], train_gpus=[2, 3]
+    ) == ([0, 1], [2, 3])
+    with pytest.raises(ValueError, match="gpu-lease"):
+        bridge.default_gpu_ids(rollout_tp=1, train_tp=2, parent_visible=None)
+    with pytest.raises(ValueError, match="needs 4"):
+        bridge.default_gpu_ids(rollout_tp=2, train_tp=2, parent_visible="0,1,2")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "4,5,6")
+    cfg = run_poc_grpo.config_from_args(
+        run_poc_grpo.build_parser().parse_args(["--rollout-tp", "1", "--train-tp", "2"])
+    )
+    assert cfg.rollout_gpus == [4] and cfg.train_gpus == [5, 6]
+    cfg = run_poc_grpo.config_from_args(
+        run_poc_grpo.build_parser().parse_args(["--rollout-gpus", "6", "--train-gpus", "4,5"])
+    )
+    assert cfg.rollout_gpus == [6] and cfg.train_gpus == [4, 5]
+
+
+def test_rank_hash_check_fails_closed() -> None:
+    sha = "a" * 64
+    bridge.check_rank_hashes([sha, sha], sha, world=2)
+    bridge.check_rank_hashes([sha], sha, world=1)
+    for ranks, world in (([sha, "b" * 64], 2), ([sha], 2), (None, 2), ([sha, None], 2)):
+        with pytest.raises(WeightSyncError, match="trainer ranks"):
+            bridge.check_rank_hashes(ranks, sha, world=world)
+
+
 def test_child_env_and_server_command(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VLLM_FOO", "1")
     monkeypatch.setenv("RL_KERNEL_MUSEGLIMMER_STRICT", "1")
@@ -333,24 +372,115 @@ def test_hung_server_times_out_and_is_killed(tmp_path: Path) -> None:
 
 
 @requires_megatron_env
-def test_remote_exception_propagates_and_server_survives(tmp_path: Path) -> None:
+def test_remote_exception_in_a_stateful_op_retires_the_bridge(tmp_path: Path) -> None:
+    """A failed step/export/scoring may leave TP ranks divergent: no further calls."""
+
     remote = _remote(
         tmp_path, factory=FAULTY, factory_kwargs={"fault": "raise", "fault_op": "step"}
     )
+    pid = remote.server_pid
     try:
+        # A failing stateless op leaves the bridge usable.
+        with pytest.raises(bridge.RemoteTrainerError, match="unknown op"):
+            remote._call("no_such_op", {})
+        assert remote.provenance()["engine"] == "MockTrainer"
         lps = remote.token_logprobs(SEQS, STARTS)
         loss = grpo.grpo_token_loss(lps, [t.detach() for t in lps], ADVANTAGES).loss
         with pytest.raises(bridge.RemoteTrainerError, match="injected fault in step"):
             remote.step(loss)
-        assert remote.alive()
-        assert remote.provenance()["engine"] == "MockTrainer"
-        with pytest.raises(bridge.RemoteTrainerError, match="unknown op"):
-            remote._call("no_such_op", {})
-        with pytest.raises(RuntimeError, match="token_logprobs before step"):
-            remote.step(loss)  # the failed step consumed nothing on the client side
+        with pytest.raises(bridge.RemoteTrainerError, match="unusable"):
+            remote.provenance()
+        with pytest.raises(bridge.RemoteTrainerError, match="unusable"):
+            remote.token_logprobs(SEQS, STARTS)
+        assert not _pid_alive(pid)  # the server group was taken down at the failure
     finally:
         remote.close()
     assert not remote.alive()
+
+
+@requires_megatron_env
+def test_trainer_builds_while_the_caller_starts_the_rollout(tmp_path: Path) -> None:
+    """The server builds the trainer BEFORE the client connects, so a slow trainer build overlaps
+    whatever the orchestrator does between launching it and ``wait_ready`` (vLLM start-up)."""
+
+    build_s = 4.0
+    caller_s = build_s + 6.0  # > interpreter start + build: the trainer must be ready by then
+    remote = _remote(tmp_path, factory_kwargs={"build_delay_s": build_s}, wait=False)
+    try:
+        time.sleep(caller_s)  # the orchestrator builds vLLM meanwhile
+        t0 = time.monotonic()
+        hello = remote.wait_ready()
+        blocked = time.monotonic() - t0
+    finally:
+        remote.close()
+    assert hello["build_s"] >= build_s
+    assert blocked < 2.0, f"wait_ready blocked {blocked:.2f}s: the build did not overlap"
+    st = hello["startup"]
+    assert st["server_build_end_after_launch_s"] < st["wait_ready_called_after_launch_s"]
+    assert st["client_connected_after_launch_s"] >= st["server_build_start_after_launch_s"]
+
+
+@requires_megatron_env
+def test_forward_only_trainer_is_rejected_at_scoring(tmp_path: Path) -> None:
+    """The server's requires_grad flags reach the client, so the loop's guard fires at scoring."""
+
+    from rl_engine.models.muse_glimmer.e2e import loop
+
+    remote = _remote(tmp_path, factory=FAULTY,
+                     factory_kwargs={"fault": "forward_only", "fault_op": "token_logprobs"})
+    try:
+        lps = remote.token_logprobs(SEQS, STARTS)
+        assert not any(t.requires_grad for t in lps)
+        with pytest.raises(ValueError, match="autograd history"):
+            loop._check_train_logps(lps, SEQS, STARTS)
+        with pytest.raises(RuntimeError, match="autograd history"):
+            remote.step(lps[0].sum())
+        assert "step" not in [c["op"] for c in remote.calls]
+    finally:
+        remote.close()
+
+
+@requires_megatron_env
+@pytest.mark.parametrize(
+    "fault,op,error",
+    [
+        ("diverge_lora", "export_lora", WeightSyncError),
+        ("diverge_logprobs", "token_logprobs", bridge.RemoteTrainerError),
+    ],
+)
+def test_torchrun_rank_divergence_fails_closed(tmp_path: Path, fault, op, error) -> None:
+    """Every rank's LoRA hash (and logprob digest) is gathered; any disagreement raises."""
+
+    remote = _remote(tmp_path, launcher="torchrun", tp=2, startup_timeout_s=180.0,
+                     factory=FAULTY, factory_kwargs={"fault": fault, "fault_op": op,
+                                                     "fault_rank": 1})
+    pid = remote.server_pid
+    try:
+        with pytest.raises(error, match="trainer ranks"):
+            if op == "export_lora":
+                remote.export_lora()
+            else:
+                remote.token_logprobs(SEQS, STARTS)
+        with pytest.raises(bridge.RemoteTrainerError, match="unusable"):
+            remote.provenance()
+        assert not _pid_alive(pid)
+    finally:
+        remote.close()
+
+
+@requires_megatron_env
+def test_nagle_variant_is_selectable_and_bit_exact(tmp_path: Path) -> None:
+    """``tcp_nodelay=False`` keeps Nagle on both ends (bench comparison); bytes are unchanged."""
+
+    remote = _remote(tmp_path, tcp_nodelay=False)
+    try:
+        payload = torch.randint(0, 256, (64 << 10,), dtype=torch.uint8)
+        echoed, _ = remote.ping(payload)
+        assert torch.equal(echoed, payload)
+        assert remote.bridge_info()["tcp_nodelay"] is False
+        assert remote.wait_ready()["tcp_nodelay"] is False
+    finally:
+        remote.close()
 
 
 @requires_megatron_env
@@ -466,6 +596,10 @@ def test_cli_mock_through_bridge_equals_in_process_and_writes_timeline(tmp_path:
     assert remote["reward"]["trajectory"] == local["reward"]["trajectory"]
     assert remote["weight_sync"]["final_sha256"] == local["weight_sync"]["final_sha256"]
     assert remote["weight_sync"]["all_passed"]
+    # The LoRA crossed the bridge socket before the in-memory hop to the rollout.
+    assert remote["weight_sync"]["transport"] == "bridge+memory"
+    assert remote["weight_sync"]["trainer_to_orchestrator"] == "bridge"
+    assert local["weight_sync"]["transport"] == "memory"
     timeline = remote["timeline"]
     assert timeline["phase_order"][0] == "rollout_generate" and timeline["steps"] == [0, 1, 2]
     assert timeline["profiled_steps"] == [1]
@@ -479,6 +613,9 @@ def test_cli_mock_through_bridge_equals_in_process_and_writes_timeline(tmp_path:
     assert first["trainer_step"]["bridge"]["grad_elements"] == first["drift"]["token_count"]
     assert records[0]["timeline"]["tokens_generated"] == records[0]["num_completion_tokens"]
     profile = remote["profiles"][0]
+    # The mock rollout has no engine-side profiler: the rollout table is orchestrator-only.
+    assert profile["rollout_engine_profiler"] is False
+    assert "orchestrator process only" in profile["orchestrator_rollout_generate_scope"]
     paths = [Path(profile["orchestrator_rollout_generate"]["path"])]
     paths += [Path(entry["path"]) for entry in profile["trainer_server"]]
     assert {entry["op"] for entry in profile["trainer_server"]} == {"token_logprobs", "step"}

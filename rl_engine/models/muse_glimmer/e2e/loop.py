@@ -19,8 +19,16 @@ server runs in the Megatron env (``trainer_server.py``). The orchestrator never 
 Timeline: every step records the wall seconds of the phases in :data:`timeline.PHASE_ORDER`
 (``steps.jsonl["timeline"]``), the RemoteTrainer call stats (RTT vs server compute, bytes), and
 ``summary.json["timeline"]`` holds the per-phase series for plotting. ``profile_step`` captures
-``torch.profiler`` top-ops tables of that step's rollout (orchestrator process) and of the
-trainer scoring + train step (on the trainer server when bridged, else in-process).
+``torch.profiler`` top-ops tables of that step's trainer scoring + train step (on the trainer
+server when bridged, else in-process) and of the rollout call AS SEEN BY THE ORCHESTRATOR
+PROCESS: vLLM V1 runs the model in EngineCore / worker subprocesses, so that table holds no GPU
+kernels. The rollout engine's own profiler runs only if it offers ``start_profile`` /
+``stop_profile`` (``StrictRolloutEngine`` does not today); the profile entry records which
+(``rollout_engine_profiler``).
+
+Weight-sync records name both hops: ``trainer_to_orchestrator`` (``in_process`` or ``bridge``:
+the trainer-bridge socket) and ``orchestrator_to_rollout`` (``memory`` or ``file``);
+``transport`` joins them (``bridge+memory``) for a bridged trainer.
 """
 
 from __future__ import annotations
@@ -28,6 +36,7 @@ from __future__ import annotations
 import csv
 import json
 import random
+import subprocess
 import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -84,10 +93,11 @@ class LoopConfig:
     seed: int = 1234
     model_path: str = "~/models/Muse-Glimmer-30B"
     max_model_len: int = 4096
-    rollout_tp: int = 2
-    rollout_gpus: list[int] = field(default_factory=lambda: [0, 1])
-    train_tp: int = 4
-    train_gpus: list[int] = field(default_factory=lambda: [4, 5, 6, 7])
+    # Physical GPU ids (run_poc_grpo fills them from the lease when the flags are omitted).
+    rollout_tp: int = 1
+    rollout_gpus: list[int] = field(default_factory=lambda: [0])
+    train_tp: int = 2
+    train_gpus: list[int] = field(default_factory=lambda: [1, 2])
     sync_via_file: bool = False
     recheck_rollout_logprobs: bool = True
     mock: bool = False
@@ -164,6 +174,34 @@ CSV_COLUMNS = [
     "lora_transfer_time_s",
     "rollout_tokens_per_s",
 ]
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+ROLLOUT_PROFILE_SCOPE = (
+    "orchestrator process only: vLLM's EngineCore/worker subprocesses (the model's GPU work) are "
+    "not in this table unless the rollout engine profiles itself (rollout_engine_profiler)"
+)
+
+
+def code_provenance() -> dict[str, Any]:
+    """The checkout this orchestrator runs from: commit and whether tracked files differ."""
+
+    def git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return out.stdout.strip()
+
+    status = git("status", "--porcelain", "--untracked-files=no")
+    return {
+        "repo_root": str(REPO_ROOT),
+        "git_commit": git("rev-parse", "HEAD"),
+        "git_dirty": None if status is None else bool(status),
+    }
 
 
 def _json_default(value: Any) -> Any:
@@ -345,6 +383,7 @@ def _summarize(
     initial_sync: dict[str, Any],
     profiles: list[dict[str, Any]] | None = None,
     initial_bridge_calls: list[dict[str, Any]] | None = None,
+    code: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     first_drift = None
     total_tokens = 0
@@ -373,6 +412,7 @@ def _summarize(
         "error": error,
         "orchestrator": "rl_engine.models.muse_glimmer.e2e (single process; no VIME, no Ray)",
         "rfc_row": "final_e2e_lora",
+        "code": code,
         "mode": cfg.mode,
         "train_strict": cfg.train_strict,
         "rollout_strict": cfg.rollout_strict,
@@ -401,6 +441,8 @@ def _summarize(
             "initial_sha256": initial_sync["exported_sha256"],
             "final_sha256": records[-1]["sync"]["exported_sha256"] if records else None,
             "transport": initial_sync["transport"],
+            "trainer_to_orchestrator": initial_sync.get("trainer_to_orchestrator"),
+            "orchestrator_to_rollout": initial_sync.get("orchestrator_to_rollout"),
         },
         "timings_mean_s": timings,
         "timeline": summarize_timeline(records) if records else None,
@@ -533,6 +575,18 @@ def _drain_bridge_calls(trainer: Any) -> list[dict[str, Any]] | None:
     return drain() if callable(drain) else None
 
 
+def _trainer_transport(trainer: Any) -> str:
+    """``bridge`` when the trainer lives behind the cross-environment bridge."""
+
+    return "bridge" if callable(getattr(trainer, "bridge_info", None)) else "in_process"
+
+
+def _has_engine_profiler(engine: Any) -> bool:
+    return callable(getattr(engine, "start_profile", None)) and callable(
+        getattr(engine, "stop_profile", None)
+    )
+
+
 def _engine_profile(engine: Any, action: str, enabled: bool) -> None:
     """Call ``engine.start_profile()`` / ``stop_profile()`` when the engine offers them."""
 
@@ -558,6 +612,7 @@ def run_loop(
     (run_dir / "mismatch-sidecars").mkdir(exist_ok=True)
     _write_json(run_dir / "config.json", cfg.to_dict())
     emit = log or (lambda _message: None)
+    code = code_provenance()
     rng = random.Random(cfg.seed)
     samples_per_prompt = cfg.samples_per_prompt
     task_description = task.describe()
@@ -565,9 +620,13 @@ def run_loop(
     lora_dir = run_dir / "lora"
     profile_dir = run_dir / "profile"
     profiles: list[dict[str, Any]] = []
+    trainer_transport = _trainer_transport(trainer)
     package = export_lora_verified(trainer, step=0)
     initial_sync = transfer_lora(
-        package, rollout, via_file=(lora_dir / "step0000.pt") if cfg.sync_via_file else None
+        package,
+        rollout,
+        via_file=(lora_dir / "step0000.pt") if cfg.sync_via_file else None,
+        trainer_transport=trainer_transport,
     )
     provenance: dict[str, Any] = {
         "rollout_start": rollout.provenance(),
@@ -686,12 +745,15 @@ def run_loop(
                         via_file=(
                             (lora_dir / f"step{step + 1:04d}.pt") if cfg.sync_via_file else None
                         ),
+                        trainer_transport=trainer_transport,
                     )
 
                 bridge_calls = _drain_bridge_calls(trainer)
                 if profile_now:
                     entry = {
                         "step": step,
+                        "rollout_engine_profiler": _has_engine_profiler(rollout),
+                        "orchestrator_rollout_generate_scope": ROLLOUT_PROFILE_SCOPE,
                         "orchestrator_rollout_generate": prof_rollout,
                         "orchestrator_trainer_logprobs": prof_logp or None,
                         "orchestrator_trainer_step": prof_step or None,
@@ -768,6 +830,7 @@ def run_loop(
                 initial_sync=initial_sync,
                 profiles=profiles,
                 initial_bridge_calls=initial_bridge_calls,
+                code=code,
             )
             _write_json(run_dir / "summary.json", summary)
             write_readme(run_dir, summary)
