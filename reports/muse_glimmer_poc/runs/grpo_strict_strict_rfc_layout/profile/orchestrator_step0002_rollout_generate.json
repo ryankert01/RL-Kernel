@@ -1,0 +1,100 @@
+{
+  "schema": "muse_glimmer_top_ops_v1",
+  "label": "orchestrator.rollout.generate",
+  "sort_by": "self_device_us",
+  "device_activity": true,
+  "num_distinct_ops": 11,
+  "total_self_cpu_us": 205544.1230006814,
+  "total_self_device_us": 0.0,
+  "rows": [
+    {
+      "name": "aten::empty",
+      "count": 7717,
+      "self_cpu_us": 3250.741000056267,
+      "cpu_total_us": 3250.741000056267,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::to",
+      "count": 7717,
+      "self_cpu_us": 416.25300078094006,
+      "cpu_total_us": 416.25300078094006,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::lift_fresh",
+      "count": 7717,
+      "self_cpu_us": 312.53999994695187,
+      "cpu_total_us": 312.53999994695187,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::detach_",
+      "count": 7717,
+      "self_cpu_us": 4895.236999943852,
+      "cpu_total_us": 5862.989999935031,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "detach_",
+      "count": 7717,
+      "self_cpu_us": 967.7529999911785,
+      "cpu_total_us": 967.7529999911785,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::item",
+      "count": 7717,
+      "self_cpu_us": 7461.428000360727,
+      "cpu_total_us": 8148.4009999632835,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "aten::_local_scalar_dense",
+      "count": 7717,
+      "self_cpu_us": 686.9729996025562,
+      "cpu_total_us": 686.9729996025562,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "cudaDeviceSynchronize",
+      "count": 2,
+      "self_cpu_us": 181439.33100000024,
+      "cpu_total_us": 187553.19799999893,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "Instrumentation",
+      "count": 3,
+      "self_cpu_us": 148.01299999654293,
+      "cpu_total_us": 148.01299999654293,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "Activity Buffer Request",
+      "count": 1,
+      "self_cpu_us": 1556.1710000038147,
+      "cpu_total_us": 1556.1710000038147,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    },
+    {
+      "name": "Resource",
+      "count": 4,
+      "self_cpu_us": 4409.682999998331,
+      "cpu_total_us": 4409.682999998331,
+      "self_device_us": 0.0,
+      "device_total_us": 0.0
+    }
+  ],
+  "wall_s": 109.81144767899968
+}
