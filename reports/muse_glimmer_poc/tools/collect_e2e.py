@@ -3,7 +3,7 @@
 # Copyright (c) 2026 RL-Kernel Contributors
 """Collect the four-mode GRPO run directories into reports/muse_glimmer_poc/data/e2e_run.json.
 
-Usage: collect_e2e.py RUN_DIR [RUN_DIR ...] [--out PATH]
+Usage: collect_e2e.py RUN_DIR[::label] [RUN_DIR[::label] ...] [--out PATH]
 Each RUN_DIR holds the loop's steps.jsonl + summary.json (rl_engine/models/muse_glimmer/e2e/loop.py).
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 DATA = Path(__file__).resolve().parents[1] / "data"
 
 
-def collect(run: Path) -> dict:
+def collect(run: Path, label: str | None = None) -> dict:
     summary = json.loads((run / "summary.json").read_text())
     steps = [json.loads(l) for l in (run / "steps.jsonl").read_text().splitlines() if l.strip()]
     rows = []
@@ -48,6 +48,7 @@ def collect(run: Path) -> dict:
     cfg = summary.get("config", {})
     return {
         "mode": summary.get("mode"),
+        "label": label,
         "status": summary.get("status"),
         "error": summary.get("error"),
         "run_dir": str(run),
@@ -69,7 +70,10 @@ def main() -> None:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--out", default=str(DATA / "e2e_run.json"))
     a = ap.parse_args()
-    modes = [collect(Path(r)) for r in a.runs]
+    modes = []
+    for r in a.runs:  # RUN_DIR or RUN_DIR::label
+        path, _, label = r.partition("::")
+        modes.append(collect(Path(path), label or None))
     out = {"schema": "muse_glimmer_e2e_run_v1", "modes": modes}
     Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
     for m in modes:

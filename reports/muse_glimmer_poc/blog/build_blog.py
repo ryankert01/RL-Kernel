@@ -687,7 +687,8 @@ def sec_e2e() -> str:
     if not e or not e.get("modes"):
         return head + pending("四种模式的真实 30B GRPO") + "</section>"
     order = ["strict/strict", "strict/native", "native/strict", "native/native"]
-    modes = sorted(e["modes"], key=lambda m: order.index(m["mode"]) if m["mode"] in order else 9)
+    extra = [m for m in e["modes"] if m.get("label")]
+    modes = sorted([m for m in e["modes"] if not m.get("label")], key=lambda m: order.index(m["mode"]) if m["mode"] in order else 9)
     m0 = modes[0]
     cfg = m0["config"]
     xs = [r["step"] for r in m0["steps"]]
@@ -717,6 +718,12 @@ def sec_e2e() -> str:
         cards.append(f'<div class="fact"><span class="fk">{esc(MODE_ZH.get(m["mode"], m["mode"]))}</span>'
                      f'<span class="fnew{"" if dt.get("bitwise_mismatch_count") == 0 else " fbad"}">{dt.get("bitwise_mismatch_count", "?")}/{dt.get("token_count", "?")}</span>'
                      f'<span class="fn">token bit 不同；最大 |Δ| {fmt(dt.get("max_abs_diff") or 0)}；第一次漂移：{esc(where)}；LoRA 同步校验 {ws.get("passed", "?")}/{ws.get("checks", "?")} 通过；{m.get("steps_completed", "?")} 步</span></div>')
+    for m in extra:
+        dt, ws, cf = m.get("drift_totals") or {}, m.get("weight_sync") or {}, m.get("config") or {}
+        cards.append(f'<div class="fact"><span class="fk">{esc(m["label"])}</span>'
+                     f'<span class="fnew{"" if dt.get("bitwise_mismatch_count") == 0 else " fbad"}">{dt.get("bitwise_mismatch_count", "?")}/{dt.get("token_count", "?")}</span>'
+                     f'<span class="fn">RFC 原定布局：rollout TP{cf.get("rollout_tp")}（GPU {cf.get("rollout_gpus")}）+ 训练 TP{cf.get("train_tp")}（GPU {cf.get("train_gpus")}）；'
+                     f'最大 |Δ| {fmt(dt.get("max_abs_diff") or 0)}；LoRA 同步 {ws.get("passed", "?")}/{ws.get("checks", "?")}；{m.get("steps_completed", "?")} 步；平均每步 {fmt((m.get("timings_mean_s") or {}).get("step_s") or 0)} s</span></div>')
     setup = (f'每种模式用 3 张卡：rollout TP{cfg.get("rollout_tp")}（1 张）+ 训练 TP{cfg.get("train_tp")}（2 张），两组同时在 GPU 0–2 和 4–6 上跑，rollout 和训练的 TP 度数不同；'
              f'{cfg.get("steps")} 步 × {cfg.get("prompts_per_step")} 道题 × {cfg.get("samples_per_prompt")} 个样本 × 最多 {cfg.get("max_tokens")} token，'
              f'LoRA r{cfg.get("lora_rank")}，lr {cfg.get("lr")}，温度 {cfg.get("temperature")}，seed {cfg.get("seed")}。')
