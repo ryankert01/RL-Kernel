@@ -795,6 +795,14 @@ def check_strict_engine_config(vllm_config: Any) -> dict[str, str]:
 
 def _bind_model(state: StrictBindingState, model: Any, vllm_config: Any) -> None:
     state.checks.update(check_strict_engine_config(vllm_config))
+    # Fail closed under the V1 model runner: the strict O7 overwrite and the sampling checks are
+    # patched into the V2 Sampler / prompt-logprob path only.
+    if vllm_config is not None and not bool(getattr(vllm_config, "use_v2_model_runner", False)):
+        raise RuntimeError(
+            "strict Muse-Glimmer binding requires vLLM's V2 model runner (VLLM_USE_V2_MODEL_RUNNER=1); "
+            "the V1 runner would return logprobs that bypass the strict O7 path"
+        )
+    state.checks["model_runner_v2"] = "passed"
     speculative = (
         vllm_config is not None and getattr(vllm_config, "speculative_config", None) is not None
     )
@@ -1038,6 +1046,7 @@ def strict_attention_forward(
         sin,
         eps=float(module.qk_norm.eps),
         qk_scale=float(module.scale_query_by),
+        local=bool(module.use_rope),
     )
     setattr(module.attn, attn_backend.GATE_ATTR, gate.contiguous())
     try:

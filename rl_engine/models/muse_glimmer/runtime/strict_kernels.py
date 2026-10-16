@@ -440,10 +440,10 @@ def _fb_fused_post_norm_residual_pre_norm(
 def _fb_rope_table(
     positions: torch.Tensor, *, theta: float, dim: int, device: torch.device
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
-    freqs = positions.to(device=device, dtype=torch.float32)[:, None] * inv_freq[None, :]
-    emb = torch.cat((freqs, freqs), dim=-1)
-    return emb.cos(), emb.sin()
+    # One table builder for every runtime (contract O4): the canonical CUDA build of ops.qknorm_rope.
+    from rl_engine.models.muse_glimmer.ops.qknorm_rope import rope_table as _canonical_rows
+
+    return _canonical_rows(positions, theta=float(theta), dim=int(dim), device=device)
 
 
 def _rotate_half(x: torch.Tensor) -> torch.Tensor:
@@ -459,7 +459,10 @@ def _fb_qknorm_scaled_rope(
     *,
     eps: float,
     qk_scale: float,
+    local: bool | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    if local is not None and bool(local) != (cos is not None):
+        raise ValueError(f"local={local} but cos/sin are {'None' if cos is None else 'given'}")
     qf = q.float()
     kf = k.float()
     qf = qf * torch.pow(qf.pow(2).mean(-1, keepdim=True) + eps, -0.5) * qk_scale

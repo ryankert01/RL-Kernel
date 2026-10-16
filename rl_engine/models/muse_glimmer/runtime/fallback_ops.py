@@ -281,12 +281,10 @@ def rope_table(
     """fp32 ``cos(p * theta^(-2i/dim))`` / ``sin`` tables of shape ``(T, dim)`` (angle repeated
     for both halves, the sibling ``rope_table`` layout)."""
 
-    pos = positions.to(device=device, dtype=torch.float32)
-    exponent = torch.arange(0, dim, 2, device=device, dtype=torch.float32) / float(dim)
-    inv_freq = 1.0 / torch.pow(torch.tensor(float(theta), device=device), exponent)
-    freqs = pos[:, None] * inv_freq[None, :]
-    emb = torch.cat((freqs, freqs), dim=-1)
-    return torch.cos(emb), torch.sin(emb)
+    # One table builder for every runtime (contract O4): the canonical CUDA build of ops.qknorm_rope.
+    from rl_engine.models.muse_glimmer.ops.qknorm_rope import rope_table as _canonical_rows
+
+    return _canonical_rows(positions, theta=float(theta), dim=int(dim), device=device)
 
 
 def _qk_norm(xf: torch.Tensor, eps: float) -> torch.Tensor:
@@ -310,9 +308,12 @@ def qknorm_scaled_rope(
     *,
     eps: float,
     qk_scale: float,
+    local: bool | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """O4: per-head weightless RMSNorm (fp32), ``q *= qk_scale`` (fp32), rotate_half RoPE on
     local layers (``cos``/``sin`` given), one cast to bf16 at the end."""
+    if local is not None and bool(local) != (cos is not None):
+        raise ValueError(f"local={local} but cos/sin are {'None' if cos is None else 'given'}")
 
     qf = _qk_norm(q.float(), eps) * float(qk_scale)
     kf = _qk_norm(k.float(), eps)

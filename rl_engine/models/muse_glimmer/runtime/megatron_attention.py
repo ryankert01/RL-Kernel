@@ -190,6 +190,7 @@ def attention_core(
     window: int | None,
     rms_eps: float,
     qk_scale: float,
+    local: bool | None = None,
 ) -> torch.Tensor:
     """Everything between the four column projections and ``o_proj`` for one rank.
 
@@ -204,7 +205,7 @@ def attention_core(
     v_head = GatherKVHead.apply(v_local, comm)
     q3 = q_local.view(t, hq, HEAD_DIM)
     k3 = k_head.view(t, hkv, HEAD_DIM)
-    qh, kh = ops.qknorm_scaled_rope(q3, k3, cos, sin, eps=rms_eps, qk_scale=qk_scale)
+    qh, kh = ops.qknorm_scaled_rope(q3, k3, cos, sin, eps=rms_eps, qk_scale=qk_scale, local=local)
     return rank_gated_attention(
         qh, kh, v_head.view(t, hkv, HEAD_DIM), g_local, cu_seqlens, cu_seqlens, positions,
         window=window, comm=comm, kernels=ops.attention,

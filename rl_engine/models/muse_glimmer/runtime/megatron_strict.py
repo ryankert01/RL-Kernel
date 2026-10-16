@@ -613,6 +613,7 @@ class MuseGlimmerStrictBinding:
             cos=cos if lw.sliding else None, sin=sin if lw.sliding else None,
             cu_seqlens=cu_seqlens, positions=positions,
             window=d.window if lw.sliding else None, rms_eps=d.rms_eps, qk_scale=d.qk_scale,
+            local=bool(lw.sliding),
         )
         del q, k, v, g
         o = self._row(y_local, lw.o_local, i, "o_proj", d.q_width, segments)

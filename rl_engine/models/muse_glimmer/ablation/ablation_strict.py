@@ -139,7 +139,7 @@ def packed_pass(model: Any, segments: Sequence[Segment], cache: Any = None) -> l
         else:
             cos = sin = None
         q_hat, k_hat = ops.qknorm_scaled_rope(q, k, cos, sin, eps=cfg.rms_norm_eps,
-                                              qk_scale=cfg.qk_scale_factor)
+                                              qk_scale=cfg.qk_scale_factor, local=bool(layer.is_local))
         layer_window = window if layer.is_local else None
         if cache is None:
             y, _o, _lse = ops.attention_varlen(q_hat, k_hat, v, g, cu, cu,

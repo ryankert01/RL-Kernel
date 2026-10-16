@@ -242,9 +242,9 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         expect(cos.dtype == torch.float32 and cos.shape[0] == 4, "rope_table")
         q = rnd(4, 32, 128)
         k = rnd(4, 2, 128)
-        qh, kh = ops.qknorm_scaled_rope(q, k, cos, sin, eps=1e-5, qk_scale=3.87)
+        qh, kh = ops.qknorm_scaled_rope(q, k, cos, sin, eps=1e-5, qk_scale=3.87, local=True)
         expect(qh.shape == q.shape and kh.dtype == bf, "qknorm_scaled_rope")
-        qh, kh = ops.qknorm_scaled_rope(q, k, None, None, eps=1e-5, qk_scale=3.87)
+        qh, kh = ops.qknorm_scaled_rope(q, k, None, None, eps=1e-5, qk_scale=3.87, local=False)
         expect(qh.shape == q.shape, "qknorm_scaled_rope (no rope)")
 
     def probe_attention(ops: StrictOps) -> None:
