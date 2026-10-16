@@ -24,8 +24,22 @@ Sharding (``tp`` = tensor-parallel size):
 Backward reduction orders (contract gap, declared here): the input gradient of a
 column-parallel projection is the fixed tree over the 8 canonical output-row chunks of the
 FULL ``N`` (one whole-chunk GEMM each); the LoRA contributions use the same chunks; base and
-LoRA fp32 input gradients are added once (``dx = bf16(dx_base + dx_lora)``); parameter
-gradients reduce over the (zero-padded) token axis with the canonical 8-chunk tree.
+LoRA fp32 input gradients are added once (``dx = bf16(dx_base + dx_lora)``).
+
+LoRA weight gradients (reduction over TOKENS), :data:`LORA_GRAD_RULE`:
+
+* per sequence ``s`` of the packed micro-batch (``segments``), ``g_s`` = the det_gemm dW rule
+  over its ``T_s`` tokens: ``T_pad = roundup(T_s, 256)``, 8 chunks of ``T_pad/8`` rows, rows
+  ``>= T_s`` masked to zero, fp32 tree (``fast_det_gemm(..., ragged_k=True)``, the rule
+  ``ops.det_gemm.DW_CHUNK_RULE`` declares);
+* the step gradient is the LEFT FOLD in fp32 over the request's sequences in sample order,
+  ``((g_0 + g_1) + g_2) + ...``, written straight into the fp32 master's ``.grad`` (the op
+  accumulates; it returns ``None`` to autograd for these inputs).
+
+So the gradient bits do not depend on how the sequences are packed into micro-batches
+(``micro_batch_tokens``) nor on the TP size; they depend on the sample order, which is part of
+the data. Without ``segments`` (single-sequence callers, the vLLM rule check) the whole input is
+one segment and the gradient is returned through autograd as usual.
 """
 
 from __future__ import annotations
@@ -41,8 +55,9 @@ from torch import nn
 from rl_engine.models.muse_glimmer.e2e.sync import lora_sha256 as _canonical_lora_sha256
 from rl_engine.models.muse_glimmer.runtime.strict_kernels import (
     CANONICAL_CHUNKS,
+    TOKEN_PAD,
     TPComm,
-    ceil_to,
+    TreeAccumulator,
     gemm_backend,
     gemm_fp32,
     gemm_single_chunk_fp32,
@@ -62,45 +77,64 @@ PROJECTIONS = (
     "mlp.up_proj",
     "mlp.down_proj",
 )
-_TOKEN_PAD = CANONICAL_CHUNKS * 64
 DEFAULT_LORA_RANK = 16
+LORA_GRAD_RULE = (
+    "per sequence: det_gemm dW rule over its tokens (T_pad = roundup(T, %d), 8 chunks of "
+    "T_pad/8 rows, fp32 tree); step gradient = left fold in fp32 over the request's sequences "
+    "in sample order, accumulated into the fp32 master .grad (packing- and TP-invariant)"
+    % TOKEN_PAD
+)
 
-
-def _pad_tokens_t(x_t: torch.Tensor, m_pad: int) -> torch.Tensor:
-    """Zero-pad the token axis (dim 1 of a transposed activation) to ``m_pad``."""
-    m = x_t.shape[1]
-    if m == m_pad:
-        return x_t.contiguous()
-    return torch.nn.functional.pad(x_t, (0, m_pad - m)).contiguous()
+Segments = tuple[tuple[int, int], ...]
 
 
 def _token_grad_gemm(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
-    """``lhs.T @ rhs`` reducing over tokens: ``lhs (M, P)``, ``rhs (M, Q)`` → fp32 ``(P, Q)``.
+    """``lhs.T @ rhs`` reducing over tokens: ``lhs (T, P)``, ``rhs (T, Q)`` -> fp32 ``(P, Q)``.
 
-    Tokens are zero-padded to a multiple of 8*64 so the reduction forms 8 canonical chunks.
+    The det_gemm dW rule: ``T_pad = roundup(T, 256)``, 8 chunks of ``T_pad/8`` token rows
+    (masked tail), fp32 chunk tree (``strict_kernels._GemmBackend.token_grad``).
     """
-    m_pad = ceil_to(lhs.shape[0], _TOKEN_PAD)
-    a = _pad_tokens_t(lhs.t(), m_pad)
-    w = _pad_tokens_t(rhs.t(), m_pad)
-    return gemm_fp32(a, w)
+    return gemm_backend().token_grad(lhs, rhs)
 
 
-class StrictColumnLinear(torch.autograd.Function):
-    """``y_local = bf16(x·W_localᵀ + B_local·bf16(A·x))`` for a column-parallel shard.
+def normalize_segments(segments: Any, tokens: int) -> Segments | None:
+    """Validate ``((start, end), ...)`` covering ``[0, tokens)`` contiguously, in order."""
+    if segments is None:
+        return None
+    out = tuple((int(s), int(e)) for s, e in segments)
+    pos = 0
+    for s, e in out:
+        if s != pos or e <= s:
+            raise ValueError(f"segments {out} do not tile [0, {tokens}) in order")
+        pos = e
+    if pos != tokens:
+        raise ValueError(f"segments end at {pos}, the input has {tokens} tokens")
+    return out
 
-    ``blocks`` are row-block views whose concatenation is this rank's shard of the weight in
-    HF row order (e.g. the q rows of each local KV group inside the fused ``linear_qkv``). Each
-    block is projected separately and the fp32 outputs concatenated: output columns are
-    independent, so this is bit-identical to one GEMM over the concatenated rows. Every block
-    must be a whole number of canonical ``N/8`` chunks.
-    """
 
+def _accumulate_token_grad(
+    param: torch.Tensor, lhs: torch.Tensor, rhs: torch.Tensor, segments: Segments
+) -> None:
+    """``param.grad += g_s`` for each segment in order (``g_s`` = :func:`_token_grad_gemm`)."""
+    with torch.no_grad():
+        for start, end in segments:
+            part = _token_grad_gemm(lhs[start:end], rhs[start:end])
+            if part.shape != param.shape:
+                raise RuntimeError(f"LoRA grad shape {tuple(part.shape)} != {tuple(param.shape)}")
+            if param.grad is None:
+                param.grad = part
+            else:
+                param.grad.add_(part)
+
+
+class _StrictColumnLinearFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, a32, b32_local, comm: TPComm, n_total: int, *blocks):
+    def forward(ctx, x, a32, b32_local, comm: TPComm, n_total: int, segments, *blocks):
         if x.dtype != torch.bfloat16 or any(w.dtype != torch.bfloat16 for w in blocks):
             raise TypeError("strict column linear needs bf16 activations and weights")
         parts = [gemm_fp32(x, w) for w in blocks]
         y32 = parts[0] if len(parts) == 1 else torch.cat(parts, dim=1)
+        del parts
         a = b = z = None
         if a32 is not None:
             a = a32.to(torch.bfloat16)
@@ -111,6 +145,8 @@ class StrictColumnLinear(torch.autograd.Function):
         ctx.comm = comm
         ctx.n_total = n_total
         ctx.n_blocks = len(blocks)
+        ctx.segments = segments
+        ctx.params = (a32, b32_local) if segments is not None else None
         return y32.to(torch.bfloat16)
 
     @staticmethod
@@ -125,8 +161,9 @@ class StrictColumnLinear(torch.autograd.Function):
         sizes = [w.shape[0] for w in blocks]
         if sum(sizes) != n_chunk * len(ids) or any(s % n_chunk for s in sizes):
             raise RuntimeError("column blocks do not tile this rank's canonical chunks")
-        base_parts = []
-        lora_parts = []
+        # Streaming canonical tree: same bits as combine_tree over the list, fewer live partials.
+        base_tree = TreeAccumulator()
+        lora_tree = TreeAccumulator() if a is not None else None
         block_index = 0
         block_start = 0
         for j, c in enumerate(ids):
@@ -137,29 +174,53 @@ class StrictColumnLinear(torch.autograd.Function):
             local = slice(start - block_start, start - block_start + n_chunk)
             dy_c = dy[:, start : start + n_chunk].contiguous()
             w_c = blocks[block_index][local].t().contiguous()
-            base_parts.append(gemm_single_chunk_fp32(dy_c, w_c, c))
-            if a is not None:
-                lora_parts.append(
+            base_tree.push(gemm_single_chunk_fp32(dy_c, w_c, c))
+            del w_c
+            if lora_tree is not None:
+                lora_tree.push(
                     gemm_single_chunk_fp32(dy_c, b[start : start + n_chunk].t().contiguous(), c)
                 )
-        backend = gemm_backend()
-        dx32 = comm.all_gather_tree(backend.combine(base_parts))
+        dx32 = comm.all_gather_tree(base_tree.result())
+        del base_tree
         da32 = db32 = None
         if a is not None:
-            dz = comm.all_gather_tree(backend.combine(lora_parts)).to(torch.bfloat16)
+            dz = comm.all_gather_tree(lora_tree.result()).to(torch.bfloat16)
             dx32 = dx32 + small_k_fp32(dz, a.t().contiguous())
-            if ctx.needs_input_grad[1]:
-                da32 = _token_grad_gemm(dz, x)  # (r, K)
-            if ctx.needs_input_grad[2]:
-                db32 = _token_grad_gemm(dy, z)  # (N_local, r)
-        return (dx32.to(torch.bfloat16), da32, db32, None, None, *([None] * ctx.n_blocks))
+            if ctx.segments is None:
+                if ctx.needs_input_grad[1]:
+                    da32 = _token_grad_gemm(dz, x)  # (r, K)
+                if ctx.needs_input_grad[2]:
+                    db32 = _token_grad_gemm(dy, z)  # (N_local, r)
+            else:
+                a_param, b_param = ctx.params
+                if ctx.needs_input_grad[1]:
+                    _accumulate_token_grad(a_param, dz, x, ctx.segments)
+                if ctx.needs_input_grad[2]:
+                    _accumulate_token_grad(b_param, dy, z, ctx.segments)
+        return (dx32.to(torch.bfloat16), da32, db32, None, None, None, *([None] * ctx.n_blocks))
 
 
-class StrictRowLinear(torch.autograd.Function):
-    """``y = bf16(tree_r(a_r·W_rᵀ) + B·bf16(tree_r(a_r·A_rᵀ)))`` for a row-parallel shard."""
+class StrictColumnLinear:
+    """``y_local = bf16(x·W_localᵀ + B_local·bf16(A·x))`` for a column-parallel shard.
+
+    ``blocks`` are row-block views whose concatenation is this rank's shard of the weight in
+    HF row order (e.g. the q rows of each local KV group inside the fused ``linear_qkv``). Each
+    block is projected separately and the fp32 outputs concatenated: output columns are
+    independent, so this is bit-identical to one GEMM over the concatenated rows. Every block
+    must be a whole number of canonical ``N/8`` chunks. ``segments`` (the packed sequences'
+    ``(start, end)`` token ranges) selects the packing-invariant LoRA gradient rule (module
+    docstring); the positional signature is the one the vLLM rule check calls.
+    """
 
     @staticmethod
-    def forward(ctx, a_local, w_local, a32_local, b32, comm: TPComm, k_total: int):
+    def apply(x, a32, b32_local, comm: TPComm, n_total: int, *blocks, segments=None):
+        segs = normalize_segments(segments, x.shape[0])
+        return _StrictColumnLinearFn.apply(x, a32, b32_local, comm, n_total, segs, *blocks)
+
+
+class _StrictRowLinearFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, a_local, w_local, a32_local, b32, comm: TPComm, k_total: int, segments):
         if a_local.dtype != torch.bfloat16 or w_local.dtype != torch.bfloat16:
             raise TypeError("strict row linear needs bf16 activations and weights")
         ids = local_chunk_ids(comm.rank, comm.world)
@@ -174,6 +235,8 @@ class StrictRowLinear(torch.autograd.Function):
             z = comm.all_gather_tree(backend.partial(a_local, a, ids)).to(torch.bfloat16)
             y32 = y32 + small_k_fp32(z, b)
         ctx.save_for_backward(a_local, w_local, a, b, z)
+        ctx.segments = segments
+        ctx.params = (a32_local, b32) if segments is not None else None
         return y32.to(torch.bfloat16)
 
     @staticmethod
@@ -187,11 +250,30 @@ class StrictRowLinear(torch.autograd.Function):
         if a is not None:
             dz = gemm_fp32(dy, b.t().contiguous()).to(torch.bfloat16)  # (M, r), replicated
             din32 = din32 + small_k_fp32(dz, a.t().contiguous())
-            if ctx.needs_input_grad[2]:
-                da32 = _token_grad_gemm(dz, a_local)  # (r, K_local)
-            if ctx.needs_input_grad[3]:
-                db32 = _token_grad_gemm(dy, z)  # (N, r), identical on every rank
-        return din32.to(torch.bfloat16), None, da32, db32, None, None
+            if ctx.segments is None:
+                if ctx.needs_input_grad[2]:
+                    da32 = _token_grad_gemm(dz, a_local)  # (r, K_local)
+                if ctx.needs_input_grad[3]:
+                    db32 = _token_grad_gemm(dy, z)  # (N, r), identical on every rank
+            else:
+                a_param, b_param = ctx.params
+                if ctx.needs_input_grad[2]:
+                    _accumulate_token_grad(a_param, dz, a_local, ctx.segments)
+                if ctx.needs_input_grad[3]:
+                    _accumulate_token_grad(b_param, dy, z, ctx.segments)
+        return din32.to(torch.bfloat16), None, da32, db32, None, None, None
+
+
+class StrictRowLinear:
+    """``y = bf16(tree_r(a_r·W_rᵀ) + B·bf16(tree_r(a_r·A_rᵀ)))`` for a row-parallel shard.
+
+    ``segments``: see :class:`StrictColumnLinear` (positional signature unchanged).
+    """
+
+    @staticmethod
+    def apply(a_local, w_local, a32_local, b32, comm: TPComm, k_total: int, *, segments=None):
+        segs = normalize_segments(segments, a_local.shape[0])
+        return _StrictRowLinearFn.apply(a_local, w_local, a32_local, b32, comm, k_total, segs)
 
 
 @dataclass(frozen=True)
@@ -430,6 +512,7 @@ def lora_is_bitwise_noop(
 __all__ = [
     "COLUMN_PROJECTIONS",
     "DEFAULT_LORA_RANK",
+    "LORA_GRAD_RULE",
     "LayerLoRA",
     "PROJECTIONS",
     "ProjectionShape",
@@ -444,5 +527,6 @@ __all__ = [
     "lora_sha256",
     "lora_state_bytes",
     "muse_glimmer_projection_shapes",
+    "normalize_segments",
     "replicated_lora_grads_agree",
 ]
