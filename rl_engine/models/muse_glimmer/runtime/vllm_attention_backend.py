@@ -58,8 +58,11 @@ PAGE_SIZE = 16
 CALL_COUNTS: Counter[str] = Counter()
 _OPS: Any = None
 # Opt-in evidence counter (measurement mode, a few extra GPU ops per local-layer call): how many
-# block-table entries inside a sequence's page range are vLLM's null block 0, i.e. sliding-window
-# pages vLLM has already evicted when the strict op reads the table.  Read with
+# block-table entries inside a sequence's page range are vLLM's null block 0 when the strict op
+# reads the table.  Measured 0 in the long-window runs: vLLM 0.31's scheduler frees the pages
+# before the sliding window, but the worker block table of a running request is append-only, so
+# those pages keep their stale ids (and may be reused by other requests); the strict kernel never
+# reads an entry or a K/V slot at a position <= p_min - window.  Read with
 # :func:`null_page_counts` (one host sync).
 COUNT_NULL_PAGES_ENV = "RL_KERNEL_MUSEGLIMMER_COUNT_NULL_PAGES"
 _NULL_PAGE_ACC: dict[str, Any] = {}
