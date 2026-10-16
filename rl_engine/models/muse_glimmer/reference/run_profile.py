@@ -51,6 +51,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--decode-repeats", type=int, default=5)
     p.add_argument("--no-paged", action="store_true", help="strict: skip paged prefill runs")
     p.add_argument("--no-profiler-check", action="store_true")
+    p.add_argument("--profiler-repeats", type=int, default=3,
+                   help="torch.profiler (gpu view) calls per config; the first keeps the full "
+                        "per-class detail, all are summarised in kernel_profile_repeats")
     p.add_argument("--hf-attn", default="sdpa")
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--json-out", required=True)
@@ -79,6 +82,7 @@ def main(argv=None) -> int:
         repeats=args.repeats,
         decode_repeats=args.decode_repeats,
         profiler_check=not args.no_profiler_check,
+        profiler_repeats=args.profiler_repeats,
         log=_log,
     )
     if args.target == "strict":
@@ -112,8 +116,9 @@ def main(argv=None) -> int:
     result["commit"] = commit
     result["method"] = ("cuda_events: nested named regions around every op call, exclusive "
                         "time per class, median over repeats; clean totals without regions; "
-                        "one torch.profiler pass per config with GPU kernel time charged to the "
-                        "innermost region open at launch (kernel_profile)")
+                        f"{args.profiler_repeats} torch.profiler pass(es) per config with GPU "
+                        "kernel time charged to the innermost region open at launch "
+                        "(kernel_profile = the first; kernel_profile_repeats = all)")
     result["args"] = vars(args)
     result["env"] = {
         "gpu": torch.cuda.get_device_name(device),

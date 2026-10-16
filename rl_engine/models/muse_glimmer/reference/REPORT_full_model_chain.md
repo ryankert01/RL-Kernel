@@ -1,15 +1,147 @@
 # REPORT — RFC #501 row `full_model_chain` (Muse-Glimmer-30B strict POC)
 
-STATUS (follow-up, wave A, 2026-10-15): complete. The shared token file is scored by the strict
-reference on both backends (`xrt_reference_{golden,triton}.json`, 933 tokens each) and every token is
-byte-equal across train / one-shot prefill / prompt prefill + decode / chunked prefills, including the
-2047/2048/2049 window boundaries. The real-weights chain still holds on the current branch (512+32 triton and
-2100+32 triton and golden, every path byte-equal). Batched decode was added: batch 1 == batch 16 == a permuted
-batch of 4, bitwise, on real weights. The single-GPU op-class profile of the strict model and of HF bf16 (sdpa)
-is in `reports/muse_glimmer_poc/data/reference_profile.json`. Tiny gates: 19/19 (+ fingerprint 32 passed,
-1 skipped).
+STATUS (wave B, 2026-10-15): complete. Every measurement of this row was re-run at the final code
+(`39053b2`; golden runs from a clean `git archive` of `615ee61`, which differs only by added scripts),
+after the O7 fix (c88607f) that changed strict Triton logprob bits. The shared token file is scored by
+the strict reference on both backends (`xrt_reference_{triton,golden}.json`, 933 tokens each) and every
+token is byte-equal across train / one-shot prefill / prompt prefill + decode / chunked prefills:
+triton 48 (mode, sequence) checks incl. W−1/W/W+1 = 2047/2048/2049 (these three apply only to the
+2439-token sequence), golden 28 checks incl. W = 2048 only. A second triton process gives the same 933
+bits. The real-weights pytest gates pass on the triton op set: the 256+32 chain and the new batched-decode
+gate (batch 1 == 2 == permuted 4 == reversed 16 == committed 16 with page eviction, and decode == train).
+The 512+32 and 2100+32 triton chains with the HF anchor and the golden 2100+32 chain are re-run. The
+single-GPU op-class profile (strict triton vs HF bf16 sdpa) is re-measured with the paged-prefill memory
+fixed and 3 profiler passes per config (`reports/muse_glimmer_poc/data/reference_profile.json`). Tiny gates:
+21/21 in both envs.
+
+## Wave B review follow-ups (issues reference_profile:R1..R12)
+
+Machine-readable: `reference_profile.json` → `notes.wave_b_review` (verdicts, the tiny tests before/after
+with the reason each failed before, the real-weights pytest result) and `measured_commits` (derived from
+every run file's own commit field, with `includes_o7_fix`).
+
+| id | verdict | change | evidence |
+|---|---|---|---|
+| R1 | fixed | `KVPlan.validate()`: ids unique and in `[0, cache.max_seqs)`, equal `seqs`/`starts`/`lens` lengths, `lens >= 1`, `starts` == committed lengths; `decode_batch` checks the ids before reading lengths; every paged forward validates its plan (and that `positions` are the plan's) before any K/V write | `test_decode_batch_and_kv_plans_reject_bad_sequence_ids`: before (f91e8b6) duplicate ids ran (row 0 off by 0.018 on the tiny model, 0.23 on real weights per the review) → FAILED; after: `ValueError`, cache K/V, block table and lengths untouched |
+| R2 | fixed | `measure(prepare=, release=)`: the paged-prefill KV cache is allocated per call outside the timed region, one alive at a time; `prepared_state_gib` = the one cache inside the peak | paged prefill peak 52.25 / 52.67 / 53.23 GiB vs train 52.22 / 52.57 / 53.03 at T = 512 / 2048 / 4096 = exactly one cache (0.026 / 0.102 / 0.204 GiB); wave A reported 52.28 / 53.16 / 54.33 (7 idle caches) |
+| R3 | fixed | the collector replaces `kernel_profile.by_group_gpu_ms` with the regrouped values (+ `groups`), so the file holds one GPU grouping; profiles re-measured | `profile.strict_triton.runs[*].kernel_profile.by_group_gpu_ms == runs[*].by_group_gpu_ms` |
+| R4 | fixed | real-weights pytest `test_batched_decode_is_batch_invariant_with_eviction` (triton; skipped for golden): 16 sequences, contexts 1..2100 (eviction asserted), 3 steps; per step batch 1 == 2 == permuted 4 == reversed 16 == committed 16 (fp32 bit patterns); committed decode logps of a 2100-token and a 17-token sequence == `logprobs(mode="train")` | `MUSEGLIMMER_CHECKPOINT=… MUSEGLIMMER_BACKEND=triton pytest test_full_model_chain.py`: 2 passed in 39.1 s |
+| R5 | fixed | every run regenerated; `measured_commits` derived from the files; golden and HF files regenerated (golden: `commit_note` explains the archive run) | golden bits identical to wave A (933/933); HF bf16 bits identical (933/933) |
+| R6 | fixed | xrt checks and `decode_batch_invariance` compare fp32 bit patterns | `test_xrt_scoring_compares_bit_patterns_and_rejects_vacuous_checks`: before, −0.0 vs +0.0 counted equal → FAILED |
+| R7 | fixed | `checks.n_checks / n_skipped / n_tokens_compared`; `all_byte_equal_to_train` needs `n_checks > 0`; `run_chain --score-file` exits 1 when no check ran | same test: before, no check → "pass" |
+| R8 | fixed | tiny tests assert properties that can fail: regions nest on the GPU timeline (exclusive ≥ 0), instrumented total within [0.5×, 5× + 5 ms] of the clean call, every layer's regions charged to its index; unattributed GPU time ≤ 10 %, GPU busy ≤ 1.25 × wall (one stream); `compare_xrt` against a payload with one flipped mantissa bit | 21/21 pass |
+| R9 | fixed | STATUS wording (above) | – |
+| R10 | fixed | corrected in place in the wave A text and in the profile notes below | – |
+| R11 | fixed | `logprobs(mode="decode", timings=)` and the xrt checks record the prompt prefill and every decode step separately (`decode_step_seconds`, `decode_step_context`) | table below |
+| R12 | fixed | the triton repeat is committed (`xrt_reference_triton_repeat.json`, second process, same commit); 3 profiler passes per config (`kernel_profile_repeats`); `KVPlan._seq_index` removed | repeat 933/933; strict GPU-busy spread < 1.1 % |
+
+### Results (wave B; all observed in the runs under "How to reproduce (wave B)")
+
+**Cross-runtime token file (933 scored tokens).**
+
+| backend | commit | checks (mode × sequence) | byte-equal to train | wall | peak | decode s/step (median per sequence; long seq: (decode − prompt prefill)/177) |
+|---|---|---|---|---|---|---|
+| triton | 39053b2 | 48 (+24 skipped: window chunkings on the 8 short sequences) = 5199 token comparisons; prefill, decode, prompt_boundary, block64, ragged, W−1/W/W+1 | all | 180 s | 54.5 GiB | 0.125–0.129; long: prefill 1.08 s + 24.3 s / 177 = 0.137 |
+| triton repeat (2nd process) | 39053b2 | 18 (prefill, decode) | all; 933/933 bits == the first process | 126 s | 54.5 GiB | – |
+| golden | 615ee61 (archive) | 28 (+8 skipped) = 2977; prefill, decode, prompt_boundary, W | all | 1041 s | 57.0 GiB | 0.50–1.89; long: prefill 34.8 s + 364.9 s / 177 = 2.06 |
+
+- O7 fix: the regenerated triton logprobs equal the pre-O7 file (f7d3723) on 739/933 tokens; the other 194
+  differ by 1.9e-6 in absolute value (one fp32 ulp at the magnitude of the logsumexp). Golden and HF bf16 bits are unchanged from wave A (933/933 each): neither uses the
+  Triton O7 kernel.
+- golden vs triton: 39/933 byte-equal (different op sets), max |Δlogp| 0.216, mean 0.0078.
+- vs HF bf16 (sdpa, native anchor): 0/933 byte-equal; triton max 0.392, mean 0.0137; golden max 0.246, mean
+  0.0147. HF's argmax equals the gold token on 77.2 % of the scored positions.
+
+**Real-weights chain (triton at 39053b2, golden from the 615ee61 archive).**
+
+| run | paths | byte-equal | train / prefill / decode s | peak GiB | HF anchor (completion) max / mean \|Δlogp\| | argmax all / completion |
+|---|---|---|---|---|---|---|
+| triton 512+32 + HF | 7 | 32/32 each | 1.05 / 0.39 / 3.88 | 52.2–52.3 | 0.0656 / 0.0254 | 98.90 % / 100 % |
+| triton 2100+32 + HF | 10 incl. W−1/W/W+1 | 32/32 each | 1.74 / 1.10 / 4.26 | 52.2–52.7 | 0.0852 / 0.0187 | 98.08 % / 100 % |
+| golden 2100+32 | 10 incl. W−1/W/W+1 | 32/32 each | 35.79 / 33.50 / 87.87 | 52.4–54.4 | – | – |
+| pytest gate 256+32 (triton) | 7 | 32/32 each | 1.13 / 0.29 / 4.67 | 52.1–52.2 | – | – |
+| pytest gate 256+32 (golden, `MUSEGLIMMER_BACKEND` unset; the batched-decode gate skips) | 7 | 32/32 each | 2.58 / 1.92 / 20.63 | 52.3–52.4 | – | – |
+
+**Profile (A100-SXM4-80GB, triton backend; strict vs HF bf16 sdpa; `clean` = median wall of 3 prefill / 5
+decode calls without regions; GPU-busy = kernel time, 3 torch.profiler passes).**
+
+| config | strict clean ms | HF clean ms | strict/HF | strict GPU-busy ms (3 profiler runs) | HF GPU-busy ms (3 runs) | strict peak GiB | HF peak GiB |
+|---|---|---|---|---|---|---|---|
+| forward T=512 | 266.2 | 146.2 | 1.82 | 251.1–251.2 | 139.5–169.5 | 52.22 | 56.52 |
+| paged prefill T=512 (strict only) | 307.8 | – | – | 255.0–255.2 | – | 52.25 (one KV cache 0.026) | – |
+| forward T=2048 | 949.6 | 590.5 | 1.61 | 940.7–940.9 | 584.8–613.5 | 52.57 | 59.41 |
+| paged prefill T=2048 (strict only) | 985.4 | – | – | 947.3–947.7 | – | 52.67 (one KV cache 0.102) | – |
+| forward T=4096 | 1901.3 | 1220.2 | 1.56 | 1893.4–1896.7 | 1222.7–1248.8 | 53.03 | 63.26 |
+| paged prefill T=4096 (strict only) | 1962.6 | – | – | 1911.6–1932.1 | – | 53.23 (one KV cache 0.204) | – |
+| decode B=1, ctx 2048 (per step) | 149.0 | 259.8 | 0.57 | 50.0–50.1 | 56.1–56.1 | 53.75 | 55.71 |
+| decode B=16, ctx 2048 (per step) | 348.5 | 110.4 | 3.16 | 70.5–70.5 | 106.4–122.4 | 53.76 | 57.69 |
+
+Notes on the profile (wave B corrections included):
+- The node was shared with other agents (load average 335–404 on 240 cores at the end of the run). Wall
+  numbers of launch-bound configurations move with host load: strict decode B=1 149 ms here vs 132 ms in
+  wave A, HF decode B=1 260 ms vs 130 ms (its B=16 step took 110 ms). Use the GPU-busy column for kernel cost
+  (spread over the 3 passes: strict ≤ 1.1 %; HF up to 21.5 % at T = 512 and 2.1 % at T = 4096).
+- Paged prefill now costs exactly its own KV cache on top of the train forward (see R2).
+- GPU-time shares, forward T=4096: strict ffn_gemm 72.6 %, q/k/v/gate/o 16.7 %, lm_head + softcap + logp
+  5.1 %, attention 4.0 % (local 53.2 ms, global 22.7 ms), ffn_act 0.8 %, norms 0.6 %, qknorm+rope 0.1 %;
+  `det_gemm_tree_kernel` 1786.6 of 1896.7 ms. HF: ffn_gemm 51.3 %, norms + residual 13.5 %, attention 13.5 %
+  (local 151.4 ms, global 13.1 ms), q/k/v/gate/o 11.5 %, lm head 4.9 %, qknorm+rope 3.3 %.
+- `det_gemm_tree_kernel` share: 95.9 / 95.1 / 94.2 % (train) and 94.5 / 94.5 / 93.6 % (paged) at T = 512 /
+  2048 / 4096. Throughput at T=4096: 217.2 TFLOP / 1.787 s ≈ 121.6 TFLOP/s; HF's cuBLAS GEMMs (GEMM classes,
+  808.2 ms) ≈ 268.7 TFLOP/s.
+- The GEMM gap (1786.6 − 808.2 = 978 ms) is LARGER than the whole GPU gap (1896.7 − 1222.7 = 674 ms): the
+  strict non-GEMM ops are faster in sum (110 vs 414 ms), so the GEMM is the first target.
+- Per layer at T=4096: strict local attention 1.36 ms vs HF 3.75 ms (HF's sliding layers pass an explicit
+  mask, which rules out a flash kernel); strict GLOBAL attention 1.75 ms vs HF 0.88 ms, i.e. ≈ 2× slower than
+  HF's sdpa (memory-efficient) kernel.
+- Decode B=16: the reference's per-sequence paged-cache write costs 204.9 ms of wall and 20.7 ms of GPU
+  (index kernels) per step, against 29.9 + 10.0 ms (wall) for the attention kernels. That is reference-harness
+  overhead, not kernel cost; a single vectorised scatter per layer is expected to remove most of it (not
+  measured).
+
+### Provenance (wave B)
+- `measured_commits` in `reference_profile.json` is derived from each run file's own `commit` field (taken
+  when the run starts; `dirty` = tracked files modified at that moment): triton xrt, repeat, HF xrt, chains
+  and profiles at 39053b2 (clean). The golden runs ran from `git archive 615ee61` in the scratchpad so the
+  worktree could be edited meanwhile; that copy has no `.git`, so the run's own lookup returned an empty sha
+  and the sha was filled in from the archive (`commit_note` in the files). 615ee61 = 39053b2 + scripts.
+- Strict code (strict_model, chain_harness, golden_ops, paged_kv, weights, backend, ops/, triton/) is
+  identical from 39053b2 to the final commit of this row.
+- Removed as stale: `chain_triton_512_hf_pre_change` (307fcf2) and the wave A first triton scoring (69b4409);
+  both predate c88607f and are superseded.
+
+### How to reproduce (wave B)
+```
+WT=$(git rev-parse --show-toplevel); CK=~/models/Muse-Glimmer-30B; R=<runs dir>; L="~/bin/gpu-lease -n 1 --pool 3,7 --"
+$L env PYTHONPATH=$WT ~/envs/vllm/bin/python -m pytest tests/models/muse_glimmer --ignore=tests/models/muse_glimmer/distributed -q
+#   -> 653 passed, 8 skipped (at 3404cf9)
+$L env PYTHONPATH=$WT MUSEGLIMMER_CHECKPOINT=$CK MUSEGLIMMER_BACKEND=triton ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA          # -> 2 passed (39.1 s)
+$L env PYTHONPATH=$WT MUSEGLIMMER_CHECKPOINT=$CK ~/envs/vllm/bin/python -m pytest \
+    tests/models/muse_glimmer/test_full_model_chain.py -q -s -rA          # golden -> 1 passed, 1 skipped (46.9 s)
+$L env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/reference/run_chain.py --checkpoint $CK \
+    --backend triton --score-file reports/muse_glimmer_poc/data/xrt_tokens.json --score-out $R/xrt_reference_triton.json \
+    --score-check-modes prefill,decode,chunked:prompt_boundary,chunked:block64,chunked:ragged,chunked:window_boundary_2047,chunked:window_boundary_2048,chunked:window_boundary_2049
+# repeat (--score-out $R/xrt_reference_triton_repeat.json --score-check-modes prefill,decode), golden
+# (--backend golden ... --score-check-modes prefill,decode,chunked:prompt_boundary,chunked:window_boundary_2048),
+# HF (python -m rl_engine.models.muse_glimmer.reference.xrt_scoring ...), the chains and the profiles:
+# exact command lines in reference_profile.json -> commands
+env PYTHONPATH=$WT ~/envs/vllm/bin/python rl_engine/models/muse_glimmer/reference/collect_results.py \
+    --runs $R --commands commands.json --notes notes.json
+```
+
+### Plot map additions (wave B)
+- Decode cost vs context: `xrt_scoring.{triton,golden}.per_sequence[*].modes.decode.{decode_step_seconds,
+  decode_step_context, prompt_prefill_seconds}`.
+- GPU-view spread: `profile.<target>.runs[i].kernel_profile_repeats.{gpu_busy_ms, by_group_gpu_ms}`.
+- Paged-prefill KV cache inside the peak: `profile.strict_triton.runs[i].prepared_state_gib`.
+- Provenance per measurement: `measured_commits[name].{commit, includes_o7_fix}`.
 
 ## Follow-up (wave A): scoring, re-run, profiling
+
+*Wave A record. Every number below was re-measured in wave B (above); the wave A runs predate
+the O7 fix (c88607f), so their triton logprob bits are stale. Claims the wave B review found
+overstated are corrected in place and marked "(wave B correction)".*
 
 ### What was done
 1. **Scoring mode** `run_chain.py --score-file <muse_glimmer_xrt_v1> --score-out <path>` (code in
@@ -66,6 +198,9 @@ with completion from 2261, so it crosses W=2048).**
   is 0.12 / mean 0.0099. HF's argmax equals the gold token on 77 % of the scored positions.
 - Decode is the slow form: triton 0.11–0.17 s/token (e.g. 29.3 s for the 178 long-window steps at context
   2261–2438), golden 0.6–1.0 s/token for short contexts and 2.3 s/token at 2.3k context (415.6 s for 178 steps).
+  (wave B correction: those totals include the one-shot prompt prefill of 2261 tokens and there are
+  177 decode steps; golden ≈ (415.6 − 43.9) / 177 = 2.10 s per decode step. Wave B times the prefill and
+  every step separately, see above.)
 
 **Real-weights chain re-run (current branch).**
 
@@ -115,8 +250,9 @@ Derived GEMM throughput: 2·T·(52 × 483.9 M + 202 752 × 6656) = 217.2 TFLOP a
 - strict `det_gemm_tree_kernel` in 1.8175 s ≈ **119.5 TFLOP/s** (meets the contract's ≥ 80 TFLOP/s target).
 - HF cuBLAS GEMMs in 0.829 s ≈ 262 TFLOP/s.
 
-So the strict path is GEMM-bound and its GEMM is ≈ 2.2× slower than cuBLAS. Strict attention, norms and
-qknorm/rope are each faster than HF's eager/sdpa equivalents. Per layer at T=4096:
+So the strict path is GEMM-bound and its GEMM is ≈ 2.2× slower than cuBLAS. (wave B correction: strict
+LOCAL attention, norms and qknorm/rope are faster than HF's equivalents; strict GLOBAL attention is ≈ 2×
+slower per layer than HF's sdpa kernel, see below.) Per layer at T=4096:
 - strict local 1.39 ms, global 1.79 ms;
 - HF sdpa local 3.84 ms, global 0.89 ms (HF's sliding layers pass an explicit mask, and the explicit mask
   rules out a flash kernel).
@@ -126,7 +262,7 @@ Decode at batch 1 is launch-bound for both: GPU busy ≈ 38–39 % of the step, 
 batch 16 the strict step is dominated by the reference's paged-cache WRITE: `PagedKVCache.append` is called
 in Python once per sequence per layer. It costs 158.4 ms of wall (kv_cache group) and 20.8 ms of GPU
 (index kernels), against 23.8 + 8.0 ms for the attention kernels themselves. That is reference-harness
-overhead, not kernel cost; a vLLM-style single scatter per layer removes it.
+overhead, not kernel cost; a vLLM-style single scatter per layer is expected to remove it (not measured).
 
 ### Contract deviations / caveats
 - Profile wall-view fractions include CPU launch gaps; read the gpu view for kernel cost. Instrumentation
@@ -134,11 +270,10 @@ overhead, not kernel cost; a vLLM-style single scatter per layer removes it.
   for strict; HF +5 % at T=512 and +51–55 % at decode.
 - HF anchors use different attention backends: the chain runs use eager (as in the original report), while
   the xrt anchor and the HF profile use sdpa. Both are tolerance references only.
-- Commit provenance: `xrt_reference_golden.json` says 86d1087 in its `commit` field. The run actually started
-  from 69b4409: the sha was taken when the file was written, and that bug is fixed in f7d3723. The strict
-  code (strict_model, chain_harness core, golden_ops, paged_kv, weights, backend, every ops/triton file) is
-  identical from 69b4409 to HEAD. `reference_profile.json` → `notes.measured_commits` lists the commit of
-  every run.
+- Commit provenance (wave A): `xrt_reference_golden.json` said 86d1087 in its `commit` field while the run
+  started from 69b4409 (the sha was taken when the file was written; fixed in f7d3723), and the hand-written
+  `notes.measured_commits` disagreed with the HF file's own field (422c33b, dirty). Superseded in wave B:
+  every file was regenerated and `measured_commits` is derived from the files.
 
 ### RFC feedback (new)
 - `full_model_chain`: make **batched decode** part of the gate (batch 1 == batch N == permuted sub-batch, per
@@ -147,10 +282,12 @@ overhead, not kernel cost; a vLLM-style single scatter per layer removes it.
   token file. Random tokens alone keep attention mass diffuse.
 - Cross-runtime file format: `muse_glimmer_xrt_logprobs_v1` (fp32 bit patterns as hex) worked as-is. Add an
   optional `logprobs` float list and a `commit` captured at run start to the schema text.
-- Performance contract: on A100 the strict forward is GEMM-bound (94–95 % of GPU time in `det_gemm_tree_kernel`
-  at T = 512–4096). The 8-chunk tree GEMM reaches ≈ 120 TFLOP/s against ≈ 260 for cuBLAS, which accounts for
-  essentially all of the 1.55× prefill gap to HF bf16. The RFC's performance item should target the GEMM, not
-  attention or norms.
+- Performance contract: on A100 the strict forward is GEMM-bound (93.5–95.9 % of GPU time in
+  `det_gemm_tree_kernel` at T = 512–4096, train and paged; wave B numbers). The 8-chunk tree GEMM reaches
+  ≈ 120 TFLOP/s against ≈ 265 for cuBLAS. The GEMM gap is LARGER than the whole prefill gap to HF bf16
+  (T=4096, wave B: 978 ms of GEMM vs 674 ms total), partly offset by faster non-GEMM ops (110 vs 414 ms).
+  The RFC's performance item should target the GEMM first; strict global attention (≈ 2× HF's sdpa per
+  layer) is second.
 - Strict kernels should take host-side metadata (`max_seqlen_q`, sequence lengths) instead of reading it back
   from the device. `strict_gated_attention_fwd_*` calls `.item()` when `max_seqlen_q` is not passed (one sync
   per layer), and decode at batch 1 is ≈ 60 % CPU/launch time. CUDA-graph capture of the strict decode step is

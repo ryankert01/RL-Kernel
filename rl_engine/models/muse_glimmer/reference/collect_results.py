@@ -17,6 +17,7 @@ import argparse
 import json
 import pathlib
 import shutil
+import subprocess
 import sys
 from importlib import metadata
 from typing import Any
@@ -36,6 +37,30 @@ from rl_engine.models.muse_glimmer.reference.xrt_scoring import (  # noqa: E402
 )
 
 DATA = REPO_ROOT / "reports" / "muse_glimmer_poc" / "data"
+# The O7 fix (softcap kernels without FMA contraction) changed strict Triton logprob bits; a
+# measurement of the triton backend taken before it is stale for bitwise comparisons.
+O7_FIX_COMMIT = "c88607f"
+
+
+def includes_commit(sha: str | None, ancestor: str = O7_FIX_COMMIT) -> bool | None:
+    """True if ``ancestor`` is an ancestor of (or equal to) ``sha``; None if unknown."""
+    if not sha:
+        return None
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "merge-base", "--is-ancestor", ancestor, sha],
+        capture_output=True, text=True, check=False,
+    )
+    return {0: True, 1: False}.get(proc.returncode)
+
+
+def provenance(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """The commit a run file says it measured (captured at run start) and whether it includes
+    the O7 fix."""
+    if payload is None:
+        return {"commit": None, "includes_o7_fix": None}
+    c = payload.get("commit") or {}
+    sha = c.get("sha") if isinstance(c, dict) else c
+    return {"commit": c, "includes_o7_fix": includes_commit(sha)}
 
 
 def _load(path: pathlib.Path) -> dict[str, Any] | None:
@@ -65,6 +90,7 @@ def chain_record(payload: dict[str, Any] | None) -> dict[str, Any]:
     train = chain["results"][0]
     rec: dict[str, Any] = {
         "status": "PASS" if chain["all_equal"] else "FAIL",
+        **provenance(payload),
         "backend": chain["backend"],
         "prompt_len": chain["prompt_len"],
         "completion_len": chain["completion_len"],
@@ -104,7 +130,8 @@ def xrt_record(golden: dict[str, Any] | None, triton: dict[str, Any] | None,
             continue
         out[name] = {
             "status": "PASS" if x["checks"]["all_byte_equal_to_train"] else "FAIL",
-            "commit": x.get("commit"),
+            **provenance(x),
+            "n_checks": x["checks"].get("n_checks"),
             "seconds": x.get("seconds"),
             "peak_allocated_gib": x.get("peak_allocated_gib"),
             "n_tokens": sum(s["n_tokens"] for s in x["sequences"]),
@@ -177,9 +204,21 @@ def profile_record(strict: dict[str, Any] | None, hf: dict[str, Any] | None) -> 
                 configs.append(lab)
             r = dict(r)
             r["by_group_ms"], r["by_group_frac"] = regroup(r["by_kind_class_ms"])
-            kp = r.get("kernel_profile") or {}
+            kp = dict(r.get("kernel_profile") or {})
             if "by_kind_class_gpu_ms" in kp:
                 r["by_group_gpu_ms"], r["by_group_gpu_frac"] = regroup(kp["by_kind_class_gpu_ms"])
+                # ONE grouping in the output: the nested field is replaced by the regrouped
+                # values (a profile recorded before a group existed would disagree otherwise)
+                kp["by_group_gpu_ms"] = r["by_group_gpu_ms"]
+                kp["groups"] = list(GROUPS)
+                r["kernel_profile"] = kp
+                reps = r.get("kernel_profile_repeats") or {}
+                if reps.get("by_kind_class_gpu_ms"):
+                    groups_per_rep = [regroup(k)[0] for k in reps["by_kind_class_gpu_ms"]]
+                    r["kernel_profile_repeats"] = {
+                        **{k: v for k, v in reps.items() if k != "by_kind_class_gpu_ms"},
+                        "by_group_gpu_ms": {g: [x[g] for x in groups_per_rep] for g in GROUPS},
+                    }
                 gpu_kind = kp["by_kind_class_gpu_ms"]
                 r["per_layer_type_gpu_ms"] = {
                     "global": {c: v / n_glob for c, v in gpu_kind["global"].items()},
@@ -287,23 +326,37 @@ def main(argv=None) -> int:
             env[f"{pkg}_installed"] = metadata.version(pkg)
         except metadata.PackageNotFoundError:
             env[f"{pkg}_installed"] = None
+    chains = {
+        "chain_triton_512_hf": _load(runs / "chain_triton_512_hf.json"),
+        "chain_triton_2100_hf": _load(runs / "chain_triton_2100_hf.json"),
+        "chain_golden_2100": _load(runs / "chain_golden_2100.json"),
+    }
+    repeat = _load(runs / "xrt_reference_triton_repeat.json")
+    if repeat is not None:
+        shutil.copyfile(runs / "xrt_reference_triton_repeat.json",
+                        DATA / "xrt_reference_triton_repeat.json")
+    measured = {name: provenance(x) for name, x in (
+        *chains.items(),
+        ("xrt_reference_triton", triton),
+        ("xrt_reference_triton_repeat", repeat),
+        ("xrt_reference_golden", golden),
+        ("xrt_reference_hf_bf16", hf_x),
+        ("profile_strict", strict),
+        ("profile_hf", hf),
+    )}
     result = {
         "row": "full_model_chain follow-up: reference scoring of xrt_tokens.json + single-GPU "
                "profiling",
         "status": args.status,
-        "commit": source_commit(),
+        "collected_at_commit": source_commit(),
+        "measured_commits": measured,
         "env": env,
         "commands": json.loads(pathlib.Path(args.commands).read_text()) if args.commands else [],
         "notes": json.loads(pathlib.Path(args.notes).read_text()) if args.notes else {},
         "experiments": {
-            "chain_triton_512_hf_pre_change": chain_record(
-                _load(runs / "chain_triton_512_hf_base.json")),
-            "chain_triton_512_hf": chain_record(_load(runs / "chain_triton_512_hf.json")),
-            "chain_triton_2100_hf": chain_record(_load(runs / "chain_triton_2100_hf.json")),
-            "chain_golden_2100": chain_record(_load(runs / "chain_golden_2100.json")),
+            **{name: chain_record(x) for name, x in chains.items()},
             "xrt_scoring": xrt_record(golden, triton, hf_x),
-            "xrt_triton_repeat": _repeat_record(_load(runs / "xrt_reference_triton_first.json"),
-                                                triton),
+            "xrt_triton_repeat": _repeat_record(repeat, triton),
             "profile": profile_record(strict, hf),
             "decode_batch_invariance": _gate_record((strict or {}).get("decode_batch_invariance")),
         },

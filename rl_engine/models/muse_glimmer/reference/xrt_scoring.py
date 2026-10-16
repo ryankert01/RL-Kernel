@@ -97,7 +97,11 @@ def score_token_file(
     """Score every sequence with the train forward and compare ``check_modes`` bitwise.
 
     ``check_modes`` entries: ``prefill``, ``decode``, ``per_token`` or
-    ``chunked:<n1>/<n2>/...`` (chunk sizes over the scored ``len - 1`` tokens).
+    ``chunked:<n1>/<n2>/...`` (chunk sizes over the scored ``len - 1`` tokens). Every check
+    compares fp32 BIT PATTERNS (``view(int32)``), so -0.0 vs +0.0 or different NaN payloads
+    count as mismatches. ``checks.all_byte_equal_to_train`` is True only if at least one
+    (mode, sequence) check ran (``checks.n_checks > 0``) and every check that ran is equal.
+    ``decode`` also records the prompt prefill time and the per-step decode times separately.
     """
     commit = source_commit()  # captured when the run starts (the code that is measured)
     raw = pathlib.Path(score_file).read_bytes()
@@ -135,27 +139,42 @@ def score_token_file(
                 continue
             torch.cuda.synchronize(dev)
             t1 = time.perf_counter()
-            other = model.logprobs(prompt, completion, mode=mode, chunk_sizes=sizes)
+            timings: dict[str, Any] | None = {} if mode == "decode" else None
+            other = model.logprobs(prompt, completion, mode=mode, chunk_sizes=sizes,
+                                   timings=timings)
             other = other.float().cpu()
             torch.cuda.synchronize(dev)
-            same = torch.eq(other, lp)
+            seconds = time.perf_counter() - t1
+            same = torch.eq(other.contiguous().view(torch.int32), lp.contiguous().view(torch.int32))
             bad = (~same).nonzero()
-            row["modes"][spec] = {
-                "seconds": time.perf_counter() - t1,
+            rec = {
+                "seconds": seconds,
                 "equal_tokens": int(same.sum()),
                 "n_tokens": int(lp.numel()),
                 "byte_equal": bool(same.all()),
+                "compare": "fp32 bit patterns",
                 "first_mismatch": None if bad.numel() == 0 else int(bad[0, 0]),
                 "max_abs_diff": float((other.double() - lp.double()).abs().max()),
             }
+            if timings:
+                steps = timings["decode_step_seconds"]
+                rec["prompt_prefill_seconds"] = timings["prompt_prefill_seconds"]
+                rec["decode_steps"] = len(steps)
+                rec["decode_step_seconds"] = steps
+                rec["decode_seconds_excl_prefill"] = float(sum(steps))
+                rec["decode_step_context"] = [timings["decode_context_start"] + j + 1
+                                              for j in range(len(steps))]
+            row["modes"][spec] = rec
         checks.append(row)
         if log:
             log(f"[score] {seq['id']}: {lp.numel()} tokens, sum logp "
                 f"{float(lp.double().sum()):.4f}, train {train_s:.2f}s; "
                 + ", ".join(f"{m}: {v['equal_tokens']}/{v['n_tokens']} ({v['seconds']:.1f}s)"
                             for m, v in row["modes"].items() if "skipped" not in v))
-    all_equal = all(v["byte_equal"] for r in checks for v in r["modes"].values()
-                    if "skipped" not in v)
+    ran = [v for r in checks for v in r["modes"].values() if "skipped" not in v]
+    n_skipped = sum(1 for r in checks for v in r["modes"].values() if "skipped" in v)
+    # vacuous truth is not a pass: no check ran -> False
+    all_equal = len(ran) > 0 and all(v["byte_equal"] for v in ran)
     return {
         "schema": SCHEMA_OUT,
         "runtime": "reference",
@@ -166,6 +185,8 @@ def score_token_file(
         "source": {"path": str(score_file), "sha256": hashlib.sha256(raw).hexdigest(),
                    "checkpoint_revision": data.get("checkpoint_revision")},
         "checks": {"modes": list(check_modes), "all_byte_equal_to_train": all_equal,
+                   "n_checks": len(ran), "n_skipped": n_skipped,
+                   "n_tokens_compared": int(sum(v["n_tokens"] for v in ran)),
                    "sequences": checks},
         "commit": commit,
         "ops_provenance": dict(model.ops.provenance),
