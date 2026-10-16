@@ -110,3 +110,16 @@ Wave D (blog: python3 reports/muse_glimmer_poc/blog/build_blog.py, publish as Ar
 - E2E: tools/collect_e2e.py + blog section ready; real 30B smoke (1 step, rollout TP1 GPU4, train TP2 GPU5,6) started at ~20:48.
 - Remaining: merge attention, apply reviewer fixes, bindings -> per-rank heads, regenerate xrt dumps (incl. TP4 if it works),
   TP8 re-test, E2E four modes (two concurrent 4-GPU runs), final blog + Artifact + RFC_CHANGES.md, push.
+
+## Update 2026-10-16 ~02:30 UTC: POC complete, report published
+- Wave B merged (6 fix branches) + integration patches (explicit RoPE layer kind, canonical table builder, V2-runner fail-closed).
+- Final xrt byte-diff: 8 strict dumps (reference x2, vLLM TP1/2/4, Megatron TP1/2/4) 0/933; LoRA group vLLM TP1/2/4 0/933.
+- Real 30B LoRA GRPO, 8 steps x 8 prompts x 4 samples x 256 tokens (rollout TP1 + train TP2 via the cross-env bridge):
+  strict/strict 0/61139, strict/native 42417/62097, native/strict 41764/60935, native/native 36041/62129, sync 9/9 each;
+  RFC layout (rollout TP2 + train TP4) strict/strict 0/61139 with the same per-step LoRA hashes as the TP1/TP2 run.
+  Artifacts: reports/muse_glimmer_poc/runs/grpo_*; data/e2e_run.json.
+- Final regression: vLLM env 778/10/0, Megatron env 289/5/0, 8-GPU distributed 89/0/0, torchrun CP4/CP8 parity bitwise.
+- Report: blog built from data (reports/muse_glimmer_poc/blog/index.html), claim-checked (411 verified, 79 fixed), published
+  as Artifact https://claude.ai/artifact/Jizn9UfL54zENiYaMki6Xf (private). RFC edits: RFC_CHANGES.md (20 findings + 56 audit).
+- Not done / for the community: see data/left_for_community.json (strict CUDA graphs, fused LoRA, TP8 training, Phase B, ...).
+  No upstream PR opened (ask the user first; PRs target test-museglimmer; the CI line is kept off the pushed branch).
