@@ -14,17 +14,28 @@ vLLM 0.31 facts this file depends on (RFC notes):
   output_scale, output_block_scale)``; ``AttentionBackend.get_kv_cache_shape`` is gone and the
   per-layer ``kv_cache`` is logically ``(blocks, kv_heads, block_size, 2 * head_dim)`` with K and V
   packed along the last dim (``KVCacheLayout``).  The strict op needs separate CONTIGUOUS
-  ``(blocks, 16, 2, 128)`` K and V caches, so this backend reinterprets the layer's (contiguous)
-  buffer as ``(2, blocks, block_size, kv_heads, head_dim)`` and owns the KV write
-  (``do_kv_cache_update`` -> ``reshape_and_cache_flash`` on those views; a pure copy).  Nothing
-  else reads the buffer in strict mode (no prefix caching, no KV connector, no cascade).
+  ``(blocks, 16, H_kv, 128)`` K and V caches, so this backend reinterprets the layer's
+  (contiguous) buffer as ``(2, blocks, block_size, kv_heads, head_dim)`` and owns the KV write
+  (``do_kv_cache_update`` -> ``reshape_and_cache_flash`` on those views; a pure copy).
+  The strict page ``b`` is therefore NOT the native page ``b``: native page ``b`` is the bytes
+  ``[b*N*H*2D, (b+1)*N*H*2D)`` of the layer region, strict K page ``b`` is ``[b*N*H*D,
+  (b+1)*N*H*D)`` and strict V page ``b`` sits in the second half.  This is safe only because
+  nothing but this backend touches the region: the binding rejects prefix caching (its partial-hit
+  copy-on-write copies native page ranges), KV connectors / transfer / offloading, speculative
+  decoding, context parallelism, KV sharing and KV-block zeroing at model init
+  (``vllm_strict.check_strict_engine_config``) and makes the native page writers raise
+  (``copy_kv_cache_blocks_inplace``, ``KVBlockZeroer.zero_block_ids``); cascade attention is off
+  in the metadata builder and rejected in :meth:`forward`.  Layers of different KV-cache groups
+  that share one tensor use the same strict view and disjoint block ids, so they cannot overlap.
 * ``FlashAttentionMetadata`` carries ``block_table``, ``seq_lens``, ``query_start_loc``,
   ``max_query_len`` and ``num_actual_tokens`` per KV-cache group.  vLLM marks never-allocated or
   evicted (sliding-window) pages with the null block id ``0``; the strict op wants ``-1``, and
   masks by absolute position so an evicted page is only ever touched where its keys are masked.
-* The strict kernel pins the full head set (32 query heads, 2 KV heads).  At TP > 1 the installer
-  replicates KV (every rank holds both KV heads and runs the full attention redundantly after an
-  exact all-gather of q/k/v/gate), so this backend always sees 32/2.
+* Heads per rank: vLLM builds each rank's ``Attention`` with ``32/t`` query heads and
+  ``max(1, 2/t)`` KV heads (TP2 16/1, TP4 8/1 with the KV head replicated on two ranks); this
+  backend passes exactly those counts to the strict op (``num_q_heads``/``num_kv_heads``).  Heads
+  never interact in O5, so the rank's output is the matching slice of the TP1 output bit for bit
+  (``ops/REPORT_gated_attention_fwd.md``, wave A: TP2/4/8 shard parity).
 
 The gate pre-activation (contract: gate on the ``input_layernorm`` output, applied inside the
 attention op) travels on a side channel: the patched ``MuseGlimmerAttention.forward`` stores it on
@@ -46,6 +57,41 @@ BACKEND_CLASS_PATH = (
 PAGE_SIZE = 16
 CALL_COUNTS: Counter[str] = Counter()
 _OPS: Any = None
+# Opt-in evidence counter (measurement mode, a few extra GPU ops per local-layer call): how many
+# block-table entries inside a sequence's page range are vLLM's null block 0 when the strict op
+# reads the table.  Measured 0 in the long-window runs: vLLM 0.31's scheduler frees the pages
+# before the sliding window, but the worker block table of a running request is append-only, so
+# those pages keep their stale ids (and may be reused by other requests); the strict kernel never
+# reads an entry or a K/V slot at a position <= p_min - window.  Read with
+# :func:`null_page_counts` (one host sync).
+COUNT_NULL_PAGES_ENV = "RL_KERNEL_MUSEGLIMMER_COUNT_NULL_PAGES"
+_NULL_PAGE_ACC: dict[str, Any] = {}
+
+
+def _count_null_pages_enabled() -> bool:
+    import os
+
+    return os.getenv(COUNT_NULL_PAGES_ENV, "").strip() in ("1", "true", "yes")
+
+
+def null_page_counts() -> dict[str, int]:
+    """Accumulated in-range null-block entries seen by local / global layers (opt-in)."""
+
+    return {key: int(acc.item()) for key, acc in _NULL_PAGE_ACC.items()}
+
+
+def _accumulate_null_pages(
+    key: str, block_table: torch.Tensor, seq_lens: torch.Tensor, num_reqs: int
+) -> None:
+    table = block_table[:num_reqs]
+    pages = (seq_lens[:num_reqs].to(torch.int64) + PAGE_SIZE - 1) // PAGE_SIZE
+    cols = torch.arange(table.shape[1], device=table.device)
+    hits = ((table == 0) & (cols[None, :] < pages[:, None])).sum()
+    acc = _NULL_PAGE_ACC.get(key)
+    if acc is None:
+        acc = torch.zeros((), dtype=torch.int64, device=table.device)
+        _NULL_PAGE_ACC[key] = acc
+    acc.add_(hits)
 
 
 def bind_ops(ops: Any) -> None:
@@ -69,10 +115,11 @@ def strict_kv_views(kv_cache: torch.Tensor, head_size: int) -> tuple[torch.Tenso
     logical view is a permutation, not contiguous).  When the layer's region is dense (the
     physical-order view is contiguous; true for the layer-outermost layouts ``LBNHC``/``LBHNC``),
     its ``B * N * H * 2D`` elements are re-viewed as ``(2, B, N, H, D)``: K of every page in the
-    first half, V in the second.  Only the strict backend reads or writes the cache in strict mode
-    (prefix caching, KV connectors and cascade attention are off), and page ``b`` keeps the same
-    byte range in both views' coordinates, so sharing a tensor between layers of different KV
-    groups (disjoint block ids) stays safe.
+    first half, V in the second.  The strict page ``b`` is NOT the native page ``b`` (different
+    byte ranges), so this view is only valid while nothing else addresses the region by block id:
+    prefix caching, zeroing and KV connectors are rejected at init and the native page writers
+    raise (see the module docstring).  Layers of different KV groups that share a tensor use this
+    same view with disjoint block ids, so they cannot overlap.
     """
 
     if kv_cache.dim() != 4:
@@ -191,6 +238,13 @@ def _build_classes() -> tuple[type, type, type]:
             cu_seqlens_q = query_start_loc[: num_reqs + 1]
             block_table = strict_block_table(attn_metadata.block_table[:num_reqs])
             window = None if self.sliding_window[0] < 0 else int(self.sliding_window[0]) + 1
+            if _count_null_pages_enabled():
+                _accumulate_null_pages(
+                    "local" if window is not None else "global",
+                    attn_metadata.block_table,
+                    seq_lens,
+                    num_reqs,
+                )
             y, _o, _lse = _ops().gated_attention_paged(
                 query[:num_tokens],
                 gate[:num_tokens],
@@ -201,6 +255,8 @@ def _build_classes() -> tuple[type, type, type]:
                 cu_seqlens_q.to(torch.int32),
                 window=window,
                 max_seqlen_q=int(attn_metadata.max_query_len),
+                num_q_heads=int(self.num_heads),
+                num_kv_heads=int(self.num_kv_heads),
             )
             output[:num_tokens].copy_(y.view(num_tokens, self.num_heads, self.head_size))
             CALL_COUNTS["attention.local" if window is not None else "attention.global"] += 1
@@ -267,9 +323,11 @@ def register(ops: Any) -> str:
 __all__ = [
     "BACKEND_CLASS_PATH",
     "CALL_COUNTS",
+    "COUNT_NULL_PAGES_ENV",
     "GATE_ATTR",
     "PAGE_SIZE",
     "bind_ops",
+    "null_page_counts",
     "register",
     "strict_block_table",
     "strict_kv_views",

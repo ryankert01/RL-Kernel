@@ -42,11 +42,13 @@ OP_NAMES = (
     "gated_attention_paged",
     "gated_attention_varlen",
     "swiglu",
+    "softcap_logits",
     "softcap_tile_stats",
     "combine_tile_stats",
 )
 
-# op name -> (sibling module, sibling attribute)
+# op name -> (sibling module, sibling attribute); a module name starting with ``rl_engine.`` is
+# absolute, every other one is relative to ``rl_engine.models.muse_glimmer.ops``.
 _SIBLING: dict[str, tuple[str, str]] = {
     "det_gemm": ("det_gemm", "fast_det_gemm"),
     "det_gemm_partial": ("det_gemm", "fast_det_gemm_partial"),
@@ -60,6 +62,9 @@ _SIBLING: dict[str, tuple[str, str]] = {
     "gated_attention_paged": ("gated_attention", "strict_gated_attention_fwd_paged"),
     "gated_attention_varlen": ("gated_attention", "strict_gated_attention_fwd_varlen"),
     "swiglu": ("swiglu_ffn", "swiglu"),
+    # The O7 kernel's own soft cap (same ``_softcap`` jit function as the tile-stats kernel,
+    # enable_fp_fusion=False): full fp32 ``zhat`` tiles for strict token selection.
+    "softcap_logits": ("rl_engine.models.muse_glimmer.triton.softcap_logprob", "launch_softcap"),
     "softcap_tile_stats": ("lm_head_softcap_logprob", "softcap_tile_stats"),
     "combine_tile_stats": ("lm_head_softcap_logprob", "combine_tile_stats"),
 }
@@ -86,6 +91,7 @@ _FALLBACK: dict[str, tuple[Callable[..., Any], str]] = {
         "fallback:torch_online_softmax_64key_blocks+" + fb.GEMM_LABEL,
     ),
     "swiglu": (fb.swiglu, "fallback:torch_fp32_elementwise"),
+    "softcap_logits": (fb.softcap_logits, "fallback:torch_fp32_elementwise"),
     "softcap_tile_stats": (fb.softcap_tile_stats, "fallback:torch_fp32_fixed_order"),
     "combine_tile_stats": (fb.combine_tile_stats, "fallback:torch_fp32_fixed_tree"),
 }
@@ -162,15 +168,18 @@ def resolve_ops(force_fallback: bool | None = None) -> StrictOps:
     for name in OP_NAMES:
         module_name, attr = _SIBLING[name]
         strict_fn = None
+        qualified = (
+            module_name if module_name.startswith("rl_engine.") else f"{_OPS_PACKAGE}.{module_name}"
+        )
         if not force:
             try:
-                module = importlib.import_module(f"{_OPS_PACKAGE}.{module_name}")
+                module = importlib.import_module(qualified)
                 strict_fn = getattr(module, attr, None)
             except Exception:  # noqa: BLE001 - absent or broken sibling -> fallback
                 strict_fn = None
         if strict_fn is not None:
             fns[name] = _adapt(name, strict_fn)
-            labels[name] = f"strict:{_OPS_PACKAGE}.{module_name}.{attr}"
+            labels[name] = f"strict:{qualified}.{attr}"
         else:
             fns[name], labels[name] = _FALLBACK[name]
     return StrictOps(fns=fns, labels=labels)
@@ -255,6 +264,23 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         pos = torch.arange(t, device=device, dtype=torch.int32)
         y2, _, _ = ops.gated_attention_varlen(q, kv, kv, gate, cu_q, cu_q, pos, window=None)
         expect(y2.shape == (t, 4096), "gated_attention_varlen")
+        # Per-rank head shards (TP2 16/1, TP4 8/1): the binding passes the rank's head counts.
+        for hq in (16, 8):
+            y3, _, _ = ops.gated_attention_paged(
+                q[:, :hq].contiguous(),
+                gate[:, : hq * 128].contiguous(),
+                k_cache[:, :, :1].contiguous(),
+                v_cache[:, :, :1].contiguous(),
+                block_table,
+                seq_lens,
+                cu_q,
+                window=2048,
+                num_q_heads=hq,
+                num_kv_heads=1,
+            )
+            expect(
+                torch.equal(y3, y[:, : hq * 128]), f"gated_attention_paged head shard {hq}/1"
+            )
 
     def probe_swiglu(ops: StrictOps) -> None:
         expect(ops.swiglu(rnd(4, 256), rnd(4, 256)).dtype == bf, "swiglu")
@@ -272,6 +298,18 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         m, log_z = ops.combine_tile_stats([(s[0], s[1]) for s in stats])
         expect(m.shape == (4,) and log_z.shape == (4,), "combine_tile_stats")
 
+    def probe_softcap(ops: StrictOps) -> None:
+        z = torch.randn(3, 25344, generator=g, device="cpu", dtype=torch.float32).to(device)
+        z[1, 7] = 300.0  # a dominant logit: zhat[target] must equal the tile-stats target logit
+        zhat = ops.softcap_logits(z, multiplier=0.19611613513818404, softcap=20.0)
+        expect(zhat.shape == z.shape and zhat.dtype == torch.float32, "softcap_logits")
+        targets = torch.tensor([3, 7, 25343], device=device)
+        _m, _s, target_logit, _in = ops.softcap_tile_stats(
+            z, 0, targets, multiplier=0.19611613513818404, softcap=20.0, vocab_size=202048
+        )
+        picked = zhat.gather(1, targets[:, None]).squeeze(1)
+        expect(torch.equal(picked, target_logit), "softcap_logits != tile-stats zhat bits")
+
     return {
         "det_gemm": probe_gemm,
         "det_gemm_partial": probe_partial,
@@ -285,6 +323,7 @@ def _probe_cases(device: torch.device) -> dict[str, Callable[[StrictOps], None]]
         "gated_attention_paged": probe_attention,
         "gated_attention_varlen": probe_attention,
         "swiglu": probe_swiglu,
+        "softcap_logits": probe_softcap,
         "softcap_tile_stats": probe_logp,
         "combine_tile_stats": probe_logp,
     }
