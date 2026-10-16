@@ -167,7 +167,11 @@ _CHECK_KEYS = (
 def _check(check: dict | None) -> Any:
     if not check:
         return "NOT RUN"
-    return {k: check.get(k) for k in _CHECK_KEYS if k in check}
+    out = {k: check.get(k) for k in _CHECK_KEYS if k in check}
+    if out.get("mismatched") == 0 and "prefill_logprobs" in out:
+        # Bitwise equal to the decode logprobs stored next to this record: do not store twice.
+        out["prefill_logprobs"] = "bitwise identical to the record's logprobs"
+    return out
 
 
 def _engine_flags(run: dict) -> dict[str, Any]:
@@ -567,7 +571,8 @@ def main(argv: list[str] | None = None) -> int:
     result = collect(
         Path(args.runs), Path(args.data), extra, [Path(p) for p in args.reference]
     )
-    Path(args.out).write_text(json.dumps(result, indent=1), encoding="utf-8")
+    # Compact: the raw per-token series dominate the size; indent would put each float on a line.
+    Path(args.out).write_text(json.dumps(result, separators=(",", ":")), encoding="utf-8")
     summary = {
         k: (v.get("mismatched"), v.get("tokens")) if isinstance(v, dict) else v
         for k, v in result["xrt"].get("comparisons", {}).items()

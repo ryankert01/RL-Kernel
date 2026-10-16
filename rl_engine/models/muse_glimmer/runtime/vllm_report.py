@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     results["report_markdown_note"] = (
         f"rendered by rl_engine.models.muse_glimmer.runtime.vllm_report into {report_path}"
     )
-    data_path.write_text(json.dumps(results, indent=1), encoding="utf-8")
+    data_path.write_text(json.dumps(results, separators=(",", ":")), encoding="utf-8")
     report_path.write_text(text, encoding="utf-8")
     print(text[:3000])
     return 0
