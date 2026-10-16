@@ -9,6 +9,7 @@
    "tp": 1,
    "backend": "megatron_bridge_te_native",
    "strict_group": null,
+   "native_base": true,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "0da5d51c65551193a720005128e2c1941531993ad3f4beac3eea3419af7db788"
@@ -20,6 +21,7 @@
    "tp": 2,
    "backend": "megatron_bridge_te_native",
    "strict_group": null,
+   "native_base": true,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "e0d17a3a800bf4b7037c3b3d0645cad9442f8cbd04ee649dee4127e05364a9d0"
@@ -31,6 +33,7 @@
    "tp": 1,
    "backend": "triton_strict",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -42,6 +45,7 @@
    "tp": 2,
    "backend": "triton_strict",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -53,6 +57,7 @@
    "tp": 4,
    "backend": "triton_strict",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -64,6 +69,7 @@
    "tp": 1,
    "backend": "golden",
    "strict_group": null,
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "55f82df9b671536b693a8624c2e4b694292afab66c74075e86351cd559574f99"
@@ -75,6 +81,7 @@
    "tp": 1,
    "backend": "transformers_sdpa",
    "strict_group": null,
+   "native_base": true,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "270e68f58c939b53e06e5736ae380c34c6a4e1c8ca564d5f9f6179b41373f588"
@@ -86,6 +93,7 @@
    "tp": 1,
    "backend": "triton",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -97,6 +105,7 @@
    "tp": 1,
    "backend": "triton",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -108,6 +117,7 @@
    "tp": 1,
    "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
+   "native_base": false,
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
    "sha256": "e381694ceae0f5eb929dbc5169992455a969c3d63ea3593bfacaebac572efcc7"
@@ -119,6 +129,7 @@
    "tp": 1,
    "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
+   "native_base": true,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "209dde3dfffc7037738c7344fd22649d2991c354c707f6b1f223f92d20b328db"
@@ -130,6 +141,7 @@
    "tp": 2,
    "backend": "vLLM native (FlashAttention, cuBLAS, NCCL all-reduce, eager)",
    "strict_group": null,
+   "native_base": true,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "dcc3c1aa31e2d7a5b3d6c1d33cf1bc99031b43ca4101b3af883a990ff98a4921"
@@ -141,6 +153,7 @@
    "tp": 1,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "native_base": false,
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
    "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
@@ -152,6 +165,7 @@
    "tp": 2,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "native_base": false,
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
    "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
@@ -163,6 +177,7 @@
    "tp": 4,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "lora:091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
+   "native_base": false,
    "lora_sha256": "091a39f46429e76da9defefab65e2cf625f16f6156d65a676d4bbda9127e88b5",
    "n_tokens": 933,
    "sha256": "d359a8d79e92085d23f246d2090aaffd918c64408552314d58dd005355093fe8"
@@ -174,6 +189,7 @@
    "tp": 1,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -185,6 +201,7 @@
    "tp": 2,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -196,6 +213,7 @@
    "tp": 4,
    "backend": "rl_engine strict binding (Triton strict ops, per-rank attention heads, strict logits)",
    "strict_group": "base",
+   "native_base": false,
    "lora_sha256": null,
    "n_tokens": 933,
    "sha256": "9638feb7c038b526e8a95e4e8fe8ce738456e23670f7d408013eb3c1d1a3479e"
@@ -232,6 +250,13 @@
   ]
  },
  "strict_all_equal": true,
+ "native_base": [
+  "megatron native tp1",
+  "megatron native tp2",
+  "reference hf bf16",
+  "vllm native tp1",
+  "vllm native tp2"
+ ],
  "matrix": {
   "megatron native tp1": {
    "megatron native tp1": 0,
@@ -6694,116 +6719,134 @@
  },
  "example_token": {
   "sequence": "gsm8k_long_window",
-  "index": 0
+  "index": 1
  },
  "example": [
   {
    "label": "megatron strict tp1",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "megatron strict tp2",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "megatron strict tp4",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "reference triton",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "reference triton repeat",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict lora tp1",
-   "hex": "0xc2065292",
-   "value": -33.58063507080078,
-   "strict": true
+   "hex": "0xc104c633",
+   "value": -8.298388481140137,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict lora tp2",
-   "hex": "0xc2065292",
-   "value": -33.58063507080078,
-   "strict": true
+   "hex": "0xc104c633",
+   "value": -8.298388481140137,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict lora tp4",
-   "hex": "0xc2065292",
-   "value": -33.58063507080078,
-   "strict": true
+   "hex": "0xc104c633",
+   "value": -8.298388481140137,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict tp1",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict tp2",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "vllm strict tp4",
-   "hex": "0xc20758d0",
-   "value": -33.83673095703125,
-   "strict": true
+   "hex": "0xc106d227",
+   "value": -8.42630672454834,
+   "strict": true,
+   "native_base": false
   },
   {
    "label": "megatron native tp1",
-   "hex": "0xc2078000",
-   "value": -33.875,
-   "strict": false
+   "hex": "0xc105018a",
+   "value": -8.312875747680664,
+   "strict": false,
+   "native_base": true
   },
   {
    "label": "megatron native tp2",
-   "hex": "0xc2078000",
-   "value": -33.875,
-   "strict": false
+   "hex": "0xc10880ae",
+   "value": -8.531415939331055,
+   "strict": false,
+   "native_base": true
   },
   {
    "label": "reference golden",
-   "hex": "0xc2075b25",
-   "value": -33.83900833129883,
-   "strict": false
+   "hex": "0xc10761df",
+   "value": -8.461394309997559,
+   "strict": false,
+   "native_base": false
   },
   {
    "label": "reference hf bf16",
-   "hex": "0xc2074000",
-   "value": -33.8125,
-   "strict": false
+   "hex": "0xc1071310",
+   "value": -8.442153930664062,
+   "strict": false,
+   "native_base": true
   },
   {
    "label": "vllm native lora tp1",
-   "hex": "0xc2068000",
-   "value": -33.625,
-   "strict": false
+   "hex": "0xc104bd2a",
+   "value": -8.296182632446289,
+   "strict": false,
+   "native_base": false
   },
   {
    "label": "vllm native tp1",
-   "hex": "0xc2078000",
-   "value": -33.875,
-   "strict": false
+   "hex": "0xc106a675",
+   "value": -8.41563892364502,
+   "strict": false,
+   "native_base": true
   },
   {
    "label": "vllm native tp2",
-   "hex": "0xc2078000",
-   "value": -33.875,
-   "strict": false
+   "hex": "0xc10656c0",
+   "value": -8.39617919921875,
+   "strict": false,
+   "native_base": true
   }
  ],
  "problems": []

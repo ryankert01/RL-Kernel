@@ -130,7 +130,7 @@ def fig_model() -> str:
         ("q/k/v/gate 投影", "四个独立 GEMM", "box strictb"),
         ("QK-norm + RoPE", "只有 Q 再乘 3.87", "box strictb"),
         ("门控注意力", "σ(gate) ⊙ attn", "box strictb"),
-        ("o_proj", "TP 下行并行", "box"),
+        ("o_proj", "TP 行并行（K 维 8 块树）", "box strictb"),
         ("post_attn norm", "eps 1e-8 → 残差加", "box"),
     ]
     steps2 = [
@@ -152,7 +152,7 @@ def fig_model() -> str:
     # wrap arrow from row1 end to row2 start
     x_end = 5 * (bw + 18) + bw / 2
     out.append(f'<path class="arrow" d="M{x_end:.1f},{y + bh:.1f} V{y + bh + 26:.1f} H{bw / 2:.1f} V{y + bh + 52:.1f}" marker-end="url(#ah-{fid})" fill="none"/>')
-    out.append(f'<text class="tick" x="0" y="{y + 2 * bh + 54 + 30}">蓝框 = 这次 POC 里由严格（定序、定 tile、fp32 累加）Triton 内核实现的算子；其余是逐元素或小归约，同样定序。</text>')
+    out.append(f'<text class="tick" x="0" y="{y + 2 * bh + 54 + 30}">蓝框 = GEMM、注意力、FFN、LM head 这些主要的严格 Triton 内核（定序、定 tile、fp32 累加）；白框的 norm 也有各自的严格内核（逐行固定顺序归约）。</text>')
     return svg(W, H, "".join(out), "Muse-Glimmer-30B 的层结构和一层的数据流", cls="diagram")
 
 
@@ -235,7 +235,7 @@ def fig_window() -> str:
     return svg(W, yy + len(cuts) * 17 + 8, "".join(out), "滑动窗口与各种 chunk 切法", cls="diagram")
 
 
-def fig_system(rollout_tp: str = "TP2", train_tp: str = "TP2") -> str:
+def fig_system(rollout_tp: str = "TP1", train_tp: str = "TP2") -> str:
     """The POC's end-to-end loop with the cross-env bridge."""
     fid = "sys"
     W, H = 900, 330
@@ -250,12 +250,12 @@ def fig_system(rollout_tp: str = "TP2", train_tp: str = "TP2") -> str:
     out.append(_box(20, 160, 390, 56, "GRPO 编排器（loop.py）", sub="奖励 → 组内优势 → token 级 loss；逐 token 比 bit"))
     out.append(_box(20, 246, 190, 52, "RemoteTrainer 客户端", sub="loss.backward() 得 dL/dlogp"))
     out.append(_box(490, 160, 390, 56, "Megatron 严格 trainer", cls="box strictb", sub=f"{train_tp} · LoRA r16 · 同一套 Triton 内核"))
-    out.append(_box(690, 246, 190, 52, "trainer server", sub="torchrun，rank 0 收发"))
+    out.append(_box(620, 246, 260, 52, "trainer server（单进程启动）", sub=f"StrictTrainer 自己拉起 {train_tp} worker"))
     out.append(_box(490, 70, 390, 56, "LoRA 导出 + sha256", sub="muse_glimmer_lora_sha256_v1"))
     out.append(_arr(fid, 210, 98, 228, 98))
     out.append(_arr(fid, 320, 126, 320, 158))
     out.append(_arr(fid, 115, 216, 115, 244))
-    out.append(_arr(fid, 212, 272, 688, 272, "arrow strict"))
+    out.append(_arr(fid, 212, 272, 618, 272, "arrow strict"))
     out.append('<text class="bsub" x="450" y="264" text-anchor="middle">token id + dL/dlogp（fp32，逐 bit）</text>')
     out.append(_arr(fid, 785, 244, 785, 218))
     out.append(_arr(fid, 685, 158, 685, 128))

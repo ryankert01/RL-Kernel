@@ -6,19 +6,19 @@
    "id": "F1",
    "area": "Numerical requirements / O5 (attention backward)",
    "title_zh": "O5 反向规则不是 CP 不变的",
-   "body_zh": "契约写的“dK/dV 按 query block 升序累加”在 CP 下做不到。已改为“整条序列 8 个规范 query 块、块间按 O3 树合并，每个 KV 头只在读它的 4 个 Q 头组之间合并”，单卡内核与 CP1/模拟 CP2/4/8/真实双卡 CP2 逐 bit 相同；代价是反向慢 5–14%。",
+   "body_zh": "契约写的“dK/dV 按 query block 升序累加”在 CP 下做不到。已改为“整条序列 8 个规范 query 块、块间按 O3 树合并，每个 KV 头只在读它的 4 个 Q 头组之间合并”，单卡内核与 CP1/模拟 CP2/4/8/真实双卡 CP2 逐 bit 相同；代价是 T ≥ 1024 时反向慢 5–14%，T = 512 时慢 55–58%。",
    "title_en": "The O5 backward accumulation rule is not CP-invariant",
-   "body_en": "Replace \"dK/dV accumulated over query blocks in ascending order\" with: \"dK/dV are accumulated per canonical query chunk (the full sequence split into 8 fixed chunks, independent of CP degree); the 8 chunk partials are combined in the O3 tree in fp32 and rounded once.\" The single-GPU kernel and every CP layout then produce identical bits; the old rule cannot be implemented when a rank only owns some query blocks.",
-   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md (CP1/2/4 equal; TP1 one-shot kernel rel 1.6e-5 apart)"
+   "body_en": "Replace \"dK/dV accumulated over query blocks in ascending order\" with the query-chunk rule of docs/contracts O5: the queries of a sequence of L_k keys are split into 8 canonical contiguous chunks on absolute positions, chunk c = [floor(c*L_k/8), floor((c+1)*L_k/8)), independent of the CP degree. Leaf (c, g) is the fp32 dK/dV contribution of chunk c for the canonical Q-head group g (4 consecutive q heads); the group partial P_g is the O3 tree over the 8 chunk leaves, ((c0+c1)+(c2+c3))+((c4+c5)+(c6+c7)); dK/dV of KV head h is the O3 tree over the 4 groups that read it, (P_g0+P_g1)+(P_g2+P_g3), in fp32, rounded to bf16 once. A CP rank's call yields the sub-tree roots of the chunks it owns (the other chunks are exact zero leaves); rank roots are exchanged by a rank-ordered all_gather and folded in the same tree. The single-GPU kernel and every CP layout then produce identical bits; the old rule cannot be implemented when a rank only owns some query blocks. docs/contracts/muse-glimmer-30b-strict-contract.md O5 already contains this rule; paste that text into the RFC.",
+   "evidence": "kernels_attention.json parity (one-shot v2 kernel == CP1 == simulated CP2/4/8 == real CP2, 0 mismatches); rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md"
   },
   {
    "id": "F2",
    "area": "WS1 attention rows / WS2 TP",
    "title_zh": "注意力内核要接受头数参数",
-   "body_zh": "已实现：注意力内核接受 H_Q/H_KV，TP2/4/8 每个 rank 只算自己的 16/1、8/1、4/1 个头，前向反向都是 TP1 的逐 bit 切片；复制的 KV 头的 dK/dV 由各副本 fp32 部分和按规范树合并。vLLM 与 Megatron 都已改用这种调用，不再复制 KV 或 all-gather 头。",
+   "body_zh": "已实现：注意力内核接受 H_Q/H_KV，TP2/4/8 每个 rank 只算自己的 16/1、8/1、4/1 个头，前向反向都是 TP1 的逐 bit 切片；复制的 KV 头的 dK/dV 由各副本 fp32 部分和按规范树合并。vLLM 与 Megatron 都已改用每 rank 自己的头数调用，不再把头 all-gather 回 32/2 的完整几何或补零调用；TP4/8 下 KV 头仍按契约在 t/2 个 rank 上复制（Megatron 用 GatherKVHead 按 rank 顺序收集 k/v 列分片）。",
    "title_en": "Attention rows must take head counts as parameters",
-   "body_en": "State that the strict attention forward/backward take H_Q and H_KV (GQA group 16) and add a TP gate: for TP in {2,4,8} the per-rank call on its head shard (16/1, 8/1 with KV replication, 4/1) equals the matching slice of the full-geometry call bit for bit. Kernels that hard-code 32 Q / 2 KV heads force runtimes to replicate KV or all-gather heads.",
-   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_ws2_tp.md (open finding); vLLM and Megatron bindings worked around it"
+   "body_en": "State that the strict attention forward/backward take H_Q and H_KV (GQA group 16) and add a TP gate: for TP in {2,4,8} the per-rank call on its head shard (16/1, 8/1 with KV replication, 4/1) equals the matching slice of the full-geometry call bit for bit. Kernels that hard-code 32 Q / 2 KV heads force runtimes to all-gather heads back to the full 32/2 geometry or to zero-pad; KV-head replication on t/2 ranks at TP4/8 stays (it is the contract's ownership map). docs/contracts/muse-glimmer-30b-strict-contract.md O5 (head geometry (32,2)/(16,1)/(8,1)/(4,1)) already contains this rule; paste that text into the RFC.",
+   "evidence": "kernels_attention.json parity.tp_matrix (TP2/4/8 per-rank calls == TP1 slices, 0 mismatches); rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md (per-rank heads, GatherKVHead); rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md"
   },
   {
    "id": "F3",
@@ -51,54 +51,54 @@
    "id": "F6",
    "area": "Numerical requirements / O5",
    "title_zh": "O5 要写明 m = −inf 保护",
-   "body_zh": "整行都被 mask 掉时（局部窗口的边界、padding）：α = 1，p = 0，不产生 NaN。",
+   "body_zh": "一行还没遇到可见的 key 时（局部窗口的边界、padding），m_new = −inf：这时减去 0 而不是 m_new（m_safe = 0）。于是 α = exp(−inf) = 0、p = 0，状态保持 (−inf, 0, 0)，不产生 NaN；遇到第一个可见 key 之后，这一步是逐 bit 的空操作。docs/contracts O5 已写入这条保护。",
    "title_en": "O5 must state the m = -inf guard",
-   "body_en": "When every key of a row is masked (window edges, padding) the running max stays -inf: define alpha = 1 and p = 0 so no NaN is produced, and make it part of the contract rather than an implementation detail.",
+   "body_en": "While a row has not met a visible key (window edges, padding) the running max m_new is -inf: subtract 0 instead of m_new (m_safe = 0 if m_new = -inf else m_new). Then alpha = exp(m - m_safe) = exp(-inf) = 0 and p = 0, the state stays exactly (m, l, acc) = (-inf, 0, 0) and no NaN is produced; once a key appears this is a bitwise no-op. Make it part of O5 rather than an implementation detail. docs/contracts/muse-glimmer-30b-strict-contract.md O5 already contains this rule; paste that text into the RFC.",
    "evidence": "rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md"
   },
   {
    "id": "F7",
    "area": "Open question 3 (LoRA)",
    "title_zh": "LoRA 不合并",
-   "body_zh": "两边都用 y = bf16(acc32(W·x) + Σ B·z)；把 LoRA 合并进 W 会改变 bit。",
+   "body_zh": "两边都用 y = bf16(acc32(W·x) + Σ_k B[:,k]·z[k])，z = bf16(A·x)，对 rank 维按 k 升序做 fp32 顺序累加、只舍入一次；把 LoRA 合并进 W 会改变 bit。",
    "title_en": "LoRA stays unmerged on both sides",
-   "body_en": "Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_i B_i z_i) with z = A x; merging the adapter into W changes the bits and is not allowed in strict mode.",
+   "body_en": "Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_{k<r} B[:,k] * z[k]) with z = bf16(A x), the sum taken as a sequential fp32 loop over the rank in ascending k and rounded once; merging the adapter into W changes the bits and is not allowed in strict mode.",
    "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md, REPORT_vllm_runtime_adapter.md"
   },
   {
    "id": "F8",
    "area": "WS1 table",
    "title_zh": "几行要改名或合并",
-   "body_zh": "fused_add_rmsnorm → post_norm_residual_pre_norm（四范数夹心，(1+w) 增益，两个 eps 1e-5 / 1e-8）；注意力的 train / rollout 两行合成一行、两种执行模式；vocab_parallel_softcap_logp 并入 WS1 的 lm_head 行 + 一个传输行。",
+   "body_zh": "fused_add_rmsnorm → fused_post_norm_residual_pre_norm（四范数夹心，(1+w) 增益，两个 eps 1e-5 / 1e-8）；注意力的 train / rollout 两行合成一行、两种执行模式；vocab_parallel_softcap_logp 并入 WS1 的 lm_head 行 + 一个传输行。",
    "title_en": "Rename / merge rows",
-   "body_en": "fused_add_rmsnorm -> post_norm_residual_pre_norm (four-norm sandwich, (1+w) gain, eps 1e-5 and 1e-8); merge the attention train and rollout rows into one kernel row with two execution modes; fold vocab_parallel_softcap_logp into the WS1 lm_head row plus a transport row.",
+   "body_en": "fused_add_rmsnorm -> fused_post_norm_residual_pre_norm, the name the contract and the code use (four-norm sandwich, (1+w) gain, eps 1e-5 and 1e-8); merge the attention train and rollout rows into one kernel row with two execution modes; fold vocab_parallel_softcap_logp into the WS1 lm_head row plus a transport row.",
    "evidence": "rl_engine/models/muse_glimmer/ops/REPORT_norms.md; REPORT_ws2_tp.md"
   },
   {
    "id": "F9",
    "area": "Foundation / environment",
    "title_zh": "版本钉在 transformers 5.17.0",
-   "body_zh": "vLLM 0.31 要 transformers<5.18，Megatron Bridge main 要 ≥5.15,<5.18：语义源从 5.19 改钉 5.17（commit 856157a2）。5.17 和 5.19 的区别：RoPE 表的构造（5.17 是受 TF32 影响的 matmul）。",
+   "body_zh": "vLLM 0.31 要 transformers ≥5.10.4,<5.18，Megatron Bridge main 要 ≥5.15,<5.18：交集是 5.15–5.17，取其中最新的 5.17.0（commit 856157a2），语义源从 5.19 改钉 5.17。5.17 用 K=1 的 fp32 matmul 构造 RoPE 角度，5.19 用 fp32 逐元素乘；在 A100 上两种构造、以及开关 TF32，logprob 都逐 bit 相同（消融 0/933）。严格路径在两个运行时都用自己固定的 fp32 CUDA 表，不依赖其中任何一种。",
    "title_en": "Pin the semantics source to transformers 5.17.0",
-   "body_en": "Only transformers 5.17.0 satisfies both vLLM 0.31 (<5.18) and Megatron Bridge main (>=5.15,<5.18). Pin the semantics source to 5.17.0 (856157a2f3e9594954310df18fdccc31ffddebe9) instead of 5.19.0; note that 5.17 builds the RoPE table with a TF32-sensitive matmul while 5.19 uses an fp32 elementwise product, so the strict RoPE table is built by our own fixed fp32 function on both runtimes.",
-   "evidence": "rl_engine/models/muse_glimmer/museglimmer_manifest.json; ~/envs/megatron/SETUP_REPORT.md"
+   "body_en": "Only transformers 5.15-5.17 satisfies both vLLM 0.31 (>=5.10.4,<5.18) and Megatron Bridge main (>=5.15,<5.18); pin the newest of them, 5.17.0 (856157a2f3e9594954310df18fdccc31ffddebe9), as the semantics source instead of 5.19.0. 5.17 builds the RoPE angles with a K=1 fp32 matmul and 5.19 with an fp32 elementwise product. On A100 the two builds, and TF32 on/off, give bit-identical logprobs (ablation tf32_probe, 0/933). The strict path still builds its own fixed fp32 CUDA table on both runtimes, so it does not depend on either.",
+   "evidence": "rl_engine/models/muse_glimmer/museglimmer_manifest.json; reports/muse_glimmer_poc/ENV_MEGATRON_SETUP.md; vllm-0.31.0 Requires-Dist transformers<5.18.0,>=5.10.4; Megatron-Bridge@d86a5c09 pyproject.toml transformers>=5.15,<5.18; data/ablation.json tf32_probe, rope_elementwise"
   },
   {
    "id": "F10",
    "area": "Hardware assumptions",
    "title_zh": "不要假设 Hopper",
-   "body_zh": "仓库现有的严格内核（FA4 CuTe、SM90 线性 logp）在 A100 上不可用，原有 Triton 确定性 GEMM 只有 5 TFLOP/s。RFC 应把“一个与架构无关的 Triton 参考实现”列为基础行，Hopper 专用内核作为优化行。",
+   "body_zh": "仓库现有的严格内核（FA4 CuTe、SM90 线性 logp）在 A100 上不可用，原有 Triton 确定性 GEMM 只有 1–6 TFLOP/s（FFN 形状约 1–2）。RFC 应把“一个与架构无关的 Triton 参考实现”列为基础行，Hopper 专用内核作为优化行。",
    "title_en": "Do not assume Hopper",
-   "body_en": "The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on A100, and the existing Triton deterministic GEMM reaches about 5 TFLOP/s. Make an architecture-neutral Triton implementation of every row the foundation (this POC reaches 105-135 TFLOP/s with an 8-leaf K tree on A100) and treat Hopper-specific kernels as optimisation rows.",
-   "evidence": "reports/muse_glimmer_poc/bench_ws1.log"
+   "body_en": "The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on A100, and the existing Triton deterministic GEMM reaches 1-6 TFLOP/s (1-2 on the FFN shapes). Make an architecture-neutral Triton implementation of every row the foundation (this POC reaches 100-131 TFLOP/s on the large M=4096 Muse Glimmer GEMMs, about 50 on the 256-wide k/v projections, 36-50 % of cuBLAS, with an 8-leaf K tree on A100) and treat Hopper-specific kernels as optimisation rows.",
+   "evidence": "reports/muse_glimmer_poc/bench_ws1.log (legacy TritonDetGemmOp); data/kernels_gemm.json benchmarks.gemm_forward"
   },
   {
    "id": "F11",
    "area": "final_e2e_lora / runtime layout",
    "title_zh": "两个运行时不能在一个进程里",
-   "body_zh": "vLLM 0.31（torch cu130）和 Megatron Bridge + TransformerEngine（torch cu129）装不进同一个环境；E2E 用跨进程 trainer 桥，只传 token id、fp32 的 dL/dlogp（代理 loss Σ lp·g 的梯度恰好是 g）和带哈希的 LoRA。Megatron 训练侧现已支持 TP4（TP8 未测，默认关闭）。",
+   "body_zh": "vLLM 0.31（torch cu130）和 Megatron Bridge + TransformerEngine（torch cu129）装不进同一个环境；E2E 用跨进程 trainer 桥，只传 token id、trainer 的 fp32 logprob、fp32 的 dL/dlogp（代理 loss Σ lp·g 的梯度恰好是 g）和带哈希的 LoRA。Megatron 训练侧现已支持 TP4（TP8 未测，默认关闭）。",
    "title_en": "The two runtimes cannot share a process",
-   "body_en": "vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot share one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, fp32 dL/dlogprob (applied through the surrogate loss sum(lp*g), whose gradient is exactly g) and hash-verified LoRA tensors. Training-side TP4 now works and equals TP1 bit for bit; TP8 is untested and gated.",
+   "body_en": "vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot share one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, the trainer's fp32 logprobs, fp32 dL/dlogprob (applied through the surrogate loss sum(lp*g), whose gradient is exactly g) and hash-verified LoRA tensors. Training-side TP4 now works and equals TP1 bit for bit; TP8 is untested and gated.",
    "evidence": "rl_engine/models/muse_glimmer/e2e/REPORT_e2e_loop.md"
   },
   {
@@ -107,16 +107,16 @@
    "title_zh": "两遍 tile 内核必须禁止 FP 融合",
    "body_zh": "第二遍重算 zhat 时编译器把 softcap·tanh − m 融成一个 FMA，最大值的 exp 不再恰好是 1，near-certain token 的 logp 比 0 大 1–2 ulp（30B 上 48/1024 个生成 token）。契约要写明：重算同一个量的两遍必须产生同样的舍入（编译时关闭 FP contraction）。",
    "title_en": "Two-pass tile kernels must not contract FP operations",
-   "body_en": "Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*tanh(..) - m becomes one FMA, the tile maximum's exp(zhat - m) is no longer exactly 1 and near-certain tokens get logp 1-2 ulp above zero (48/1024 generated tokens on the 30B). State that any quantity recomputed in a later pass must be rounded identically (compile those kernels without FP contraction).",
+   "body_en": "Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*tanh(..) - m becomes one FMA, the tile maximum's exp(zhat - m) is no longer exactly 1 and near-certain tokens get logp 1-2 ulp above zero (48/1024 generated tokens on the 30B). State that any quantity recomputed in a later pass must be rounded identically (compile those kernels without FP contraction). docs/contracts/muse-glimmer-30b-strict-contract.md O7 (\"No FP contraction\") already contains this rule; paste that text into the RFC.",
    "evidence": "c88607f; docs/contracts O7 note"
   },
   {
    "id": "F13",
    "area": "O3 / dense_gemm_qualification",
    "title_zh": "编译器可能把声明的树折掉",
-   "body_zh": "K 很小时每个 K 块只迭代一次，Triton 把 8 叶树的加法折进 MMA 累加链（7 个加法剩 3 个），K=256/512 的输出约一半偏离契约。“BLOCK_K 不改变 bit”的说法不成立。契约要求每块至少两次迭代，并检查编译后的 IR。",
+   "body_zh": "K 很小时每个 K 块只迭代一次，Triton 把 8 叶树的加法折进 MMA 累加链（7 个加法剩 3 个），K=256/512 的输出有 47–67% 偏离契约。“BLOCK_K 不改变 bit”的说法不成立。契约要求每块至少两次迭代，并检查编译后的 IR。",
    "title_en": "The compiler can erase the declared reduction tree",
-   "body_en": "With one K iteration per chunk, Triton folded the 8-leaf tree adds into the MMA accumulation chain (3 of 7 adds left) and about half of the K=256/512 outputs deviated from the contract. Require >= 2 iterations per chunk (static_assert) and a check of the compiled IR in the qualification row; drop the claim that BLOCK_K never changes bits.",
+   "body_en": "With one K iteration per chunk, Triton folded the 8-leaf tree adds into the MMA accumulation chain (3 of 7 adds left) and 47-67 % of the K=256/512 outputs deviated from the contract. Require >= 2 iterations per chunk (static_assert) and a check of the compiled IR in the qualification row; drop the claim that BLOCK_K never changes bits.",
    "evidence": "reports/muse_glimmer_poc/data/kernels_gemm.json det_gemm_1_iters_probe"
   },
   {
@@ -132,19 +132,19 @@
    "id": "F15",
    "area": "O4 qknorm_scaled_rope",
    "title_zh": "RoPE 表必须在 CUDA 上用同一个函数构造",
-   "body_zh": "同一公式在 CPU 和 GPU 上构造，cos/sin 约 20% 的表项 bit 不同；HF 在 CPU 上算 inv_freq，GPU 上算 64 个里有 4 个不同，会让 924/933 个 token 变 bit。契约 O4 已要求“一次构造、缓存同一个对象”，还应要求运行时记录表的哈希并在两边比较。",
+   "body_zh": "同一公式在 CPU 和 GPU 上构造，cos/sin 有 18–27%（平均约 23%）的表项 bit 不同；HF 在 CPU 上算 inv_freq，GPU 上算 64 个里有 4 个不同，会让 924/933 个 token 变 bit。契约 O4 已要求“一次构造、缓存同一个对象”，还应要求运行时记录表的哈希并在两边比较。",
    "title_en": "Build the RoPE table once, on CUDA, with one function",
-   "body_en": "The same formula built on CPU and on CUDA differs in about 20 % of the cos/sin entries; HF's CPU-built inv_freq differs from a GPU build in 4 of 64 entries, which changes 924/933 token logprobs. Keep O4's 'built once, cached, same object' and add: record the table's SHA-256 in both runtimes' provenance and fail the run if they differ.",
+   "body_en": "The same formula built on CPU and on CUDA differs in 18-27 % (mean about 23 %) of the cos/sin entries; HF's CPU-built inv_freq differs from a GPU build in 4 of 64 entries, which changes 924/933 token logprobs. Keep O4's 'built once, cached, same object' (already in docs/contracts O4) and add: record the table's SHA-256 in both runtimes' provenance and fail the run if they differ.",
    "evidence": "kernels_rope.json table_cpu_vs_cuda_per_bucket; ablation.json rope_inv_freq_cuda"
   },
   {
    "id": "F16",
    "area": "Training side / LoRA",
    "title_zh": "LoRA 梯度要与 micro-batch 打包无关",
-   "body_zh": "原实现的梯度依赖 micro-batch 怎么打包（14,860/20,480 个元素随打包变化）。现在 token 维的权重梯度逐序列计算、按样本顺序左折叠，512/4096/8192 三种打包结果一致。契约要写明这个规则。",
+   "body_zh": "原实现的梯度依赖 micro-batch 怎么打包（单元测试：3 条序列、一个列并行 LoRA 线性层，1 个和 2 个 micro-batch 之间 20,480 个梯度元素里有 14,860 个不同）。现在 token 维的权重梯度逐序列计算、按样本顺序左折叠，512/4096/8192 三种打包结果一致。契约要写明这个规则。",
    "title_en": "LoRA gradients must not depend on micro-batch packing",
-   "body_en": "The first binding's LoRA gradients changed with the micro-batch packing (14,860 of 20,480 elements). The POC now computes the token-axis weight gradient per sequence with det_gemm's 256-token rule and folds sequences left to right in sample order; 512/4096/8192-token packings give identical gradients at TP1/2/4. Declare this rule in the contract.",
-   "evidence": "megatron_runtime.json packing check; runtime/megatron_lora.py LORA_GRAD_RULE"
+   "body_en": "The first binding's LoRA gradients changed with the micro-batch packing (in a unit test with 3 sequences on one column-parallel LoRA linear, 14,860 of 20,480 gradient elements changed between 1 and 2 micro-batches). The POC now computes the token-axis weight gradient per sequence with det_gemm's 256-token rule and folds sequences left to right in sample order; 512/4096/8192-token packings give identical gradients at TP1/2/4. Declare this rule in the contract.",
+   "evidence": "megatron_runtime.json packing check; runtime/megatron_lora.py LORA_GRAD_RULE; REPORT_megatron_strict.md test_lora_grads_are_packing_invariant"
   },
   {
    "id": "F17",
@@ -153,7 +153,7 @@
    "body_zh": "Megatron 绑定曾在严格内核缺失时静默回退；vLLM 在退回 V1 model runner 时严格路径被绕过。RFC 应列出严格模式下禁止的功能（V1 runner、prefix caching、KV offload、投机解码等）和必须报错的情形。",
    "title_en": "Strict mode must fail closed, including runtime selection",
    "body_en": "The Megatron binding once fell back to torch/cuBLAS when a strict kernel was missing, and vLLM's V1 model runner bypasses the strict sampler path. List the features that strict mode forbids (V1 runner, prefix caching, KV offload/transfer, speculative decoding, ...) and require a hard error instead of a fallback.",
-   "evidence": "review_wave_a2.json megatron_runtime:R1; wave B vLLM verify NEW-1"
+   "evidence": "review_wave_a2.json megatron_runtime:R1; commit 7d60df9 (runtime/vllm_strict.py _bind_model fails closed unless vLLM's V2 model runner is active)"
   },
   {
    "id": "F18",
@@ -176,11 +176,11 @@
   {
    "id": "F20",
    "area": "vLLM rollout",
-   "title_zh": "采样用的 logits 来源要写清楚",
-   "body_zh": "严格 vLLM 记录的 logprob 来自严格路径，但选 token 时仍用原生 bf16 logits（已声明的偏差）。RFC 要说明严格模式下 token 选择是否也必须来自严格 logits。",
-   "title_en": "Say where the sampled token comes from",
-   "body_en": "The strict vLLM binding reports strict logprobs but still selects tokens from the native bf16 logits (a declared deviation). State whether strict mode must also sample from the strict logits; logprobs are identical either way, token choices across TP were identical in every strict run.",
-   "evidence": "runtime/REPORT_vllm_runtime_adapter.md"
+   "title_zh": "token 选择必须读严格 logits",
+   "body_zh": "第一版绑定记录的是严格 logprob，但选 token 用的是原生 cuBLAS bf16 logits，近似并列时选中的 token 会随 batch 组成和 TP 变化。wave B 让 compute_logits 返回严格的 fp32 zhat，vLLM V2 的 seeded Gumbel 采样器 / argmax 从它选 token，不再跑原生 lm_head。RFC 应在严格模式下要求这一点，并把采样器自身的 kernel（温度除法、按 (seed, position) 生成的 Gumbel 噪声、argmax）声明为契约算子。",
+   "title_en": "Token selection must read the strict logits",
+   "body_en": "The first binding reported strict logprobs but chose tokens from the native cuBLAS bf16 logits, so at near-ties the chosen token depended on batch composition and TP. Wave B makes compute_logits return the strict fp32 zhat; vLLM V2's seeded Gumbel sampler / argmax picks from it and the native lm_head is no longer run. Require this in strict mode, and declare the sampler's own kernels (temperature division, Gumbel noise from (seed, position), argmax) as contract ops.",
+   "evidence": "rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md (strict token selection, R5; contract deviations); commit 88fe1b8"
   }
  ]
 }

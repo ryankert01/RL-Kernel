@@ -10,8 +10,11 @@ Output: reports/muse_glimmer_poc/data/xrt_summary.json with
   * matrix: mismatching-token counts for every ordered pair (symmetric)
   * per_sequence: for every pair with mismatches, counts per sequence and the first mismatch
   * max_abs: max |a - b| over tokens for every pair (fp32 values decoded from the hex)
-  * example: one token's hex in each file (the first token of the window-crossing sequence where
-    the native dumps disagree, if any), for the blog's opening strip.
+  * native_base: the native dumps that use the base weights (no LoRA), HF bf16 included; pairwise
+    ranges of native drift are taken over these only (a LoRA dump is a different model)
+  * example: one token's hex in each file, for the blog's opening strip: the first token (window-crossing
+    sequence first) where every base strict dump agrees and the base native dumps all disagree with each
+    other, so the strip shows one strict result against several native ones.
 Exit code 1 if any two STRICT dumps differ (the POC's pass criterion), else 0.
 """
 
@@ -50,6 +53,11 @@ def group_of(d: dict, path: Path) -> str | None:
     return None
 
 
+def is_native_base(d: dict, path: Path) -> bool:
+    """A native (non-strict) dump on the base weights: vLLM / Megatron native or HF bf16, no LoRA loaded."""
+    return str(d.get("mode", "")).startswith("native") and not d.get("lora_sha256") and "_lora_" not in path.stem
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=str(DATA))
@@ -77,7 +85,8 @@ def main() -> int:
                 problems.append(f"{p.name}: {sid} has {len(m[sid])} logprobs, expected {n}")
         cat = "".join(h for sid in sorted(m) for h in m[sid])
         files[lab] = {"file": p.name, "runtime": d.get("runtime"), "mode": d.get("mode"), "tp": d.get("tp"),
-                      "backend": d.get("backend"), "strict_group": group_of(d, p), "lora_sha256": d.get("lora_sha256"), "n_tokens": sum(len(v) for v in m.values()),
+                      "backend": d.get("backend"), "strict_group": group_of(d, p), "native_base": is_native_base(d, p),
+                      "lora_sha256": d.get("lora_sha256"), "n_tokens": sum(len(v) for v in m.values()),
                       "sha256": hashlib.sha256(cat.encode()).hexdigest()}
         maps[lab] = m
     labels = list(files)
@@ -105,30 +114,38 @@ def main() -> int:
             groups.setdefault(files[l]["strict_group"], []).append(l)
     strict = [l for g in groups.values() for l in g]
     strict_ok = all(matrix[x][y] == 0 for g in groups.values() for x in g for y in g)
-    # example token: first token where any two dumps differ, inside the long sequence if possible
+    native_base = [l for l in labels if files[l]["native_base"]]
+    # example token: every base strict dump agrees and the base native dumps all disagree with each other
+    # (window-crossing sequence first); fall back to the token with the most distinct native values
     example = []
     if labels:
         seqs = ["gsm8k_long_window"] + [s for s in want if s != "gsm8k_long_window"]
-        pick = None
+        base = groups.get("base", [])
+        pick, best = None, (-1, None)
         for sid in seqs:
-            n = want[sid]
-            for k in range(n):
-                vals = {maps[l][sid][k] for l in labels if sid in maps[l] and k < len(maps[l][sid])}
-                if len(vals) > 1:
+            for k in range(want[sid]):
+                sv = {maps[l][sid][k] for l in base if sid in maps[l] and k < len(maps[l][sid])}
+                nv = [maps[l][sid][k] for l in native_base if sid in maps[l] and k < len(maps[l][sid])]
+                if len(sv) != 1 or not nv or sv & set(nv):
+                    continue
+                if len(set(nv)) == len(nv):
                     pick = (sid, k)
                     break
+                if len(set(nv)) > best[0]:
+                    best = (len(set(nv)), (sid, k))
             if pick:
                 break
         if pick is None:
-            pick = ("gsm8k_long_window", 0)
+            pick = best[1] or ("gsm8k_long_window", 0)
         sid, k = pick
         for l in labels:
             if sid in maps[l] and k < len(maps[l][sid]):
                 h = maps[l][sid][k]
-                example.append({"label": l, "hex": "0x" + h, "value": f32(h), "strict": l in strict})
+                example.append({"label": l, "hex": "0x" + h, "value": f32(h), "strict": l in strict, "native_base": files[l]["native_base"]})
         example = sorted(example, key=lambda r: (not r["strict"], r["label"]))
     out = {"schema": "muse_glimmer_xrt_summary_v1", "n_scored_tokens": sum(want.values()), "files": files,
-           "strict_labels": strict, "strict_groups": groups, "strict_all_equal": strict_ok, "matrix": matrix, "max_abs": max_abs,
+           "strict_labels": strict, "strict_groups": groups, "strict_all_equal": strict_ok, "native_base": native_base,
+           "matrix": matrix, "max_abs": max_abs,
            "per_sequence": per_seq, "example_token": {"sequence": pick[0], "index": pick[1]} if labels else None,
            "example": example, "problems": problems}
     (Path(a.out) if a.out else data / "xrt_summary.json").write_text(json.dumps(out, indent=1) + "\n")

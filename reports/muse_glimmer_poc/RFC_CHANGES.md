@@ -10,17 +10,17 @@ audit of the RFC text (56 edits, each independently re-verified).
 
 *Where:* Numerical requirements / O5 (attention backward)
 
-Replace "dK/dV accumulated over query blocks in ascending order" with: "dK/dV are accumulated per canonical query chunk (the full sequence split into 8 fixed chunks, independent of CP degree); the 8 chunk partials are combined in the O3 tree in fp32 and rounded once." The single-GPU kernel and every CP layout then produce identical bits; the old rule cannot be implemented when a rank only owns some query blocks.
+Replace "dK/dV accumulated over query blocks in ascending order" with the query-chunk rule of docs/contracts O5: the queries of a sequence of L_k keys are split into 8 canonical contiguous chunks on absolute positions, chunk c = [floor(c*L_k/8), floor((c+1)*L_k/8)), independent of the CP degree. Leaf (c, g) is the fp32 dK/dV contribution of chunk c for the canonical Q-head group g (4 consecutive q heads); the group partial P_g is the O3 tree over the 8 chunk leaves, ((c0+c1)+(c2+c3))+((c4+c5)+(c6+c7)); dK/dV of KV head h is the O3 tree over the 4 groups that read it, (P_g0+P_g1)+(P_g2+P_g3), in fp32, rounded to bf16 once. A CP rank's call yields the sub-tree roots of the chunks it owns (the other chunks are exact zero leaves); rank roots are exchanged by a rank-ordered all_gather and folded in the same tree. The single-GPU kernel and every CP layout then produce identical bits; the old rule cannot be implemented when a rank only owns some query blocks. docs/contracts/muse-glimmer-30b-strict-contract.md O5 already contains this rule; paste that text into the RFC.
 
-*Evidence:* rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md (CP1/2/4 equal; TP1 one-shot kernel rel 1.6e-5 apart)
+*Evidence:* kernels_attention.json parity (one-shot v2 kernel == CP1 == simulated CP2/4/8 == real CP2, 0 mismatches); rl_engine/models/muse_glimmer/runtime/REPORT_ws2_cp.md
 
 ### F2. Attention rows must take head counts as parameters
 
 *Where:* WS1 attention rows / WS2 TP
 
-State that the strict attention forward/backward take H_Q and H_KV (GQA group 16) and add a TP gate: for TP in {2,4,8} the per-rank call on its head shard (16/1, 8/1 with KV replication, 4/1) equals the matching slice of the full-geometry call bit for bit. Kernels that hard-code 32 Q / 2 KV heads force runtimes to replicate KV or all-gather heads.
+State that the strict attention forward/backward take H_Q and H_KV (GQA group 16) and add a TP gate: for TP in {2,4,8} the per-rank call on its head shard (16/1, 8/1 with KV replication, 4/1) equals the matching slice of the full-geometry call bit for bit. Kernels that hard-code 32 Q / 2 KV heads force runtimes to all-gather heads back to the full 32/2 geometry or to zero-pad; KV-head replication on t/2 ranks at TP4/8 stays (it is the contract's ownership map). docs/contracts/muse-glimmer-30b-strict-contract.md O5 (head geometry (32,2)/(16,1)/(8,1)/(4,1)) already contains this rule; paste that text into the RFC.
 
-*Evidence:* rl_engine/models/muse_glimmer/runtime/REPORT_ws2_tp.md (open finding); vLLM and Megatron bindings worked around it
+*Evidence:* kernels_attention.json parity.tp_matrix (TP2/4/8 per-rank calls == TP1 slices, 0 mismatches); rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md (per-rank heads, GatherKVHead); rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md
 
 ### F3. Megatron Bridge stores the final norm as w-1
 
@@ -50,7 +50,7 @@ Compare backward outputs with a normalised error (max |g - g_ref| / max |g_ref|,
 
 *Where:* Numerical requirements / O5
 
-When every key of a row is masked (window edges, padding) the running max stays -inf: define alpha = 1 and p = 0 so no NaN is produced, and make it part of the contract rather than an implementation detail.
+While a row has not met a visible key (window edges, padding) the running max m_new is -inf: subtract 0 instead of m_new (m_safe = 0 if m_new = -inf else m_new). Then alpha = exp(m - m_safe) = exp(-inf) = 0 and p = 0, the state stays exactly (m, l, acc) = (-inf, 0, 0) and no NaN is produced; once a key appears this is a bitwise no-op. Make it part of O5 rather than an implementation detail. docs/contracts/muse-glimmer-30b-strict-contract.md O5 already contains this rule; paste that text into the RFC.
 
 *Evidence:* rl_engine/models/muse_glimmer/ops/REPORT_gated_attention_fwd.md
 
@@ -58,7 +58,7 @@ When every key of a row is masked (window edges, padding) the running max stays 
 
 *Where:* Open question 3 (LoRA)
 
-Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_i B_i z_i) with z = A x; merging the adapter into W changes the bits and is not allowed in strict mode.
+Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_{k<r} B[:,k] * z[k]) with z = bf16(A x), the sum taken as a sequential fp32 loop over the rank in ascending k and rounded once; merging the adapter into W changes the bits and is not allowed in strict mode.
 
 *Evidence:* rl_engine/models/muse_glimmer/runtime/REPORT_megatron_strict.md, REPORT_vllm_runtime_adapter.md
 
@@ -66,7 +66,7 @@ Answer to open question 3: both runtimes compute y = bf16(acc32(W x) + sum_i B_i
 
 *Where:* WS1 table
 
-fused_add_rmsnorm -> post_norm_residual_pre_norm (four-norm sandwich, (1+w) gain, eps 1e-5 and 1e-8); merge the attention train and rollout rows into one kernel row with two execution modes; fold vocab_parallel_softcap_logp into the WS1 lm_head row plus a transport row.
+fused_add_rmsnorm -> fused_post_norm_residual_pre_norm, the name the contract and the code use (four-norm sandwich, (1+w) gain, eps 1e-5 and 1e-8); merge the attention train and rollout rows into one kernel row with two execution modes; fold vocab_parallel_softcap_logp into the WS1 lm_head row plus a transport row.
 
 *Evidence:* rl_engine/models/muse_glimmer/ops/REPORT_norms.md; REPORT_ws2_tp.md
 
@@ -74,23 +74,23 @@ fused_add_rmsnorm -> post_norm_residual_pre_norm (four-norm sandwich, (1+w) gain
 
 *Where:* Foundation / environment
 
-Only transformers 5.17.0 satisfies both vLLM 0.31 (<5.18) and Megatron Bridge main (>=5.15,<5.18). Pin the semantics source to 5.17.0 (856157a2f3e9594954310df18fdccc31ffddebe9) instead of 5.19.0; note that 5.17 builds the RoPE table with a TF32-sensitive matmul while 5.19 uses an fp32 elementwise product, so the strict RoPE table is built by our own fixed fp32 function on both runtimes.
+Only transformers 5.15-5.17 satisfies both vLLM 0.31 (>=5.10.4,<5.18) and Megatron Bridge main (>=5.15,<5.18); pin the newest of them, 5.17.0 (856157a2f3e9594954310df18fdccc31ffddebe9), as the semantics source instead of 5.19.0. 5.17 builds the RoPE angles with a K=1 fp32 matmul and 5.19 with an fp32 elementwise product. On A100 the two builds, and TF32 on/off, give bit-identical logprobs (ablation tf32_probe, 0/933). The strict path still builds its own fixed fp32 CUDA table on both runtimes, so it does not depend on either.
 
-*Evidence:* rl_engine/models/muse_glimmer/museglimmer_manifest.json; ~/envs/megatron/SETUP_REPORT.md
+*Evidence:* rl_engine/models/muse_glimmer/museglimmer_manifest.json; reports/muse_glimmer_poc/ENV_MEGATRON_SETUP.md; vllm-0.31.0 Requires-Dist transformers<5.18.0,>=5.10.4; Megatron-Bridge@d86a5c09 pyproject.toml transformers>=5.15,<5.18; data/ablation.json tf32_probe, rope_elementwise
 
 ### F10. Do not assume Hopper
 
 *Where:* Hardware assumptions
 
-The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on A100, and the existing Triton deterministic GEMM reaches about 5 TFLOP/s. Make an architecture-neutral Triton implementation of every row the foundation (this POC reaches 105-135 TFLOP/s with an 8-leaf K tree on A100) and treat Hopper-specific kernels as optimisation rows.
+The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on A100, and the existing Triton deterministic GEMM reaches 1-6 TFLOP/s (1-2 on the FFN shapes). Make an architecture-neutral Triton implementation of every row the foundation (this POC reaches 100-131 TFLOP/s on the large M=4096 Muse Glimmer GEMMs, about 50 on the 256-wide k/v projections, 36-50 % of cuBLAS, with an 8-leaf K tree on A100) and treat Hopper-specific kernels as optimisation rows.
 
-*Evidence:* reports/muse_glimmer_poc/bench_ws1.log
+*Evidence:* reports/muse_glimmer_poc/bench_ws1.log (legacy TritonDetGemmOp); data/kernels_gemm.json benchmarks.gemm_forward
 
 ### F11. The two runtimes cannot share a process
 
 *Where:* final_e2e_lora / runtime layout
 
-vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot share one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, fp32 dL/dlogprob (applied through the surrogate loss sum(lp*g), whose gradient is exactly g) and hash-verified LoRA tensors. Training-side TP4 now works and equals TP1 bit for bit; TP8 is untested and gated.
+vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot share one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, the trainer's fp32 logprobs, fp32 dL/dlogprob (applied through the surrogate loss sum(lp*g), whose gradient is exactly g) and hash-verified LoRA tensors. Training-side TP4 now works and equals TP1 bit for bit; TP8 is untested and gated.
 
 *Evidence:* rl_engine/models/muse_glimmer/e2e/REPORT_e2e_loop.md
 
@@ -98,7 +98,7 @@ vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) ca
 
 *Where:* Numerical requirements / O7
 
-Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*tanh(..) - m becomes one FMA, the tile maximum's exp(zhat - m) is no longer exactly 1 and near-certain tokens get logp 1-2 ulp above zero (48/1024 generated tokens on the 30B). State that any quantity recomputed in a later pass must be rounded identically (compile those kernels without FP contraction).
+Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*tanh(..) - m becomes one FMA, the tile maximum's exp(zhat - m) is no longer exactly 1 and near-certain tokens get logp 1-2 ulp above zero (48/1024 generated tokens on the 30B). State that any quantity recomputed in a later pass must be rounded identically (compile those kernels without FP contraction). docs/contracts/muse-glimmer-30b-strict-contract.md O7 ("No FP contraction") already contains this rule; paste that text into the RFC.
 
 *Evidence:* c88607f; docs/contracts O7 note
 
@@ -106,7 +106,7 @@ Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*ta
 
 *Where:* O3 / dense_gemm_qualification
 
-With one K iteration per chunk, Triton folded the 8-leaf tree adds into the MMA accumulation chain (3 of 7 adds left) and about half of the K=256/512 outputs deviated from the contract. Require >= 2 iterations per chunk (static_assert) and a check of the compiled IR in the qualification row; drop the claim that BLOCK_K never changes bits.
+With one K iteration per chunk, Triton folded the 8-leaf tree adds into the MMA accumulation chain (3 of 7 adds left) and 47-67 % of the K=256/512 outputs deviated from the contract. Require >= 2 iterations per chunk (static_assert) and a check of the compiled IR in the qualification row; drop the claim that BLOCK_K never changes bits.
 
 *Evidence:* reports/muse_glimmer_poc/data/kernels_gemm.json det_gemm_1_iters_probe
 
@@ -122,7 +122,7 @@ Rounding each rank's dA to bf16 before the all-reduce makes 37-41 % of the eleme
 
 *Where:* O4 qknorm_scaled_rope
 
-The same formula built on CPU and on CUDA differs in about 20 % of the cos/sin entries; HF's CPU-built inv_freq differs from a GPU build in 4 of 64 entries, which changes 924/933 token logprobs. Keep O4's 'built once, cached, same object' and add: record the table's SHA-256 in both runtimes' provenance and fail the run if they differ.
+The same formula built on CPU and on CUDA differs in 18-27 % (mean about 23 %) of the cos/sin entries; HF's CPU-built inv_freq differs from a GPU build in 4 of 64 entries, which changes 924/933 token logprobs. Keep O4's 'built once, cached, same object' (already in docs/contracts O4) and add: record the table's SHA-256 in both runtimes' provenance and fail the run if they differ.
 
 *Evidence:* kernels_rope.json table_cpu_vs_cuda_per_bucket; ablation.json rope_inv_freq_cuda
 
@@ -130,9 +130,9 @@ The same formula built on CPU and on CUDA differs in about 20 % of the cos/sin e
 
 *Where:* Training side / LoRA
 
-The first binding's LoRA gradients changed with the micro-batch packing (14,860 of 20,480 elements). The POC now computes the token-axis weight gradient per sequence with det_gemm's 256-token rule and folds sequences left to right in sample order; 512/4096/8192-token packings give identical gradients at TP1/2/4. Declare this rule in the contract.
+The first binding's LoRA gradients changed with the micro-batch packing (in a unit test with 3 sequences on one column-parallel LoRA linear, 14,860 of 20,480 gradient elements changed between 1 and 2 micro-batches). The POC now computes the token-axis weight gradient per sequence with det_gemm's 256-token rule and folds sequences left to right in sample order; 512/4096/8192-token packings give identical gradients at TP1/2/4. Declare this rule in the contract.
 
-*Evidence:* megatron_runtime.json packing check; runtime/megatron_lora.py LORA_GRAD_RULE
+*Evidence:* megatron_runtime.json packing check; runtime/megatron_lora.py LORA_GRAD_RULE; REPORT_megatron_strict.md test_lora_grads_are_packing_invariant
 
 ### F17. Strict mode must fail closed, including runtime selection
 
@@ -140,7 +140,7 @@ The first binding's LoRA gradients changed with the micro-batch packing (14,860 
 
 The Megatron binding once fell back to torch/cuBLAS when a strict kernel was missing, and vLLM's V1 model runner bypasses the strict sampler path. List the features that strict mode forbids (V1 runner, prefix caching, KV offload/transfer, speculative decoding, ...) and require a hard error instead of a fallback.
 
-*Evidence:* review_wave_a2.json megatron_runtime:R1; wave B vLLM verify NEW-1
+*Evidence:* review_wave_a2.json megatron_runtime:R1; commit 7d60df9 (runtime/vllm_strict.py _bind_model fails closed unless vLLM's V2 model runner is active)
 
 ### F18. Weight-sync hashes must be recomputed by every worker
 
@@ -158,13 +158,13 @@ The rollout first echoed the hash the orchestrator declared. Each TP worker must
 
 *Evidence:* ablation/REPORT_ablation.md
 
-### F20. Say where the sampled token comes from
+### F20. Token selection must read the strict logits
 
 *Where:* vLLM rollout
 
-The strict vLLM binding reports strict logprobs but still selects tokens from the native bf16 logits (a declared deviation). State whether strict mode must also sample from the strict logits; logprobs are identical either way, token choices across TP were identical in every strict run.
+The first binding reported strict logprobs but chose tokens from the native cuBLAS bf16 logits, so at near-ties the chosen token depended on batch composition and TP. Wave B makes compute_logits return the strict fp32 zhat; vLLM V2's seeded Gumbel sampler / argmax picks from it and the native lm_head is no longer run. Require this in strict mode, and declare the sampler's own kernels (temperature division, Gumbel noise from (seed, position), argmax) as contract ops.
 
-*Evidence:* runtime/REPORT_vllm_runtime_adapter.md
+*Evidence:* rl_engine/models/muse_glimmer/runtime/REPORT_vllm_runtime_adapter.md (strict token selection, R5; contract deviations); commit 88fe1b8
 
 ## Part 2 — line-by-line audit of the RFC text
 

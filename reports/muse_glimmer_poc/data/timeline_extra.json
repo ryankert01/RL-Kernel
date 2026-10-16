@@ -17,7 +17,7 @@
  [
   "up",
   "rollout 自己和自己一致",
-  "严格 vLLM 在 TP1/TP2、贪心/采样、有无 LoRA 的 8 种组合里，decode 时记下的 logprob 与事后 prefill 重算 0/512 不同；原生是 146–169/512。"
+  "严格 vLLM 在 TP1/TP2/TP4、贪心/采样、有无 LoRA 的 12 种组合里，decode 时记下的 logprob 与事后 prefill 重算 0/512 不同；原生是 144–168/512。"
  ],
  [
   "up",
@@ -27,7 +27,7 @@
  [
   "down",
   "TP1 训练 OOM",
-  "单次 8192 token 的打包在 80 GB 上放不下（权重就 56 GB）；默认 micro batch 改成 4096 token。"
+  "Wave A：TP1 上单次 8192 token 的打包 OOM（权重就 56 GB），默认 micro batch 先改成 4096 token；wave B 把 RoPE 改为从规范缓存表取行（原来每种打包一份、无限增长），8192 token 在 TP1 上峰值 68.5 GiB 可以训练，4096 只剩内存旋钮的作用。"
  ],
  [
   "down",
@@ -37,7 +37,7 @@
  [
   "down",
   "Triton 把树折进了 MMA 链",
-  "K 很小时每个 K 块只迭代一次，编译器把树的 7 个加法折成 3 个，约一半输出偏离契约；对抗 review 发现，强制两次迭代后修复。"
+  "K 很小时每个 K 块只迭代一次，编译器把树的 7 个加法折成 3 个，K=256/512 时 47–67% 的输出偏离契约；对抗 review 发现，强制两次迭代后修复。"
  ],
  [
   "down",
@@ -52,7 +52,7 @@
  [
   "up",
   "消融：原生漂移的来源",
-  "拼 batch、KV cache decode、prefill 少一个 token、注意力实现、logits 精度、在 GPU 上算 RoPE 频率，任何一个都让 918–927/933 个 token 变 bit；TF32、换卡、换进程是 0。第一轮把“GPU 上算 inv_freq”误判为 0，review 发现那一项根本没在 GPU 上算。"
+  "在 HF 上，拼 batch、KV cache decode、prefill 少一个 token、注意力实现、logits 精度、在 GPU 上算 RoPE 频率，任何一个都让 918–927/933 个 token 变 bit；TF32、换卡、换进程是 0。第一轮把“GPU 上算 inv_freq”误判为 0，review 发现那一项根本没在 GPU 上算。"
  ],
  [
   "up",
@@ -62,7 +62,7 @@
  [
   "up",
   "梯度与打包方式无关",
-  "LoRA 权重梯度改为逐序列计算、按样本顺序左折叠，micro-batch 512/4096/8192 三种打包下梯度完全一样（以前 14,860/20,480 个元素不同）。"
+  "LoRA 权重梯度改为逐序列计算、按样本顺序左折叠，micro-batch 512/4096/8192 三种打包下梯度完全一样（以前在 3 条序列、一个列并行 LoRA 层的单元测试里，20,480 个梯度元素有 14,860 个随打包变化）。"
  ],
  [
   "down",
@@ -77,6 +77,6 @@
  [
   "up",
   "最终三方比对",
-  "参考链、vLLM TP1/2/4、Megatron TP1/2/4 共 8 份结果，加 3 份带 LoRA 的 vLLM 结果，全部来自 O7 修复之后、三个独立分支，组内 0/933 不同。"
+  "参考链（两次运行）、vLLM TP1/2/4、Megatron TP1/2/4 共 8 份结果，加 3 份带 LoRA 的 vLLM 结果，全部来自 O7 修复之后；三个运行时调用同一套严格 Triton 内核，组内 0/933 不同。"
  ]
 ]

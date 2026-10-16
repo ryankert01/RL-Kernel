@@ -110,10 +110,16 @@ def hbars(
         x0 = X(0)
     out = []
     plot_b = top + group_h * len(rows)
+    last_r = -1e9
     for t in ticks:
         x = X(t)
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 4}" x2="{x:.1f}" y2="{plot_b}"/>')
-        out.append(f'<text class="tick" x="{x:.1f}" y="{plot_b + 14}" text-anchor="middle">{esc(fmt(t))}{esc(unit) if t == ticks[-1] else ""}</text>')
+        lab = f'{fmt(t)}{unit if t == ticks[-1] else ""}'
+        half = text_w(lab, 11) / 2
+        if x - half < last_r + 6:  # crowded (log axis): keep the grid line, drop the label
+            continue
+        last_r = x + half
+        out.append(f'<text class="tick" x="{x:.1f}" y="{plot_b + 14}" text-anchor="middle">{esc(lab)}</text>')
     if ref is not None:
         x = X(ref)
         out.append(f'<line class="refline" x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{plot_b + 2}"/>')
@@ -217,6 +223,8 @@ def heatmap(
     col_h = (max(text_w(c, 11) for c in col_labels) * (0.72 if col_rotate else 0) + 18) if col_labels else 0
     top = (22 if title else 4) + col_h
     w = left + cw * len(col_labels) + 8
+    if col_rotate and col_labels:  # a label rotated by -40 deg reaches cos(40 deg) of its width to the right of its column
+        w = max(w, max(left + j * cw + cw / 2 + 0.77 * text_w(c, 11) for j, c in enumerate(col_labels)) + 6)
     h = top + cell * len(row_labels) + 8
     vm = vmax or max([v for row in values for v in row if v] + [1])
     out = []

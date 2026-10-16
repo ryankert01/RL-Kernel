@@ -42,6 +42,7 @@ def collect(run: Path, label: str | None = None) -> dict:
             "loss": g.get("loss"),
             "grad_norm": (s.get("trainer_step") or {}).get("grad_norm"),
             "sync_identity": (s.get("sync") or {}).get("identity"),
+            "lora_sha256": (s.get("sync") or {}).get("exported_sha256"),
             "phases_s": (s.get("timeline") or {}).get("phases_s", {}),
             "step_s": (s.get("timings") or {}).get("step_s"),
         })
