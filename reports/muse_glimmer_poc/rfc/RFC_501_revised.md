@@ -31,7 +31,7 @@ No row is blocked on another RFC. Rows extend the Qwen3-8B dense track. Sibling 
 | Context | 131,072 |
 | Vision (Phase B) | frozen ViT-G/14-class perception encoder, 1.85B; `out_hidden_size: 6144`; up to 4,096 visual tokens per image |
 
-The fingerprint (`OFFICIAL_FROZEN_SEMANTICS`) also freezes what the configs do not state: the gate's width, input and placement (its dtype is set by the contract: FP32 sigmoid and product); the Q/K norm form and where 3.87 is applied; the norm form and what `post_norm_eps` governs; the embedding normalization form and dtype; the soft-cap formula, dtype and order relative to the multiplier; the RoPE rotated-channel count and cos/sin dtypes; the local-layer cache rule (keep the last 2,047 tokens); and one grouping: four separate Q/K/V/gate GEMMs and separate MLP gate/up (Megatron Bridge fuses Q/K/V/gate and gate/up, vLLM fuses Q/K/V and gate/up).
+The fingerprint (`OFFICIAL_FROZEN_SEMANTICS`, `OFFICIAL_PROJECTION_GROUPING`) also freezes what the configs do not state: the gate's width, input and placement; the Q/K norm form and where 3.87 is applied; the norm form and what `post_norm_eps` governs; the embedding normalization form and dtype; the soft-cap formula, dtype and order relative to the multiplier; the RoPE rotated-channel count and cos/sin dtypes; the local-layer cache rule (keep the last 2,047 tokens); and one grouping: four separate Q/K/V/gate GEMMs and separate MLP gate/up (Megatron Bridge fuses Q/K/V/gate and gate/up, vLLM fuses Q/K/V and gate/up). These are the reference semantics; the strict contract keeps the forms and order but sets its own dtypes (FP32 gate, Q scale and RoPE rotation, one rounding).
 
 Upstream support: vLLM native model (0.28.0+, vllm#51655), SGLang (sglang#34262), and Megatron Bridge `megatron.bridge.models.muse_glimmer` (main only) with an 8× H100 LoRA recipe. The VIME provider is new work.
 
@@ -50,7 +50,7 @@ The existing WS1 numerical standard applies:
 - Fixed accumulator precision and reduction order. No Split-K, Stream-K, split-KV or cross-block atomics unless the merge tree is fixed by contract. No TF32, fast math, or FP contraction of recomputed values. Casts only at the points the contract declares. An attention row with no visible key yet produces no NaN.
 - **Batch invariance:** a logical row's bytes do not change with batch size or batch position.
 - **Sequence-split invariance:** a token's output is identical in training, prefill and decode, for any chunked-prefill split and any eviction timing around the 2,048 window.
-- **One projection grouping and Q-scale placement** (frozen by the fingerprint) on both sides. A runtime that keeps its native fused projection is not in strict mode.
+- **One projection grouping and Q-scale placement** on both sides. A runtime that keeps its native fused projection is not in strict mode.
 - **Multi-GPU execution reproduces the single-GPU result byte for byte:** the forward pass first (G1), then gradients (G2).
 - **Fail closed** (an error, never a fallback) on a Transformers-fallback model class, a config other than the pinned one, a missing strict kernel, a non-canonical projection grouping or Q-scale placement, RoPE on a global layer, an unsupported window or eviction mode, a native reducing collective, a zigzag CP layout, an undeclared KV ownership map, a weight-sync or RoPE-table hash mismatch, speculative decoding, vLLM's V1 model runner, prefix caching or KV offload.
 
@@ -70,7 +70,7 @@ Status: 🙋 open → ⏳ in progress → 👀 in review → ✅ merged. "If lan
 
 | Work item | Scope | Reuse | Claim | PR | Status |
 | --- | --- | --- | --- | --- | --- |
-| `museglimmer_arch_fingerprint` | Pin checkpoint and semantics source, layer schedule, to-freeze items, projection grouping, canonical TP and padded vocabulary; strict loader; operator trace | New | @ryankert01 | #558 | ⏳ |
+| `museglimmer_arch_fingerprint` | Pin checkpoint and semantics source, layer schedule, to-freeze items, projection grouping, canonical TP and padded vocabulary; strict loader; operator trace | New | @ryankert01 | #558 | 👀 |
 
 ### WS1: single-GPU kernels
 
