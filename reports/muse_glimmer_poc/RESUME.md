@@ -126,3 +126,9 @@ Wave D (blog: python3 reports/muse_glimmer_poc/blog/build_blog.py, publish as Ar
 - Upstream PR (user: scope = Foundation only; kept as DRAFT at the user's request): RL-Align/RL-Kernel#558, base test-museglimmer, head
   ryankert01:feat/museglimmer-foundation (8eee377): the 8 foundation files only (manifest, workload, loader,
   operator_trace, reference script, fingerprint test + package inits); no CI line. Tests 33 passed with the checkpoint.
+- Everything from the on-prem node is on the fork: `feat/museglimmer-poc` (code, data, blog, runs), `feat/museglimmer-foundation`
+  (PR #558) and `museglimmer-poc-artifacts` (orphan branch: scratchpad material incl. E2E run dirs and sidecars, workflow scripts
+  + journals, memory notes, gpu-lease, env freezes, hardware; see its README.md / SKIPPED_MANIFEST.json). Not uploaded: 18
+  tensor dumps > 25 MB (sizes + SHA-256 in SKIPPED_MANIFEST.json, reproducible), code snapshots (= repo commits), venvs,
+  the checkpoint and GSM8K (public), the conversation transcripts, and the local branch feat/museglimmer-arch-fingerprint
+  (= this branch's history + the CI line; needs the gh `workflow` scope).
