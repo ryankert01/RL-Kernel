@@ -1,0 +1,18 @@
+[gpu-lease] using GPUs [4, 5]
+== single-GPU files
+    torch._C._cuda_set_sync_debug_mode(debug_mode)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+143 passed, 1 warning in 54.78s
+rc=0
+== distributed CP files (2 GPUs visible)
+............s.s...s.s.s                                                  [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:132: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_global_attention.py:146: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:78: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_local_attention.py:92: requires 4 CUDA GPUs
+SKIPPED [1] tests/models/muse_glimmer/distributed/test_cp_tp_topology.py:44: requires 4 CUDA GPUs
+18 passed, 5 skipped in 32.21s
+rc=0
+== done

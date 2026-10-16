@@ -362,6 +362,14 @@ class SequenceMeta:
     once per step and passes the object to every layer's backward (``seq_meta=``), which then
     performs no host synchronisation. The object remembers the exact tensors it was built from
     (identity + in-place version counters) and is rejected for any other tensors (fail closed).
+
+    Precondition (not checkable without a sync): the tensors are only modified through PyTorch
+    ops while the meta is in use. A write that does not bump ``_version`` (a Triton/CUDA kernel
+    or an NCCL collective filling a persistent buffer, a ``.data`` write) leaves a stale meta
+    that is accepted. The forward kernel re-checks the packing on the device on every call
+    (``cu_seqlens``, grid coverage, ``q_pos`` range; device-side assert), so a stale meta cannot
+    make the forward read or write out of bounds; the backward kernels rely on the meta's grid
+    sizes and ``qpos0``. Build a new meta whenever such a buffer is refilled.
     """
 
     batch: int
@@ -417,12 +425,12 @@ def prepare_sequence_meta(
         )
     batch = int(lens_q.numel())
     pos_cpu = q_pos.to("cpu", torch.int64)
-    qpos0_cpu = torch.zeros(batch, dtype=torch.int32)
+    qpos0_cpu = torch.zeros(batch, dtype=torch.int32, device="cpu")
     for b in range(batch):
         if int(lens_q[b]) == 0:
             continue
         seg = pos_cpu[int(cu_q[b]) : int(cu_q[b + 1])]
-        expected = seg[0] + torch.arange(seg.numel(), dtype=torch.int64)
+        expected = seg[0] + torch.arange(seg.numel(), dtype=torch.int64, device="cpu")
         if not torch.equal(seg, expected):
             raise ValueError(
                 "gated_attention_bwd requires contiguous ascending q_pos inside every sequence"

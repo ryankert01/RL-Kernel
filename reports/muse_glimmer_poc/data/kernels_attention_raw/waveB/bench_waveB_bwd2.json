@@ -1,0 +1,452 @@
+{
+ "prefill_forward": [],
+ "decode_forward": [],
+ "backward": [
+  {
+   "T": 512,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 1.8958335876464845,
+   "transient_peak_GiB": 0.05474853515625,
+   "sdpa_causal_bwd_ms": 0.2908159891764323,
+   "ratio": 6.519014284652416
+  },
+  {
+   "T": 1024,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 1.3050538380940755,
+   "transient_peak_GiB": 0.1094970703125,
+   "sdpa_causal_bwd_ms": 0.37253119150797526,
+   "ratio": 3.5032068933914666
+  },
+  {
+   "T": 2048,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.4858624776204428,
+   "transient_peak_GiB": 0.218994140625,
+   "sdpa_causal_bwd_ms": 0.9629013061523437,
+   "ratio": 2.5816378706076306
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 7.278250630696615,
+   "transient_peak_GiB": 0.43798828125,
+   "sdpa_causal_bwd_ms": 2.593450673421224,
+   "ratio": 2.8063963989318155
+  },
+  {
+   "T": 8192,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 21.004219563802085,
+   "transient_peak_GiB": 0.8759765625,
+   "sdpa_causal_bwd_ms": 8.368196105957031,
+   "ratio": 2.5100056568762654
+  },
+  {
+   "T": 512,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 0.993075180053711,
+   "transient_peak_GiB": 0.05474853515625,
+   "sdpa_causal_bwd_ms": 0.3046741485595703,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward"
+  },
+  {
+   "T": 1024,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 1.0270037333170572,
+   "transient_peak_GiB": 0.1094970703125,
+   "sdpa_causal_bwd_ms": 0.3414698600769043,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward"
+  },
+  {
+   "T": 2048,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 2.693939208984375,
+   "transient_peak_GiB": 0.218994140625,
+   "sdpa_causal_bwd_ms": 0.8150357564290365,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward"
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 5.051938374837239,
+   "transient_peak_GiB": 0.43798828125,
+   "sdpa_causal_bwd_ms": 2.4278358459472655,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward"
+  },
+  {
+   "T": 8192,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 10.82265625,
+   "transient_peak_GiB": 0.8759765625,
+   "sdpa_causal_bwd_ms": 8.338636779785157,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward"
+  }
+ ],
+ "tp_shard_forward": [
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 30,
+   "rounds": 5,
+   "sdpa_max_abs_diff_y": 0.015625,
+   "flash_max_abs_diff_y": 0.015625,
+   "strict_ms": 1.7508010864257812,
+   "strict_ms_rounds": [
+    2.072610092163086,
+    1.7508010864257812,
+    1.7132884979248046,
+    1.7120938618977866,
+    1.7595391591389975
+   ],
+   "strict_ms_range": [
+    1.7120938618977866,
+    2.072610092163086
+   ],
+   "sdpa_ms": 1.3495296478271483,
+   "sdpa_ms_rounds": [
+    1.5753557840983072,
+    1.3499732971191407,
+    1.3473108927408854,
+    1.3495296478271483,
+    1.3461504618326823
+   ],
+   "sdpa_ms_range": [
+    1.3461504618326823,
+    1.5753557840983072
+   ],
+   "flash_ms": 1.2253866831461588,
+   "flash_ms_rounds": [
+    1.4217216491699218,
+    1.2238848368326822,
+    1.2307455698649088,
+    1.2253866831461588,
+    1.2229291280110677
+   ],
+   "flash_ms_range": [
+    1.2229291280110677,
+    1.4217216491699218
+   ],
+   "ratio": 1.297341699194762,
+   "flash_ratio": 1.428774370169121,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal + the same gate",
+   "tp": 1
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "iters": 30,
+   "rounds": 5,
+   "sdpa_max_abs_diff_y": 0.0234375,
+   "flash_max_abs_diff_y": 0.0234375,
+   "strict_ms": 1.3647871653238932,
+   "strict_ms_rounds": [
+    1.3647871653238932,
+    1.3640363057454428,
+    1.3646165211995442,
+    1.366050084431966,
+    1.3653675079345704
+   ],
+   "strict_ms_range": [
+    1.3640363057454428,
+    1.366050084431966
+   ],
+   "sdpa_ms": 30.05999755859375,
+   "sdpa_ms_rounds": [
+    30.057609049479165,
+    30.05811971028646,
+    30.064947509765624,
+    30.05999755859375,
+    30.061090087890626
+   ],
+   "sdpa_ms_range": [
+    30.057609049479165,
+    30.064947509765624
+   ],
+   "flash_ms": 1.157905069986979,
+   "flash_ms_rounds": [
+    1.1575637817382813,
+    1.157905069986979,
+    1.1599872589111329,
+    1.1587242126464843,
+    1.157905069986979
+   ],
+   "flash_ms_range": [
+    1.1575637817382813,
+    1.1599872589111329
+   ],
+   "ratio": null,
+   "baseline_not_comparable": "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel",
+   "flash_ratio": 1.1786693060591233,
+   "flash_baseline": "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), causal, window_size=[2047, 0] + the same gate",
+   "tp": 1
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 16,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.9462101618448894,
+   "strict_ms_rounds": [
+    0.9476095835367838,
+    0.9418410619099935,
+    0.9462101618448894,
+    0.9446741104125976,
+    0.9492479960123698
+   ],
+   "strict_ms_range": [
+    0.9418410619099935,
+    0.9492479960123698
+   ],
+   "tp": 2
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 16,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.7326378504435221,
+   "strict_ms_rounds": [
+    0.7326378504435221,
+    0.7337642669677734,
+    0.7322624206542969,
+    0.7328426361083984,
+    0.7319210688273112
+   ],
+   "strict_ms_range": [
+    0.7319210688273112,
+    0.7337642669677734
+   ],
+   "tp": 2
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 8,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.5596842447916667,
+   "strict_ms_rounds": [
+    0.5584213256835937,
+    0.5596842447916667,
+    0.5618346532185873,
+    0.5656576156616211,
+    0.5562367757161458
+   ],
+   "strict_ms_range": [
+    0.5562367757161458,
+    0.5656576156616211
+   ],
+   "tp": 4
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 8,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.40929279327392576,
+   "strict_ms_rounds": [
+    0.4112383842468262,
+    0.41058985392252606,
+    0.40857601165771484,
+    0.40929279327392576,
+    0.4086101214090983
+   ],
+   "strict_ms_range": [
+    0.40857601165771484,
+    0.4112383842468262
+   ],
+   "tp": 4
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 4,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.3573418617248535,
+   "strict_ms_rounds": [
+    0.36024319330851234,
+    0.3573418617248535,
+    0.35720532735188804,
+    0.3576832135518392,
+    0.35700054168701173
+   ],
+   "strict_ms_range": [
+    0.35700054168701173,
+    0.36024319330851234
+   ],
+   "tp": 8
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 4,
+   "H_KV": 1,
+   "iters": 30,
+   "rounds": 5,
+   "strict_ms": 0.24268800417582195,
+   "strict_ms_rounds": [
+    0.24391679763793944,
+    0.24268800417582195,
+    0.2423807938893636,
+    0.24268800417582195,
+    0.24320000012715656
+   ],
+   "strict_ms_range": [
+    0.2423807938893636,
+    0.24391679763793944
+   ],
+   "tp": 8
+  }
+ ],
+ "tp_shard_backward": [
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 6.148983256022135,
+   "transient_peak_GiB": 0.43798828125,
+   "sdpa_causal_bwd_ms": 2.4332288106282554,
+   "ratio": 2.527087970175102,
+   "tp": 1
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 32,
+   "H_KV": 2,
+   "strict_ms": 5.0609491984049475,
+   "transient_peak_GiB": 0.43798828125,
+   "sdpa_causal_bwd_ms": 2.4294059753417967,
+   "ratio": null,
+   "baseline_not_comparable": "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), i.e. different work from the windowed strict backward",
+   "tp": 1
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 16,
+   "H_KV": 1,
+   "strict_ms": 3.2604159037272136,
+   "transient_peak_GiB": 0.211181640625,
+   "tp": 2
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 16,
+   "H_KV": 1,
+   "strict_ms": 2.6649940490722654,
+   "transient_peak_GiB": 0.211181640625,
+   "tp": 2
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 8,
+   "H_KV": 1,
+   "strict_ms": 1.8736469268798828,
+   "transient_peak_GiB": 0.1055908203125,
+   "tp": 4
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 8,
+   "H_KV": 1,
+   "strict_ms": 1.5474688212076824,
+   "transient_peak_GiB": 0.1055908203125,
+   "tp": 4
+  },
+  {
+   "T": 4096,
+   "window": null,
+   "H_Q": 4,
+   "H_KV": 1,
+   "strict_ms": 1.2301653544108073,
+   "transient_peak_GiB": 0.05279541015625,
+   "tp": 8
+  },
+  {
+   "T": 4096,
+   "window": 2048,
+   "H_Q": 4,
+   "H_KV": 1,
+   "strict_ms": 1.0018133163452148,
+   "transient_peak_GiB": 0.05279541015625,
+   "tp": 8
+  }
+ ],
+ "sections": [
+  "backward",
+  "tp"
+ ],
+ "iters": 30,
+ "rounds": 5,
+ "env": {
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "torch": "2.13.0+cu130",
+  "triton": "3.7.1",
+  "cuda": "13.0",
+  "python": "3.12.15"
+ },
+ "modules": {
+  "forward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/ops/gated_attention.py",
+  "backward": "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/triton/gated_attention_bwd.py",
+  "backward_kernel_id": "muse_glimmer.triton.gated_attention_bwd.v2"
+ },
+ "argv": [
+  "/home/ubuntu/RL-Kernel/.claude/worktrees/wf_65f5032c-579-4/rl_engine/models/muse_glimmer/ops/gated_attention_bench.py",
+  "bench",
+  "--iters",
+  "30",
+  "--rounds",
+  "5",
+  "--sections",
+  "backward",
+  "tp",
+  "--out",
+  "/tmp/claude-1000/-home-ubuntu-RL-Kernel--claude-worktrees-swift-oak-hsv7/80655dc5-1eae-4992-a93b-f6f87e8ab1d8/scratchpad/attn_norms_B/bench_waveB_bwd2.json"
+ ],
+ "head_count_params": true,
+ "wall_s": 23.03254246711731
+}

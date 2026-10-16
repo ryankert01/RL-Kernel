@@ -20,6 +20,10 @@ kernels_attention.json``). Three modes, all single-GPU (run under ``~/bin/gpu-le
 * ``bench``: CUDA-event timings in ms (prefill forward, paged decode forward, backward) for the
   strict kernels and the torch SDPA baseline, the ratio, and the backward's transient peak
   memory in GiB; optional TP head-shard geometries when the wrappers accept head counts.
+  Forward rows time strict / SDPA / vLLM FlashAttention-2 (windowed on local layers, paged for
+  decode) in alternating rounds and keep the raw per-round series (median, range). Local-layer
+  SDPA rows carry ``ratio: null`` + ``baseline_not_comparable`` (dense-mask SDPA, and a
+  full-causal SDPA backward); the FA2 ``flash_ratio`` is the comparable local baseline.
 * ``bwd-diff``: per shape, mismatch counts / max relative difference between the backward of an
   OLD module file (e.g. ``git show <sha>:rl_engine/.../triton/gated_attention_bwd.py``) and the
   current one, on the same strict-forward ``o``/``lse`` (bit-pattern counts), split into the
@@ -183,6 +187,7 @@ def run_digest() -> dict[str, Any]:
             inp["q"], inp["gate"], kc, vc, table, seq_lens, _i32([0, 300]), window=window
         )
         fwd[f"{kind}/paged_prefill/T=300"] = [_sha(y), _sha(o), _sha(lse)]
+        _digest_extra(fwd, kind, window)
 
     back = out["backward"]
     for window in (None, W):
@@ -204,6 +209,90 @@ def run_digest() -> dict[str, Any]:
     return out
 
 
+def _paged_layout(ctxs: list[int], seed: int, hkv: int = HKV, evict_window: Optional[int] = None):
+    """Several sequences in one cache with interleaved (non-contiguous) page ids.
+
+    Sequence ``i`` has ``ctxs[i]`` keys; its logical page ``j`` lives at physical page
+    ``j * B + i``. With ``evict_window`` the pages whose keys all sit at ``<= ctx - 1 - W`` are
+    marked ``-1`` (evicted for a decode query at ``ctx - 1``) and NaN-filled.
+    """
+    bsz = len(ctxs)
+    max_pages = max(-(-c // PAGE) for c in ctxs)
+    kc = torch.zeros((max_pages * bsz, PAGE, hkv, D), dtype=torch.bfloat16, device=DEV)
+    vc = torch.zeros_like(kc)
+    table = torch.full((bsz, max_pages), -1, dtype=torch.int32, device=DEV)
+    seqs = []
+    for i, ctx in enumerate(ctxs):
+        s = _inputs(ctx, seed=seed + 13 * i, hq=HQ if hkv == HKV else 4, hkv=hkv)
+        seqs.append(s)
+        for j in range(-(-ctx // PAGE)):
+            phys = j * bsz + i
+            rows = slice(j * PAGE, min((j + 1) * PAGE, ctx))
+            n = rows.stop - rows.start
+            kc[phys, :n] = s["k"][rows]
+            vc[phys, :n] = s["v"][rows]
+            table[i, j] = phys
+            if evict_window is not None and (j + 1) * PAGE - 1 <= ctx - 1 - evict_window:
+                table[i, j] = -1
+                kc[phys].fill_(float("nan"))
+                vc[phys].fill_(float("nan"))
+    lens = torch.tensor(ctxs, dtype=torch.int32, device=DEV)
+    return kc, vc, table, lens
+
+
+def _digest_extra(fwd: dict[str, Any], kind: str, window: Optional[int]) -> None:
+    """Paths added in wave B (validation / in-kernel paged positions must not move bits):
+    TP head shards (TOKEN + HEAD tiles, varlen and paged), paged chunked prefill with queries
+    that are NOT the whole sequence (TOKEN tiles), multi-token HEAD tiles on the paged path,
+    interleaved page ids and evicted (-1, NaN-filled) pages on local layers."""
+    lens = [5, 130, 2100, 1, 333]
+    for hq in (16, 8, 4):
+        seqs = [_inputs(n, seed=21_000 + 7 * hq + i, hq=hq, hkv=1) for i, n in enumerate(lens)]
+        packed = {k: torch.cat([s[k] for s in seqs]) for k in ("q", "k", "v", "gate")}
+        cu = _i32([0, *torch.tensor(lens).cumsum(0).tolist()])
+        pos = torch.cat([torch.arange(n, dtype=torch.int32, device=DEV) for n in lens])
+        for mode in ("token", "head"):
+            y, o, lse = _fwd_varlen(packed, cu, cu, pos, window, tile_mode=mode,
+                                    num_q_heads=hq, num_kv_heads=1)
+            fwd[f"{kind}/tp_varlen/H_Q={hq}/{lens}/{mode}"] = [_sha(y), _sha(o), _sha(lse)]
+        ctxs = [2049, 1, 700, 4096]
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=22_000 + hq, hkv=1)
+        g = torch.Generator(device="cpu").manual_seed(23_000 + hq)
+        q = (torch.randn(len(ctxs), hq, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(len(ctxs), hq * D, generator=g).to(DEV, torch.bfloat16)
+        y, o, lse = ga.strict_gated_attention_fwd_paged(
+            q, gate, kc, vc, table, seq_lens, _i32(range(len(ctxs) + 1)), window=window,
+            num_q_heads=hq, num_kv_heads=1,
+        )
+        fwd[f"{kind}/tp_paged_decode/H_Q={hq}/{ctxs}"] = [_sha(y), _sha(o), _sha(lse)]
+    # paged chunked prefill: the queries are the last len_q of each sequence (TOKEN tiles)
+    for ctxs, lq in (([2100, 300, 4096], [100, 17, 64]), ([2049, 70, 4096], [3, 16, 1])):
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=24_000 + sum(lq))
+        g = torch.Generator(device="cpu").manual_seed(25_000 + sum(lq))
+        tq = sum(lq)
+        q = (torch.randn(tq, HQ, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(tq, HQ * D, generator=g).to(DEV, torch.bfloat16)
+        cu_q = _i32([0, *torch.tensor(lq).cumsum(0).tolist()])
+        for mode in (None, "token", "head"):
+            kw = {} if mode is None else {"tile_mode": mode}
+            y, o, lse = ga.strict_gated_attention_fwd_paged(
+                q, gate, kc, vc, table, seq_lens, cu_q, window=window, **kw
+            )
+            fwd[f"{kind}/paged_chunk/{ctxs}/{lq}/{mode or 'auto'}"] = [
+                _sha(y), _sha(o), _sha(lse)
+            ]
+    if window is not None:  # evicted pages (-1 in the table, NaN-filled) at decode
+        ctxs = [4096, 2100, 2049, 9000]
+        kc, vc, table, seq_lens = _paged_layout(ctxs, seed=26_000, evict_window=window)
+        g = torch.Generator(device="cpu").manual_seed(26_500)
+        q = (torch.randn(len(ctxs), HQ, D, generator=g) * 3.0).to(DEV, torch.bfloat16)
+        gate = torch.randn(len(ctxs), HQ * D, generator=g).to(DEV, torch.bfloat16)
+        y, o, lse = ga.strict_gated_attention_fwd_paged(
+            q, gate, kc, vc, table, seq_lens, _i32(range(len(ctxs) + 1)), window=window
+        )
+        fwd[f"{kind}/paged_decode_evicted/{ctxs}"] = [_sha(y), _sha(o), _sha(lse)]
+
+
 # --------------------------------------------------------------------------------- bench
 def _sdpa_gated(q4, k4, v4, gate, *, is_causal: bool, mask):
     out = F.scaled_dot_product_attention(
@@ -213,16 +302,72 @@ def _sdpa_gated(q4, k4, v4, gate, *, is_causal: bool, mask):
     return (o.float() * torch.sigmoid(gate.float())).to(torch.bfloat16)
 
 
-def bench_prefill(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv: int = HKV):
+#: Why a baseline is not comparable (stored instead of a ratio; review kernels_attention:R3).
+LOCAL_SDPA_NOT_COMPARABLE = (
+    "local layer: torch SDPA has no sliding-window kernel; the baseline is SDPA with a dense "
+    "bool mask (math/efficient path, O(T^2) memory), not a flash-class kernel"
+)
+LOCAL_SDPA_BWD_NOT_COMPARABLE = (
+    "local layer: the SDPA backward baseline is the FULL-causal flash backward (no window), "
+    "i.e. different work from the windowed strict backward"
+)
+
+
+def _flash_fwd():
+    """vLLM's FlashAttention-2 varlen forward (windowed, GQA, paged), or None if unavailable."""
+    try:
+        from vllm.vllm_flash_attn import flash_attn_varlen_func
+    except Exception:  # noqa: BLE001 - optional baseline (only in the vLLM env)
+        return None
+    return flash_attn_varlen_func
+
+
+def _flash_window(window: Optional[int]) -> list[int]:
+    return [-1, -1] if window is None else [window - 1, 0]
+
+
+def _gated(o: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+    return (o.reshape(gate.shape).float() * torch.sigmoid(gate.float())).to(torch.bfloat16)
+
+
+def _rounds(fns: dict[str, Callable[[], Any]], iters: int, rounds: int) -> dict[str, Any]:
+    """Time every fn ``rounds`` times, alternating (review kernels_attention:R6): raw per-round
+    ms, median, min, max per fn."""
+    import statistics
+
+    raw: dict[str, list[float]] = {name: [] for name in fns}
+    for _ in range(rounds):
+        for name, fn in fns.items():
+            raw[name].append(_time_ms(fn, iters))
+    out: dict[str, Any] = {}
+    for name, xs in raw.items():
+        out[f"{name}_ms"] = statistics.median(xs)
+        out[f"{name}_ms_rounds"] = xs
+        out[f"{name}_ms_range"] = [min(xs), max(xs)]
+    return out
+
+
+def _baseline_diffs(fns: dict[str, Callable[[], Any]]) -> dict[str, float]:
+    """max |y_baseline - y_strict| per baseline: the baselines compute the same function."""
+    y = fns["strict"]()[0].float()
+    return {f"{name}_max_abs_diff_y": float((fn().float() - y).abs().max().item())
+            for name, fn in fns.items() if name != "strict"}
+
+
+def bench_prefill(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv: int = HKV,
+                  rounds: int = 5):
     inp = _inputs(n, seed=1, hq=hq, hkv=hkv)
     cu = _i32([0, n])
     pos = torch.arange(n, dtype=torch.int32, device=DEV)
     kw: dict[str, Any] = {"max_seqlen_q": n}
     if (hq, hkv) != (HQ, HKV):
         kw.update(num_q_heads=hq, num_kv_heads=hkv)
-    strict_ms = _time_ms(lambda: _fwd_varlen(inp, cu, cu, pos, window, **kw), iters)
+    fns: dict[str, Callable[[], Any]] = {
+        "strict": lambda: _fwd_varlen(inp, cu, cu, pos, window, **kw)
+    }
     rec: dict[str, Any] = {"T": n, "window": window, "H_Q": hq, "H_KV": hkv,
-                           "strict_ms": strict_ms}
+                           "iters": iters, "rounds": rounds}
+    flash = _flash_fwd()
     if (hq, hkv) == (HQ, HKV):
         q4 = inp["q"].transpose(0, 1).unsqueeze(0).contiguous()
         k4 = inp["k"].transpose(0, 1).unsqueeze(0).contiguous()
@@ -232,14 +377,30 @@ def bench_prefill(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv: 
         else:
             i = torch.arange(n, device=DEV)
             mask, causal = (i[None, :] <= i[:, None]) & (i[None, :] > i[:, None] - window), False
-        sdpa_ms = _time_ms(
-            lambda: _sdpa_gated(q4, k4, v4, inp["gate"], is_causal=causal, mask=mask), iters
-        )
-        rec.update(sdpa_ms=sdpa_ms, ratio=strict_ms / sdpa_ms)
+        fns["sdpa"] = lambda: _sdpa_gated(q4, k4, v4, inp["gate"], is_causal=causal, mask=mask)
+        if flash is not None:
+            fns["flash"] = lambda: _gated(
+                flash(inp["q"], inp["k"], inp["v"], n, cu, n, cu_seqlens_k=cu,
+                      causal=True, window_size=_flash_window(window)),
+                inp["gate"],
+            )
+    rec.update(_baseline_diffs(fns))
+    rec.update(_rounds(fns, iters, rounds))
+    if "sdpa_ms" in rec:
+        if window is None:
+            rec["ratio"] = rec["strict_ms"] / rec["sdpa_ms"]
+        else:
+            rec["ratio"] = None
+            rec["baseline_not_comparable"] = LOCAL_SDPA_NOT_COMPARABLE
+    if "flash_ms" in rec:
+        rec["flash_ratio"] = rec["strict_ms"] / rec["flash_ms"]
+        rec["flash_baseline"] = "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2), " + (
+            "causal" if window is None else f"causal, window_size=[{window - 1}, 0]"
+        ) + " + the same gate"
     return rec
 
 
-def bench_decode(bsz: int, ctx: int, window: Optional[int], iters: int):
+def bench_decode(bsz: int, ctx: int, window: Optional[int], iters: int, rounds: int = 5):
     g = torch.Generator(device="cpu").manual_seed(bsz * 7 + ctx)
     k_all = torch.randn(bsz * ctx, HKV, D, generator=g).to(DEV, torch.bfloat16)
     v_all = torch.randn(bsz * ctx, HKV, D, generator=g).to(DEV, torch.bfloat16)
@@ -247,12 +408,6 @@ def bench_decode(bsz: int, ctx: int, window: Optional[int], iters: int):
     gate = torch.randn(bsz, HQ * D, generator=g).to(DEV, torch.bfloat16)
     kc, vc, table, seq_lens = _paged_from_contiguous(k_all, v_all, bsz, ctx)
     cu_q = _i32(range(bsz + 1))
-    strict_ms = _time_ms(
-        lambda: ga.strict_gated_attention_fwd_paged(
-            q, gate, kc, vc, table, seq_lens, cu_q, window=window, max_seqlen_q=1
-        ),
-        iters,
-    )
     q4 = q.unsqueeze(2).contiguous()
     k4 = k_all.view(bsz, ctx, HKV, D).transpose(1, 2).contiguous()
     v4 = v_all.view(bsz, ctx, HKV, D).transpose(1, 2).contiguous()
@@ -261,9 +416,37 @@ def bench_decode(bsz: int, ctx: int, window: Optional[int], iters: int):
     else:
         j = torch.arange(ctx, device=DEV)
         mask = ((j <= ctx - 1) & (j > ctx - 1 - window)).view(1, 1, 1, ctx)
-    sdpa_ms = _time_ms(lambda: _sdpa_gated(q4, k4, v4, gate, is_causal=False, mask=mask), iters)
-    return {"B": bsz, "ctx": ctx, "window": window, "strict_ms": strict_ms, "sdpa_ms": sdpa_ms,
-            "ratio": strict_ms / sdpa_ms}
+    fns: dict[str, Callable[[], Any]] = {
+        "strict": lambda: ga.strict_gated_attention_fwd_paged(
+            q, gate, kc, vc, table, seq_lens, cu_q, window=window, max_seqlen_q=1
+        ),
+        "sdpa": lambda: _sdpa_gated(q4, k4, v4, gate, is_causal=False, mask=mask),
+    }
+    flash = _flash_fwd()
+    if flash is not None:
+        fns["flash"] = lambda: _gated(
+            flash(q, kc, vc, 1, cu_q, ctx, seqused_k=seq_lens, block_table=table, causal=True,
+                  window_size=_flash_window(window)),
+            gate,
+        )
+    rec: dict[str, Any] = {"B": bsz, "ctx": ctx, "window": window, "iters": iters,
+                           "rounds": rounds}
+    rec.update(_baseline_diffs(fns))
+    rec.update(_rounds(fns, iters, rounds))
+    if window is None:
+        rec["ratio"] = rec["strict_ms"] / rec["sdpa_ms"]
+    else:
+        rec["ratio"] = None
+        rec["baseline_not_comparable"] = LOCAL_SDPA_NOT_COMPARABLE
+    if "flash_ms" in rec:
+        rec["flash_ratio"] = rec["strict_ms"] / rec["flash_ms"]
+        rec["flash_baseline"] = (
+            "vllm.vllm_flash_attn.flash_attn_varlen_func (FA2) on the same paged cache "
+            "(block_table, page 16, seqused_k), " + (
+                "causal" if window is None else f"causal, window_size=[{window - 1}, 0]"
+            ) + " + the same gate"
+        )
+    return rec
 
 
 def bench_backward(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv: int = HKV):
@@ -310,32 +493,39 @@ def bench_backward(n: int, window: Optional[int], iters: int, hq: int = HQ, hkv:
             lambda: torch.autograd.grad(out, (qs, ks, vs), grad_outputs=dout, retain_graph=True),
             iters,
         )
-        rec.update(sdpa_causal_bwd_ms=sdpa_ms, ratio=strict_ms / sdpa_ms)
+        rec.update(sdpa_causal_bwd_ms=sdpa_ms)
+        if window is None:
+            rec["ratio"] = strict_ms / sdpa_ms
+        else:
+            rec["ratio"] = None
+            rec["baseline_not_comparable"] = LOCAL_SDPA_BWD_NOT_COMPARABLE
     return rec
 
 
 SECTIONS = ("prefill", "decode", "backward", "tp")
 
 
-def run_bench(iters: int, quick: bool, sections=SECTIONS) -> dict[str, Any]:
+def run_bench(iters: int, quick: bool, sections=SECTIONS, rounds: int = 5) -> dict[str, Any]:
     lengths = (512, 1024, 2048, 4096, 8192) if not quick else (1024, 4096)
     out: dict[str, Any] = {"prefill_forward": [], "decode_forward": [], "backward": [],
                            "tp_shard_forward": [], "tp_shard_backward": [],
-                           "sections": list(sections), "iters": iters}
+                           "sections": list(sections), "iters": iters, "rounds": rounds}
     for window in (None, W):
         for n in lengths:
             if "prefill" in sections:
-                out["prefill_forward"].append(bench_prefill(n, window, iters))
+                out["prefill_forward"].append(bench_prefill(n, window, iters, rounds=rounds))
             if "backward" in sections:
                 out["backward"].append(bench_backward(n, window, max(5, iters // 2)))
         if "decode" in sections:
             for bsz in ((1, 16, 64, 256) if not quick else (1, 64)):
-                out["decode_forward"].append(bench_decode(bsz, 4096, window, iters))
+                out["decode_forward"].append(
+                    bench_decode(bsz, 4096, window, iters, rounds=rounds)
+                )
     if "tp" in sections and _supports_heads():
         for hq, hkv in ((32, 2), (16, 1), (8, 1), (4, 1)):
             for window in (None, W):
                 kw = {} if (hq, hkv) == (HQ, HKV) else {"hq": hq, "hkv": hkv}
-                rec = bench_prefill(4096, window, iters, **kw)
+                rec = bench_prefill(4096, window, iters, rounds=rounds, **kw)
                 rec["tp"] = HQ // hq
                 out["tp_shard_forward"].append(rec)
                 rec = bench_backward(4096, window, max(5, iters // 2), **kw)
@@ -389,8 +579,12 @@ def run_bwd_ab(old_path: str, iters: int, rounds: int) -> dict[str, Any]:
                 for _ in range(rounds)
             ]
             rec["sdpa_causal_bwd_median_ms"] = statistics.median(sdpa)
-            rec["v1_ratio_to_sdpa"] = rec["v1_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
-            rec["v2_ratio_to_sdpa"] = rec["v2_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
+            if window is None:
+                rec["v1_ratio_to_sdpa"] = rec["v1_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
+                rec["v2_ratio_to_sdpa"] = rec["v2_median_ms"] / rec["sdpa_causal_bwd_median_ms"]
+            else:
+                rec["v1_ratio_to_sdpa"] = rec["v2_ratio_to_sdpa"] = None
+                rec["baseline_not_comparable"] = LOCAL_SDPA_BWD_NOT_COMPARABLE
             records.append(rec)
     return {"records": records, "old_module": old_path}
 
@@ -741,7 +935,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("mode", choices=["digest", "bench", "bwd-diff", "bwd-ab", "parity"])
     ap.add_argument("--out", required=True)
     ap.add_argument("--iters", type=int, default=20)
-    ap.add_argument("--rounds", type=int, default=5, help="bwd-ab: alternating rounds")
+    ap.add_argument("--rounds", type=int, default=5,
+                    help="bwd-ab / bench forward rows: alternating timing rounds")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--old-module", default=None)
     ap.add_argument("--sections", nargs="+", choices=SECTIONS, default=list(SECTIONS),
@@ -753,7 +948,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.mode == "digest":
         payload = run_digest()
     elif args.mode == "bench":
-        payload = run_bench(args.iters, args.quick, tuple(args.sections))
+        payload = run_bench(args.iters, args.quick, tuple(args.sections), args.rounds)
     elif args.mode == "parity":
         payload = run_parity()
     else:

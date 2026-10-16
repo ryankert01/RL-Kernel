@@ -26,7 +26,8 @@ in O5, so a rank's ``(y, o, lse)`` equal the matching slices of the full call bi
 
 Numerics are defined in ``docs/contracts/muse-glimmer-30b-strict-contract.md`` section O5 and
 restated in :mod:`rl_engine.models.muse_glimmer.triton.gated_attention_fwd`. Summary of the
-reduction order and cast points (identical in kernel and golden):
+reduction order and cast points (same order in kernel and golden; the golden is a tolerance
+reference because the compiled exp/division/FMA differ, see ``trace()["compiled_arithmetic"]``):
 KV blocks of 64 keys aligned at absolute position 0, ascending; fp32 scores ``q.k * 128**-0.5``;
 online softmax ``m_new = max(m, rowmax)``, ``alpha = exp(m - m_new)``, ``p = exp(s - m_new)``,
 ``l = l*alpha + rowsum(p)``, ``acc = acc*alpha + (p -> bf16) @ V``; ``o = acc / l -> bf16``;
@@ -39,6 +40,7 @@ from typing import Any
 
 import torch
 
+from rl_engine.models.muse_glimmer.triton import gated_attention_bwd as _bwd
 from rl_engine.models.muse_glimmer.triton.gated_attention_fwd import (
     BLOCK_M_HEAD,
     BLOCK_M_TOKEN,
@@ -64,6 +66,19 @@ SOFTMAX_SCALE = HEAD_DIM**-0.5
 HEAD_TILE_MAX_Q = 16
 
 TILE_MODES = ("token", "head")
+
+#: Message of the device-side assert (``torch._assert_async``) raised at the next
+#: synchronisation when the kernel finds metadata that the wrapper could not check on the host
+#: without a sync. A device-side assert poisons the CUDA context (fail closed, no recovery).
+#: torch limits the message to 254 characters. Meaning: cu_seqlens not starting at 0 / decreasing
+#: / not ending at the row count; max_seqlen_q below a real query length; q_pos outside
+#: [0, len_k); seq_lens outside [len_q, max_pages*16]; a block-table page outside [0, num_pages)
+#: under a key some query needs.
+METADATA_ASSERT_MSG = (
+    "strict gated attention: invalid metadata (cu_seqlens, max_seqlen_q < a query length, "
+    "q_pos outside [0,len_k), seq_lens outside [len_q,max_pages*16] or a page id outside "
+    "[0,num_pages) under a visible key)"
+)
 
 
 def _check(cond: bool, msg: str) -> None:
@@ -101,12 +116,92 @@ def _validate_common(
     return int(cu_seqlens_q.numel() - 1)
 
 
-def _resolve_max_seqlen_q(cu_seqlens_q: torch.Tensor, max_seqlen_q: int | None) -> int:
-    if max_seqlen_q is None:
-        lens = cu_seqlens_q[1:] - cu_seqlens_q[:-1]
-        max_seqlen_q = int(lens.max().item())
-    _check(max_seqlen_q >= 1, "max_seqlen_q must be >= 1")
-    return int(max_seqlen_q)
+# ------------------------------------------------------------------------------ host checks
+def _host_int64(*tensors: torch.Tensor) -> list[torch.Tensor]:
+    """One device->host copy (one synchronisation) of several 1-D int tensors, as int64."""
+    sizes = [int(t.numel()) for t in tensors]
+    flat = torch.cat([t.reshape(-1) for t in tensors]).to("cpu", torch.int64)
+    return list(torch.split(flat, sizes))
+
+
+def _check_offsets_host(cu: torch.Tensor, total: int, name: str) -> torch.Tensor:
+    """``cu[0] == 0``, non-decreasing, ``cu[-1] == total``; returns the lengths."""
+    _check(int(cu[0]) == 0, f"{name}[0] must be 0, got {int(cu[0])}")
+    lens = cu[1:] - cu[:-1]
+    if bool((lens < 0).any()):
+        i = int(torch.nonzero(lens < 0)[0, 0])
+        raise ValueError(
+            f"{name} must be non-decreasing: {name}[{i}]={int(cu[i])} > "
+            f"{name}[{i + 1}]={int(cu[i + 1])}"
+        )
+    _check(
+        int(cu[-1]) == int(total),
+        f"{name}[-1]={int(cu[-1])} must equal the number of rows {int(total)}",
+    )
+    return lens
+
+
+def validate_varlen_packing(
+    cu_seqlens_q: torch.Tensor,
+    cu_seqlens_k: torch.Tensor,
+    q_pos: torch.Tensor,
+    *,
+    num_k_tokens: int,
+) -> int:
+    """Host validation of a varlen packing; returns ``max_seqlen_q``.
+
+    Checks ``cu_seqlens_q`` / ``cu_seqlens_k`` (start at 0, non-decreasing, end at ``len(q_pos)``
+    / ``num_k_tokens``) and ``0 <= q_pos < len_k`` of each query's sequence. Cost: one
+    device->host copy of ``cu_seqlens_q``, ``cu_seqlens_k`` and ``q_pos`` (``4 * (2B + 2 + Tq)``
+    bytes, one synchronisation) plus vectorised CPU int64 ops. Positions need not be
+    contiguous here (the forward does not require it; the backward's
+    ``prepare_sequence_meta`` does).
+    """
+    cu_q, cu_k, pos = _host_int64(cu_seqlens_q, cu_seqlens_k, q_pos)
+    lens_q = _check_offsets_host(cu_q, q_pos.numel(), "cu_seqlens_q")
+    lens_k = _check_offsets_host(cu_k, int(num_k_tokens), "cu_seqlens_k")
+    seq_of_tok = torch.repeat_interleave(torch.arange(lens_q.numel(), device="cpu"), lens_q)
+    bad = (pos < 0) | (pos >= lens_k[seq_of_tok])
+    if bool(bad.any()):
+        t = int(torch.nonzero(bad)[0, 0])
+        b = int(seq_of_tok[t])
+        raise ValueError(
+            f"q_pos[{t}]={int(pos[t])} (sequence {b}) must lie in [0, {int(lens_k[b])}): a query "
+            "position must be one of its sequence's keys"
+        )
+    return int(lens_q.max()) if lens_q.numel() else 0
+
+
+def validate_paged_packing(
+    cu_seqlens_q: torch.Tensor,
+    seq_lens: torch.Tensor,
+    *,
+    num_q_tokens: int,
+    max_pages: int,
+) -> int:
+    """Host validation of the paged path's packing; returns ``max_seqlen_q``.
+
+    Checks ``cu_seqlens_q`` (start 0, non-decreasing, ends at ``num_q_tokens``) and
+    ``len_q <= seq_lens <= max_pages * 16`` per sequence. Cost: one device->host copy of
+    ``cu_seqlens_q`` and ``seq_lens`` (``4 * (2B + 1)`` bytes, one synchronisation). The
+    block-table entries are checked by the kernel (device-side assert), not here.
+    """
+    cu_q, lens_k = _host_int64(cu_seqlens_q, seq_lens)
+    lens_q = _check_offsets_host(cu_q, int(num_q_tokens), "cu_seqlens_q")
+    bad = (lens_k < lens_q) | (lens_k > int(max_pages) * PAGE_SIZE)
+    if bool(bad.any()):
+        b = int(torch.nonzero(bad)[0, 0])
+        raise ValueError(
+            f"sequence {b}: seq_lens={int(lens_k[b])} must lie in [len_q={int(lens_q[b])}, "
+            f"max_pages*{PAGE_SIZE}={int(max_pages) * PAGE_SIZE}]"
+        )
+    return int(lens_q.max()) if lens_q.numel() else 0
+
+
+def _check_max_seqlen_q(max_seqlen_q: int, tq: int) -> int:
+    max_seqlen_q = int(max_seqlen_q)
+    _check(max_seqlen_q >= 1 or tq == 0, "max_seqlen_q must be >= 1")
+    return max_seqlen_q
 
 
 def _resolve_tile_mode(max_seqlen_q: int, tile_mode: str | None) -> str:
@@ -128,6 +223,7 @@ def _launch(
     seq_lens: torch.Tensor,
     block_table: torch.Tensor,
     max_pages: int,
+    num_k_rows: int,
     num_seqs: int,
     max_seqlen_q: int,
     window: int | None,
@@ -136,6 +232,11 @@ def _launch(
     hq: int,
     hkv: int,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Allocate outputs, launch the kernel and queue the metadata assert (no host sync).
+
+    ``num_k_rows``: ``Tk`` (varlen) or ``num_pages`` (paged). Cost of the fail-closed status
+    word: one 4-byte ``torch.ones`` fill and one ``torch._assert_async`` launch per call.
+    """
     tq = q.shape[0]
     y = torch.empty((tq, hq * HEAD_DIM), dtype=torch.bfloat16, device=q.device)
     o = torch.empty_like(y)
@@ -152,6 +253,7 @@ def _launch(
         grid = (triton_cdiv(max_seqlen_q, BLOCK_M_TOKEN), num_seqs, hq)
         block_m, num_warps = BLOCK_M_TOKEN, NUM_WARPS_TOKEN
 
+    status = torch.ones((1,), dtype=torch.int32, device=q.device)
     _gated_attention_fwd_kernel[grid](
         q,
         gate_logits,
@@ -165,9 +267,12 @@ def _launch(
         cu_seqlens_k,
         seq_lens,
         block_table,
+        status,
         float(SOFTMAX_SCALE),
         int(window) if local else 0,
         int(max_pages),
+        int(tq),
+        int(num_k_rows),
         H_Q=hq,
         H_KV=hkv,
         D=HEAD_DIM,
@@ -180,6 +285,7 @@ def _launch(
         num_warps=num_warps,
         num_stages=NUM_STAGES,
     )
+    torch._assert_async(status, METADATA_ASSERT_MSG)
     return y, o, lse
 
 
@@ -201,6 +307,7 @@ def strict_gated_attention_fwd_varlen(
     tile_mode: str | None = None,
     num_q_heads: int = NUM_Q_HEADS,
     num_kv_heads: int = NUM_KV_HEADS,
+    seq_meta: _bwd.SequenceMeta | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Strict gated attention over packed sequences (training / prefill / chunked prefill).
 
@@ -210,13 +317,26 @@ def strict_gated_attention_fwd_varlen(
             ``k[cu_seqlens_k[i]:cu_seqlens_k[i+1]]`` at absolute positions ``0..len_k-1``.
         gate_logits: ``(Tq, H_Q*128)`` bf16 output of the attention gate projection of the
             layer input (input_layernorm output).
-        cu_seqlens_q, cu_seqlens_k: ``(B+1,)`` int32 packed offsets.
-        q_pos: ``(Tq,)`` int32 absolute positions of the queries (chunked prefill: the queries
-            are the last ``len_q`` positions of the sequence; ``q_pos`` says which).
+        cu_seqlens_q, cu_seqlens_k: ``(B+1,)`` int32 packed offsets (start at 0,
+            non-decreasing, end at ``Tq`` / ``Tk``).
+        q_pos: ``(Tq,)`` int32 absolute positions of the queries, ``0 <= q_pos < len_k`` of
+            the query's sequence (chunked prefill: the queries are the last ``len_q``
+            positions of the sequence; ``q_pos`` says which).
         window: ``None`` for a global (full causal) layer, ``2048`` for a local layer.
-        max_seqlen_q: optional host-side ``max(len_q)`` (avoids one device sync).
+        max_seqlen_q: optional host-side ``max(len_q)`` (avoids the host validation's sync).
         tile_mode: ``"token"`` / ``"head"`` to force a tile shape; default picks by length.
         num_q_heads, num_kv_heads: per-rank head counts (``SUPPORTED_HEAD_GEOMETRIES``).
+        seq_meta: optional :class:`~rl_engine.models.muse_glimmer.triton.gated_attention_bwd.
+            SequenceMeta` from ``prepare_sequence_meta`` on these exact ``cu_seqlens``/``q_pos``
+            tensors: host-validated packing, no synchronisation here.
+
+    Validation (fail closed): with ``seq_meta`` the packing was validated when the meta was
+    built (identity/version check only, no sync); without it and without ``max_seqlen_q`` the
+    wrapper validates on the host (:func:`validate_varlen_packing`, one sync, ``ValueError``);
+    with only ``max_seqlen_q`` the kernel checks the same conditions and the coverage of the
+    grid, and a violation raises a device-side assert (:data:`METADATA_ASSERT_MSG`) at the next
+    synchronisation. The in-kernel checks run on every path (one 4-byte fill + one assert
+    launch per call).
 
     Returns:
         ``(y, o, lse)``: gated output bf16 ``(Tq, H_Q*128)``, pre-gate output bf16
@@ -241,20 +361,33 @@ def strict_gated_attention_fwd_varlen(
         q_pos.dtype == torch.int32 and q_pos.shape == (q.shape[0],) and q_pos.device == q.device,
         "q_pos must be int32 of shape (Tq,) on q's device",
     )
-    max_seqlen_q = _resolve_max_seqlen_q(cu_seqlens_q, max_seqlen_q)
+    if seq_meta is not None:
+        meta = _bwd._resolve_meta(seq_meta, cu_seqlens_q, cu_seqlens_k, q_pos, k.shape[0])
+        if max_seqlen_q is None:
+            max_seqlen_q = meta.max_seqlen_q
+        _check(
+            int(max_seqlen_q) >= meta.max_seqlen_q,
+            f"max_seqlen_q={int(max_seqlen_q)} is below the packing's {meta.max_seqlen_q}",
+        )
+    elif max_seqlen_q is None:
+        max_seqlen_q = validate_varlen_packing(
+            cu_seqlens_q, cu_seqlens_k, q_pos, num_k_tokens=k.shape[0]
+        )
+    max_seqlen_q = _check_max_seqlen_q(max_seqlen_q, q.shape[0])
     mode = _resolve_tile_mode(max_seqlen_q, tile_mode)
-    dummy = torch.zeros((1,), dtype=torch.int32, device=q.device)
+    cu_q = cu_seqlens_q.contiguous()
     return _launch(
         q=q,
         gate_logits=gate_logits,
         k=k,
         v=v,
         q_pos=q_pos.contiguous(),
-        cu_seqlens_q=cu_seqlens_q.contiguous(),
+        cu_seqlens_q=cu_q,
         cu_seqlens_k=cu_seqlens_k.contiguous(),
-        seq_lens=dummy,
-        block_table=dummy,
+        seq_lens=cu_q,  # unused on the varlen path (any int32 pointer)
+        block_table=cu_q,  # unused on the varlen path
         max_pages=0,
+        num_k_rows=k.shape[0],
         num_seqs=num_seqs,
         max_seqlen_q=max_seqlen_q,
         window=window,
@@ -271,7 +404,8 @@ def paged_query_positions(
     """Absolute positions of packed queries that are the last ``len_q`` tokens of each sequence.
 
     ``q_pos[t] = seq_lens[b] - len_q[b] + (t - cu_seqlens_q[b])`` for ``t`` in sequence ``b``.
-    Pure device arithmetic (no host sync).
+    Pure device arithmetic (no host sync). The paged kernel derives the same positions itself;
+    this helper is kept for callers that need them on the host side (e.g. RoPE tables, tests).
     """
     lens_q = (cu_seqlens_q[1:] - cu_seqlens_q[:-1]).to(torch.int64)
     num_seqs = lens_q.numel()
@@ -303,16 +437,27 @@ def strict_gated_attention_fwd_paged(
 
     Args:
         q, gate_logits: as in :func:`strict_gated_attention_fwd_varlen`; the queries of
-            sequence ``i`` are its last ``len_q_i`` positions (decode: ``len_q_i == 1``).
+            sequence ``i`` are its last ``len_q_i`` positions (decode: ``len_q_i == 1``). The
+            kernel derives their absolute positions ``seq_lens[i] - len_q_i + t``.
         k_cache, v_cache: ``(num_pages, 16, H_KV, 128)`` bf16 (``H_KV = 2`` at TP1).
-        block_table: ``(B, max_pages)`` int32 physical page per logical page; ``-1`` marks a
-            page that was never allocated or was evicted. Evicted pages are never read: the
-            kernel masks every key at position ``<= q_pos - window`` before it touches the
-            table, so eviction timing cannot change bits.
+        block_table: ``(B, max_pages)`` int32 physical page per logical page. Every page that
+            holds a key some query of the call can see must be a live page id in
+            ``[0, num_pages)``; ``-1`` (never allocated / evicted) is allowed only for pages
+            no query can see (positions ``>= seq_lens``, or ``<= p - window`` for the smallest
+            query position ``p`` of the sequence). Those entries are never read; a ``-1`` or
+            out-of-range id under a visible key fails closed (device-side assert), it is not
+            treated as "masked".
         seq_lens: ``(B,)`` int32 total keys per sequence including the new tokens, which the
-            caller has already written to the cache.
+            caller has already written to the cache; ``len_q <= seq_lens <= max_pages * 16``.
+        cu_seqlens_q: ``(B+1,)`` int32 (start at 0, non-decreasing, end at ``Tq``).
         window: ``None`` (global) or ``2048`` (local).
+        max_seqlen_q: optional host-side ``max(len_q)`` (vLLM: ``max_query_len``); without it
+            the wrapper validates ``cu_seqlens_q``/``seq_lens`` on the host (one sync).
         num_q_heads, num_kv_heads: per-rank head counts (``SUPPORTED_HEAD_GEOMETRIES``).
+
+    Validation cost on the hot path (``max_seqlen_q`` given): Python shape checks, one 4-byte
+    fill and one ``torch._assert_async`` launch; the kernel checks ``cu_seqlens_q``, the grid
+    coverage, ``seq_lens`` and every visible key's page id. No host synchronisation.
 
     Returns:
         ``(y, o, lse)`` exactly as the varlen path, bitwise.
@@ -338,22 +483,26 @@ def strict_gated_attention_fwd_paged(
         and seq_lens.device == q.device,
         "seq_lens must be int32 (B,) on q's device",
     )
-    max_seqlen_q = _resolve_max_seqlen_q(cu_seqlens_q, max_seqlen_q)
+    max_pages = int(block_table.shape[1])
+    if max_seqlen_q is None:
+        max_seqlen_q = validate_paged_packing(
+            cu_seqlens_q, seq_lens, num_q_tokens=q.shape[0], max_pages=max_pages
+        )
+    max_seqlen_q = _check_max_seqlen_q(max_seqlen_q, q.shape[0])
     mode = _resolve_tile_mode(max_seqlen_q, tile_mode)
     cu_q = cu_seqlens_q.contiguous()
-    seq_lens = seq_lens.contiguous()
-    q_pos = paged_query_positions(cu_q, seq_lens, q.shape[0])
     return _launch(
         q=q,
         gate_logits=gate_logits,
         k=k_cache,
         v=v_cache,
-        q_pos=q_pos,
+        q_pos=cu_q,  # unused on the paged path: the kernel derives the positions
         cu_seqlens_q=cu_q,
-        cu_seqlens_k=cu_q,
-        seq_lens=seq_lens,
+        cu_seqlens_k=cu_q,  # unused on the paged path
+        seq_lens=seq_lens.contiguous(),
         block_table=block_table.contiguous(),
-        max_pages=int(block_table.shape[1]),
+        max_pages=max_pages,
+        num_k_rows=int(k_cache.shape[0]),
         num_seqs=num_seqs,
         max_seqlen_q=max_seqlen_q,
         window=window,
@@ -387,12 +536,18 @@ def gated_attention_forward_fp32(
     ``(y, o, lse)`` in ``dtype`` (unrounded; the kernel's bf16 outputs are compared to them
     with the WS1 attention tolerance).
 
-    Reduction order: identical to the kernel — KV blocks of 64 keys aligned at absolute
-    position 0, ascending, with the same online-softmax update order and the same casts
-    (``p -> bf16`` before the PV product, ``o -> bf16`` before the gate). The two inner
-    contractions (``sum over d`` of ``q*k`` and ``sum over the 64 keys`` of ``p*v``) are
-    torch reductions over a fixed-size trailing axis: deterministic for a given shape and
-    device, accumulated in ``dtype``. No matmul / SDPA.
+    Reduction order: the kernel's — KV blocks of 64 keys aligned at absolute position 0,
+    ascending, with the same online-softmax update order and the same casts (``p -> bf16``
+    before the PV product, ``o -> bf16`` before the gate). The two inner contractions (``sum
+    over d`` of ``q*k`` and ``sum over the 64 keys`` of ``p*v``) are torch reductions over a
+    fixed-size trailing axis: deterministic for a given shape and device, accumulated in
+    ``dtype``. No matmul / SDPA.
+
+    Not the kernel's instruction sequence (tolerance reference, not bitwise): the kernel's
+    ``tl.exp`` is ``ex2.approx(x * log2 e)`` (here ``torch.exp``), its divisions flush
+    subnormals (``div.rn.ftz``), ``l*alpha + rowsum`` is one fused multiply-add, and the PV
+    products accumulate into ``acc*alpha`` inside the MMA (here ``acc*alpha + sum(p*v)``).
+    See ``trace()["compiled_arithmetic"]``.
     """
     _check(q.dim() == 3 and k.dim() == 3 and v.dim() == 3, "golden expects 3-D q/k/v")
     tq, hq, d = q.shape
@@ -487,9 +642,39 @@ def trace() -> dict[str, Any]:
         "casts": [
             "scores fp32 (tl.dot bf16xbf16->fp32, K=128), scaled in fp32",
             "p -> bf16 before the PV dot (K=64)",
-            "o = div_rn(acc, l) fp32 -> bf16",
+            "o = div_rn(acc, l) fp32 (div.rn.ftz.f32) -> bf16",
             "y = (o_bf16->fp32) * sigmoid(g->fp32) fp32 -> bf16 (elementwise over 4096)",
         ],
+        # What the compiled kernel executes (Triton 3.7.1, sm80, enable_fp_fusion=True default;
+        # PTX/TTGIR inspected in wave B, review gated_attention_fwd:R5). Kernel-vs-kernel parity
+        # (tiles, TP shards, paged/varlen, chunking) holds because every variant compiles the same
+        # sequence; the torch golden differs in these points and is a tolerance reference only.
+        "compiled_arithmetic": {
+            "exp": "tl.exp(x) = ex2.approx.f32(x * log2(e)) (the exp2 form; golden: torch.exp)",
+            "log": "tl.log = libdevice __nv_logf with FTZ (fma.rn.ftz polynomial)",
+            "division": (
+                "libdevice.div_rn -> div.rn.ftz.f32: IEEE round-to-nearest, subnormal operands "
+                "and results flushed to zero (o = acc/l and the gate sigmoid)"
+            ),
+            "l_update": "l = l*alpha + rowsum(p) contracts to one fma.rn.f32 (single rounding)",
+            "acc_update": (
+                "acc*alpha is a separate mul.f32; the PV tl.dot accumulates into it inside the "
+                "MMA (tt.dot %p_bf16, %v, %acc_scaled), not dot-then-add"
+            ),
+            "rowsum": "tl.sum over 64 keys: warps split along keys (warpsPerCTA=[1,4])",
+        },
+        "window_values": (
+            "the wrappers accept window None or any positive int (tiny-model tests use small "
+            "windows); Muse-Glimmer-30B bindings must pass exactly 2048 (= SLIDING_WINDOW)"
+        ),
+        "validation": (
+            "fail closed: cu_seqlens (start 0, monotone, end = rows), grid coverage "
+            "(max_seqlen_q), 0 <= q_pos < len_k, len_q <= seq_lens <= max_pages*16 and every "
+            "visible key's page id in [0, num_pages): host ValueError when the wrapper syncs "
+            "anyway (max_seqlen_q None) or a SequenceMeta is given, otherwise in-kernel checks "
+            "+ torch._assert_async (one 4-byte fill + one assert launch per call, no sync)"
+        ),
+        "paged_positions": "derived in the kernel: seq_lens[b] - len_q + t",
         "gqa": "q head h reads kv head h // 16 (rank-local: h_local // (H_Q // H_KV))",
         "head_geometries": [list(g) for g in SUPPORTED_HEAD_GEOMETRIES],
         "head_tile_rows": (
@@ -509,13 +694,14 @@ def trace() -> dict[str, Any]:
         "_gated_attention_fwd_kernel",
         "autotune": False,
         "tf32": False,
-        "exp": "tl.exp fp32",
+        "exp": "tl.exp fp32 (ex2.approx.f32(x * log2 e), see compiled_arithmetic)",
         "split_kv": "disabled",
     }
 
 
 __all__ = [
     "HEAD_TILE_MAX_Q",
+    "METADATA_ASSERT_MSG",
     "SLIDING_WINDOW",
     "SOFTMAX_SCALE",
     "SUPPORTED_HEAD_GEOMETRIES",
@@ -526,4 +712,6 @@ __all__ = [
     "strict_gated_attention_fwd_paged",
     "strict_gated_attention_fwd_varlen",
     "trace",
+    "validate_paged_packing",
+    "validate_varlen_packing",
 ]

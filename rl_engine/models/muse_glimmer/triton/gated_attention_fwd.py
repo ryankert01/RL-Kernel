@@ -29,6 +29,13 @@ Reduction order (per query row, fp32 unless stated):
   flattened channels of the gate projection; ``lse = m + log(l)`` fp32.
 * GQA: query head ``h`` reads KV head ``h // 16``.
 
+Compiled form (Triton 3.7.1, sm80, default ``enable_fp_fusion=True``; PTX/TTGIR inspected):
+``tl.exp(x)`` is ``ex2.approx.f32(x * log2 e)`` (the exp2 form), ``tl.log`` is libdevice
+``__nv_logf`` with FTZ, ``libdevice.div_rn`` is ``div.rn.ftz.f32`` (round-to-nearest, subnormals
+flushed), ``l * alpha + rowsum(p)`` contracts to one ``fma.rn.f32``, and the PV ``tl.dot``
+accumulates into ``acc * alpha`` inside the MMA. Every tile / TP / paged variant compiles the
+same sequence (bitwise parity); the torch golden does not (tolerance reference only).
+
 Cast points: inputs bf16; scores/p/l/acc fp32; ``p`` rounded to bf16 once before the PV dot;
 ``o`` rounded to bf16 once; ``y`` rounded to bf16 once. No other rounding.
 
@@ -103,15 +110,16 @@ INT32_MAX = tl.constexpr(2147483647)
 def sigmoid_rn(x):
     """Output-gate sigmoid shared by the forward and the backward: ``1 / (1 + exp(-x))`` fp32.
 
-    ``tl.exp`` fp32 and an IEEE round-to-nearest division (``libdevice.div_rn``): Triton's
-    default fp32 ``/`` may lower to the approximate ``div.full.f32``. Both kernels must call this
+    ``tl.exp`` fp32 (``ex2.approx(x * log2 e)``) and a round-to-nearest division
+    (``libdevice.div_rn`` = ``div.rn.ftz.f32``): Triton's default fp32 ``/`` may lower to the
+    approximate ``div.full.f32``. Both kernels must call this
     helper so the gradient differentiates the same function that produced ``y``.
     """
     one = tl.zeros_like(x) + 1.0
     return libdevice.div_rn(one, one + tl.exp(-x))
 
 
-@triton.jit
+@triton.jit(do_not_specialize=["num_q_tok", "num_k_tok"])
 def _gated_attention_fwd_kernel(
     q_ptr,
     gate_ptr,
@@ -125,9 +133,12 @@ def _gated_attention_fwd_kernel(
     cu_k_ptr,
     seq_lens_ptr,
     block_table_ptr,
+    status_ptr,
     sm_scale,
     window,
     max_pages,
+    num_q_tok,
+    num_k_tok,
     H_Q: tl.constexpr,
     H_KV: tl.constexpr,
     D: tl.constexpr,
@@ -143,15 +154,47 @@ def _gated_attention_fwd_kernel(
     grid = (tiles, sequences, H_Q) for TOKEN tiles, (max_len_q, sequences, H_KV) for HEAD
     tiles. ``q``/``gate``/``y``/``o`` are packed ``(T, H_Q*D)`` rows, ``lse`` is ``(T, H_Q)``.
     Varlen K/V are ``(Tk, H_KV, D)``; paged caches are ``(num_pages, PAGE, H_KV, D)``.
+
+    Fail closed (``status_ptr``: one int32 the wrapper sets to 1 and asserts on): a program
+    that finds invalid metadata stores 0 there. Checked before any data access: ``cu_q`` (and
+    ``cu_k`` on the varlen path) start at 0, are non-decreasing and end at ``num_q_tok``
+    (``num_k_tok``); the grid covers every query (``len_q <= rows of grid axis 0``, i.e. the
+    caller's ``max_seqlen_q`` is not under-reported); paged: ``len_q <= seq_lens[b] <=
+    max_pages * PAGE``. Such a program returns without reading or writing anything. Per row
+    (varlen): ``0 <= q_pos < len_k``. Per visible key (paged): its block-table entry lies in
+    ``[0, num_k_tok)`` (= ``num_pages``); a bad entry is never dereferenced. Paged query
+    positions are derived here: ``pos = seq_lens[b] - len_q + t`` (the last ``len_q`` keys).
     """
     GROUP: tl.constexpr = H_Q // H_KV
     pid_m = tl.program_id(0)
     b = tl.program_id(1)
     pid_h = tl.program_id(2)
+    last_b = tl.num_programs(1) - 1
 
     q_start = tl.load(cu_q_ptr + b).to(tl.int64)
     q_end = tl.load(cu_q_ptr + b + 1).to(tl.int64)
     len_q = q_end - q_start
+
+    # ---- fail-closed metadata checks (no data is touched before they pass) ----------------
+    bad = (q_start < 0) | (q_end < q_start) | (q_end > num_q_tok)
+    bad = bad | ((b == 0) & (q_start != 0)) | ((b == last_b) & (q_end != num_q_tok))
+    if HEAD_TILE:
+        bad = bad | (len_q > tl.num_programs(0))
+    else:
+        bad = bad | (len_q > tl.num_programs(0).to(tl.int64) * BLOCK_M)
+    if PAGED:
+        len_k = tl.load(seq_lens_ptr + b)
+        bad = bad | (len_k < len_q) | (len_k > max_pages * PAGE)
+        bt_row = block_table_ptr + b.to(tl.int64) * max_pages
+    else:
+        k_start = tl.load(cu_k_ptr + b).to(tl.int64)
+        k_end = tl.load(cu_k_ptr + b + 1).to(tl.int64)
+        bad = bad | (k_start < 0) | (k_end < k_start) | (k_end > num_k_tok)
+        bad = bad | ((b == 0) & (k_start != 0)) | ((b == last_b) & (k_end != num_k_tok))
+        len_k = (k_end - k_start).to(tl.int32)
+    if bad:
+        tl.store(status_ptr, 0)
+        return
 
     offs_d = tl.arange(0, D)
     offs_n = tl.arange(0, BLOCK_N)
@@ -166,7 +209,13 @@ def _gated_attention_fwd_kernel(
         row_head = pid_h * GROUP + tl.arange(0, BLOCK_M)
         # rows >= GROUP exist only for TP4/TP8 shards (group 8/4); they are masked everywhere
         row_valid = tl.arange(0, BLOCK_M) < GROUP
-        pos_scalar = tl.load(q_pos_ptr + q_start + tok)
+        if PAGED:
+            # the queries are the last len_q keys of the sequence (len_q <= len_k checked)
+            pos_scalar = len_k - len_q.to(tl.int32) + tok.to(tl.int32)
+        else:
+            pos_scalar = tl.load(q_pos_ptr + q_start + tok)
+            if (pos_scalar < 0) | (pos_scalar >= len_k):
+                tl.store(status_ptr, 0)
         pos_rows = pos_scalar + tl.zeros([BLOCK_M], dtype=tl.int32)
         p_min = pos_scalar
         p_max = pos_scalar
@@ -178,20 +227,20 @@ def _gated_attention_fwd_kernel(
         row_tok = tok0 + tl.arange(0, BLOCK_M).to(tl.int64)
         row_head = pid_h + tl.zeros([BLOCK_M], dtype=tl.int32)
         row_valid = row_tok < len_q
-        pos_rows = tl.load(q_pos_ptr + q_start + row_tok, mask=row_valid, other=-1)
+        if PAGED:
+            pos_rows = len_k - len_q.to(tl.int32) + row_tok.to(tl.int32)
+            pos_rows = tl.where(row_valid, pos_rows, -1)
+        else:
+            pos_rows = tl.load(q_pos_ptr + q_start + row_tok, mask=row_valid, other=-1)
+            pos_bad = row_valid & ((pos_rows < 0) | (pos_rows >= len_k))
+            zero_rows = tl.zeros([BLOCK_M], dtype=tl.int32)
+            tl.store(status_ptr + zero_rows, zero_rows, mask=pos_bad)
         p_min = tl.min(tl.where(row_valid, pos_rows, INT32_MAX), axis=0)
         p_max = tl.max(pos_rows, axis=0)
 
     # q tile (BLOCK_M, D) bf16. Row offsets are shared with gate/y/o (same (T, H_Q*D) layout).
     row_off = (q_start + row_tok) * (H_Q * D) + row_head.to(tl.int64) * D
     q = tl.load(q_ptr + row_off[:, None] + offs_d[None, :], mask=row_valid[:, None], other=0.0)
-
-    if PAGED:
-        len_k = tl.load(seq_lens_ptr + b)
-        bt_row = block_table_ptr + b.to(tl.int64) * max_pages
-    else:
-        k_start = tl.load(cu_k_ptr + b).to(tl.int64)
-        len_k = (tl.load(cu_k_ptr + b + 1).to(tl.int64) - k_start).to(tl.int32)
 
     if LOCAL:
         win_lo = p_min - window  # keys must satisfy k_pos > win_lo
@@ -211,9 +260,16 @@ def _gated_attention_fwd_kernel(
         if LOCAL:
             key_ok = key_ok & (k_pos > win_lo)
         if PAGED:
-            page = tl.load(bt_row + k_pos // PAGE, mask=key_ok, other=-1)
-            key_ok = key_ok & (page >= 0)
-            page = tl.where(page >= 0, page, 0).to(tl.int64)
+            # Every key_ok key is needed by some row of the tile (rows are consecutive
+            # positions), so its page must be live: an entry outside [0, num_pages) is a cache
+            # bug (evicted pages hold only keys <= p_min - W, never key_ok). Fail closed and
+            # never dereference it.
+            page = tl.load(bt_row + k_pos // PAGE, mask=key_ok, other=0)
+            page_bad = key_ok & ((page < 0) | (page >= num_k_tok))
+            zero_keys = tl.zeros([BLOCK_N], dtype=tl.int32)
+            tl.store(status_ptr + zero_keys, zero_keys, mask=page_bad)
+            key_ok = key_ok & (page >= 0) & (page < num_k_tok)
+            page = tl.where(key_ok, page, 0).to(tl.int64)
             kv_off = page * (PAGE * H_KV * D) + (k_pos % PAGE).to(tl.int64) * (H_KV * D)
         else:
             kv_off = (k_start + k_pos.to(tl.int64)) * (H_KV * D)
@@ -241,8 +297,8 @@ def _gated_attention_fwd_kernel(
         acc = acc * alpha[:, None] + tl.dot(p.to(tl.bfloat16), v, allow_tf32=False)
         m_i = m_new
 
-    # IEEE round-to-nearest divisions (libdevice div_rn) so the golden's torch division is
-    # the same operation; Triton's default fp32 `/` may lower to the approximate div.full.
+    # Round-to-nearest divisions (libdevice div_rn -> div.rn.ftz.f32: IEEE-RN except that
+    # subnormals flush to zero); Triton's default fp32 `/` may lower to the approximate div.full.
     l_b = tl.broadcast_to(l_i[:, None], (BLOCK_M, D))
     o = libdevice.div_rn(acc, l_b)
     o_bf16 = o.to(tl.bfloat16)

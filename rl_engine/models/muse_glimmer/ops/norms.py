@@ -28,7 +28,9 @@ round-to-nearest sqrt and division (the chosen "rsqrt form"; NOT approximate rsq
 ``xhat = x * inv``; gain ``(1 + w)``/``w`` applied in fp32; cast once. The golden's ``ss`` is
 summed as 32-wide chunk partials then over the H/32 partials (fixed shapes -> fixed torch
 kernels); the kernel's ``ss`` is ``tl.sum`` over a zero-padded ``BLOCK_H`` block. They agree to
-fp32 rounding, not bitwise; everything after ``ss`` is a sequence of IEEE-RN ops on both sides.
+fp32 rounding, not bitwise; everything after ``ss`` is a sequence of IEEE-RN ops on both sides,
+provided the torch side divides by a TENSOR (:func:`div_ieee`): in torch CUDA, ``t / python_float``
+is ``t * (1 / python_float)`` (two roundings), not a division.
 
 Backward (all strict ops): row-local fp32 VJP of y = xhat * g; weight gradients are fp32 per-row
 partials ``dy * xhat`` reduced by ``colsum_fixed_order`` (left fold over 32-row blocks, then over
@@ -78,12 +80,28 @@ def _sum_squares_fp32(x32: torch.Tensor) -> torch.Tensor:
     return partial.sum(dim=-1)
 
 
+def div_ieee(t: torch.Tensor, divisor: float) -> torch.Tensor:
+    """IEEE round-to-nearest ``t / divisor`` on every device (the kernels' ``div_rn``).
+
+    The divisor is a 0-dim tensor on ``t``'s device, never a Python number: ATen's CUDA division
+    by a CPU scalar is ``t * (1 / divisor)`` (two roundings; it differs from ``div_rn`` in ~46 %
+    of the rows at H=6656), while CPU division by a scalar is a true division, so ``t / float``
+    would make the golden device-dependent.
+    """
+
+    return torch.div(t, torch.full((), float(divisor), dtype=t.dtype, device=t.device))
+
+
 def inv_rms_fp32(x32: torch.Tensor, eps: float) -> torch.Tensor:
-    """inv = 1 / sqrt(sum(x^2) / H + eps) in fp32 with IEEE-RN sqrt and division. Shape (...,)."""
+    """inv = 1 / sqrt(sum(x^2) / H + eps) in fp32 with IEEE-RN sqrt and division. Shape (...,).
+
+    ``ms = div_ieee(ss, H)`` (true division, see :func:`div_ieee`); ``1.0 / t`` is
+    ``reciprocal(t) * 1.0`` in torch, i.e. one IEEE-RN division on both devices.
+    """
 
     if x32.dtype != torch.float32:
         raise TypeError("inv_rms_fp32 expects an fp32 tensor")
-    ms = _sum_squares_fp32(x32) / float(x32.shape[-1])
+    ms = div_ieee(_sum_squares_fp32(x32), x32.shape[-1])
     return 1.0 / torch.sqrt(ms + float(eps))
 
 
@@ -384,6 +402,12 @@ def fused_post_norm_residual_pre_norm(
     """
 
     form = _pre_form_code(pre_form)
+    devices = {t.device for t in (branch, resid, w_post, w_pre)}
+    if len(devices) != 1:
+        raise RuntimeError(
+            "fused_post_norm_residual_pre_norm: branch, resid, w_post and w_pre must share one "
+            f"device, got {sorted(str(d) for d in devices)}"
+        )
     _check_norm_inputs(branch, w_post, strict_dtype=True)
     _check_norm_inputs(resid, w_pre, strict_dtype=True)
     if branch.shape != resid.shape:
@@ -526,6 +550,7 @@ __all__ = [
     "centered_rmsnorm",
     "centered_rmsnorm_fp32",
     "declared_cast_bf16",
+    "div_ieee",
     "fused_post_norm_residual_pre_norm",
     "fused_post_norm_residual_pre_norm_fp32",
     "inv_rms_fp32",

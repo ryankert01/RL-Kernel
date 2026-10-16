@@ -1,5 +1,47 @@
 # REPORT — gated attention BACKWARD (rows `global_gated_attention`, `local_gated_attention_train`)
 
+## Wave B update (review wave A2) — backward kernels unchanged, bits unchanged
+
+Tests (final code, one A100 of pool 3,7): the three owned files 223 passed, 1 skipped
+(test_gated_attention_bwd.py: 75 tests, all passed); log
+`reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/tests_owned.log.txt`. Distributed CP
+tests NOT re-run in this wave (one GPU at a time).
+
+- **Backward bits**: the 14 backward digests of `gated_attention_bench digest` (dq, dk, dv,
+  dgate at T = 1..4096, global + local) are identical to f91e8b6
+  (`reports/muse_glimmer_poc/data/kernels_attention_raw/waveB/digest_cmp.json`).
+- **Autograd validates in the forward (gated_attention_fwd:R1/R4).** Without `seq_meta`,
+  `GatedAttentionFn.forward` now calls `prepare_sequence_meta` when any input requires grad and
+  hands the meta to the forward wrapper (no extra sync there) and to the backward (no sync
+  there): a packing the backward rejects (non-contiguous `q_pos`, `cu_seqlens_k[-1] != Tk`, ...)
+  now fails before the forward kernel runs, and a layer pays 2 D2H copies per forward+backward
+  instead of 1 (forward) + 2 (backward). Test `test_autograd_validates_in_forward_and_reuses_meta`
+  (backward under `set_sync_debug_mode("error")`; fails on f91e8b6). With a per-micro-batch meta
+  the whole op stays sync-free (unchanged).
+- **Megatron binding (kernels_attention:R5)**: since c88607f, `strict_kernels.resolve_ops` binds
+  `GatedAttentionFn` (the sibling op) for the Megatron path, which passes no `seq_meta`, so every
+  layer pays the 2 copies above. Request to the integrator: build one `SequenceMeta` per
+  micro-batch with `prepare_sequence_meta` and pass it to `gated_attention(..., seq_meta)`.
+- **CP evidence (kernels_attention:R4).** `test_one_shot_equals_cp1_path` is now labelled a
+  plumbing check (at CP1 the runtime calls the same preprocess -> partials -> combine as the
+  one-shot entry, so equality is by construction). New
+  `test_cp_backward_plumbing_cp4_cp8`: the real `runtime/cp_attention.cp_gated_attention_backward`
+  of every rank at CP4 and CP8 on one GPU with a replayed all_gather (record pass, then the
+  rank-ordered concatenation NCCL would return); dq/dk/dv/dgate concatenated over ranks equal the
+  one-shot kernel bitwise at T = 2048 (CP4, CP8) and 2100 (CP4), global + local.
+- **TP tree assertions (kernels_attention:R8)**: `test_tp_head_shards_equal_tp1_slices` docstring
+  now says the per-rank partial equality carries the evidence and the final tree assertions are
+  documentation of the binding recipe (same adds on bitwise-equal operands).
+- **SequenceMeta precondition (kernels_attention:R7)**: documented in the class docstring — the
+  meta is bound by identity + `_version`, so a write that bypasses PyTorch's version counter
+  (Triton/CUDA kernel or NCCL into a persistent buffer, `.data`) is not detected; the forward
+  kernel's device-side checks still catch a stale meta's out-of-range packing in the forward.
+- **Local SDPA backward ratio (kernels_attention:R3)**: the SDPA backward baseline is the
+  full-causal flash backward, so local-layer ratios are not comparable. The JSON now stores
+  `ratio: null` + `baseline_not_comparable` for every local backward row; the "2.08x (local)"
+  figure below is withdrawn. No windowed backward baseline exists in the envs (vLLM's FA2 build is
+  forward-only).
+
 ## v2 update (wave A) — supersedes the v1 sections below where they disagree
 
 Kernel id `muse_glimmer.triton.gated_attention_bwd.v2`. Machine-readable results (raw mismatch
@@ -14,7 +56,7 @@ Measured on A100-SXM4-80GB, torch 2.13.0+cu130, Triton 3.7.1 (`~/envs/vllm`), GP
 | One-shot kernel == CP path (cp_attention CP1, simulated CP2/4/8, real CP2 on 2 GPUs) | 0 for dq/dk/dv/dgate, T in {2048, 2100, 4096, 8192} |
 | Forward bits vs the old forward (c88607f) | 66/66 digests identical |
 | Backward bits vs v1 | dq, dgate changed (sigmoid fix); dk, dv changed (query-chunk rule + sigmoid) |
-| Backward time vs v1 (7 alternating rounds, median) | +5..14 % at T >= 1024, +55 % at T = 512; 2.52x / 2.08x SDPA causal bwd at T = 4096 global / local |
+| Backward time vs v1 (7 alternating rounds, median) | +5..14 % at T >= 1024, +55 % at T = 512; 2.52x SDPA causal bwd at T = 4096 (global; the local SDPA ratio is not comparable, see wave B) |
 
 What changed versus v1:
 1. **dK/dV query-chunk rule (CP-invariant).** Leaves (query chunk c, Q-head group g):
@@ -55,7 +97,8 @@ dv also flip near-zero elements produced by cancellation (max ulp distance ~3e4 
 change is not a last-bit change of every element. Forward outputs: unchanged.
 
 Backward timing before/after (`gated_attention_bench bwd-ab`, ms, median of 7 alternating rounds
-x 10 iterations; SDPA = causal GQA backward without window or gate):
+x 10 iterations; SDPA = causal GQA backward without window or gate; n/c = not comparable: the
+local rows' SDPA baseline does the full-causal work, not the windowed one):
 
 | T | layer | v1 | v2 | v2/v1 | SDPA | v2/SDPA |
 |---|---|---|---|---|---|---|
@@ -64,11 +107,11 @@ x 10 iterations; SDPA = causal GQA backward without window or gate):
 | 2048 | global | 2.013 | 2.124 | 1.05 | 0.813 | 2.61 |
 | 4096 | global | 5.766 | 6.124 | 1.06 | 2.434 | 2.52 |
 | 8192 | global | 19.817 | 20.973 | 1.06 | 8.376 | 2.50 |
-| 512 | local | 0.622 | 0.983 | 1.58 | 0.202 | 4.86 |
-| 1024 | local | 0.891 | 1.009 | 1.13 | 0.316 | 3.19 |
-| 2048 | local | 2.050 | 2.156 | 1.05 | 0.814 | 2.65 |
-| 4096 | local | 4.440 | 5.048 | 1.14 | 2.431 | 2.08 |
-| 8192 | local | 9.547 | 10.818 | 1.13 | 8.407 | 1.29 |
+| 512 | local | 0.622 | 0.983 | 1.58 | 0.202 (full causal) | n/c |
+| 1024 | local | 0.891 | 1.009 | 1.13 | 0.316 (full causal) | n/c |
+| 2048 | local | 2.050 | 2.156 | 1.05 | 0.814 (full causal) | n/c |
+| 4096 | local | 4.440 | 5.048 | 1.14 | 2.431 (full causal) | n/c |
+| 8192 | local | 9.547 | 10.818 | 1.13 | 8.407 (full causal) | n/c |
 
 Transient backward memory 0.876 GiB at T = 8192 (v1 0.349 GiB): the fp32 chunk leaves
 `(8, H_Q/4, Tk, 128)` dominate. A fused in-kernel chunk loop with a register-resident tree would

@@ -97,6 +97,80 @@ def test_goldens_match_fp64_cpu():
     _close(pre, _rms64(rnew64, w, EPS_RMS, "centered"), _TOL_FP32)
 
 
+def _ieee_inv_reference(ss: torch.Tensor, hidden: int, eps: float) -> torch.Tensor:
+    """inv from the golden's own ss with a correctly rounded fp32 ss / H (fp64 tensor division on
+    the CPU, rounded once to fp32: exact for division since 53 >= 2 * 24 + 2)."""
+    ms = torch.div(ss.cpu().double(), torch.tensor(float(hidden), dtype=torch.float64)).float()
+    return 1.0 / torch.sqrt(ms.to(ss.device) + float(eps))
+
+
+@pytest.mark.parametrize(
+    "device", ["cpu", pytest.param("cuda", marks=_cuda)]
+)
+def test_golden_mean_square_is_ieee_division(device):
+    """Review norms:R1: the golden's ms = ss / H must be the IEEE division the kernels' div_rn
+    performs, on CPU and CUDA alike (torch CUDA `t / float` is t * (1/float))."""
+    x = _bf16((4096, H), seed=3, scale=2.0, device=device).float()
+    ss = N._sum_squares_fp32(x)
+    want = _ieee_inv_reference(ss, H, EPS_RMS)
+    got = N.inv_rms_fp32(x, EPS_RMS)
+    bad = int((got != want).sum())
+    assert bad == 0, f"{bad}/{got.numel()} rows: golden inv is not 1/sqrt(div_rn(ss, H) + eps)"
+    ms = N.div_ieee(ss, H)
+    ms_other = N.div_ieee(ss.cpu() if device == "cuda" else ss, H).to(ms.device)
+    assert torch.equal(ms, ms_other), "div_ieee differs between CPU and CUDA"
+
+
+@_cuda
+def test_embedding_out_of_range_ids_fail_closed():
+    """Review norms:R2: the kernel maps an out-of-range id to a zero row, so rejection rests on
+    the wrapper's torch._assert_async (device-side assert: poisons the context -> subprocess)."""
+    import subprocess
+    import sys
+
+    child = (
+        "import torch\n"
+        "from rl_engine.models.muse_glimmer.ops import norms as N\n"
+        "w = torch.randn(100, 64, device='cuda').bfloat16()\n"
+        "ok = N.normalized_embedding(w, torch.tensor([3, 99], device='cuda'))\n"
+        "torch.cuda.synchronize()\n"
+        "print('VALID-OK', flush=True)\n"
+        "N.normalized_embedding(w, torch.tensor([3, 100], device='cuda'))\n"
+        "torch.cuda.synchronize()\n"
+        "print('CHILD-OK')\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(
+        [sys.executable, "-c", child], capture_output=True, text=True, env=env, timeout=600
+    )
+    out = proc.stdout + proc.stderr
+    assert "VALID-OK" in out, out[-2000:]
+    assert proc.returncode != 0 and "CHILD-OK" not in out, out[-2000:]
+    assert "token_ids must be in [0, 100)" in out, out[-2000:]
+
+
+def test_fused_rejects_mixed_devices():
+    """Review norms:R2: the fused wrapper checks that all four tensors share one device (before,
+    each tensor was only checked against its own weight)."""
+    b = torch.zeros(2, 64, dtype=torch.bfloat16, device="meta")
+    w = torch.zeros(64, dtype=torch.bfloat16, device="meta")
+    r = torch.zeros(2, 64, dtype=torch.bfloat16, device="cpu")
+    w_r = torch.zeros(64, dtype=torch.bfloat16, device="cpu")
+    with pytest.raises(RuntimeError, match="share one device"):
+        N.fused_post_norm_residual_pre_norm(b, r, w, 1e-8, w_r, 1e-5)
+
+
+@pytest.mark.skipif(torch.cuda.device_count() < 2, reason="needs two visible GPUs")
+def test_fused_rejects_two_gpus():
+    b = torch.zeros(2, 64, dtype=torch.bfloat16, device="cuda:0")
+    w = torch.zeros(64, dtype=torch.bfloat16, device="cuda:0")
+    r = torch.zeros(2, 64, dtype=torch.bfloat16, device="cuda:1")
+    w_r = torch.zeros(64, dtype=torch.bfloat16, device="cuda:1")
+    with pytest.raises(RuntimeError, match="share one device"):
+        N.fused_post_norm_residual_pre_norm(b, r, w, 1e-8, w_r, 1e-5)
+
+
 def test_strict_rejects_non_bf16():
     if not torch.cuda.is_available():
         pytest.skip("CUDA required")

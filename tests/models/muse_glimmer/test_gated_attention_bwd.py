@@ -281,7 +281,13 @@ def test_one_shot_equals_simulated_cp_ranks(mods, window, n):
 @WINDOWS
 @pytest.mark.parametrize("n", [2048, 2100])
 def test_one_shot_equals_cp1_path(mods, window, n):
-    """runtime/cp_attention backward at CP1 (the plan WS2 runs) == the one-shot kernel."""
+    """PLUMBING check: runtime/cp_attention backward at CP1 == the one-shot kernel.
+
+    At cp_world=1 the CP path calls the same preprocess -> partials -> combine sequence as
+    strict_gated_attention_bwd (no all_gather), so equality is by construction and this only
+    catches wiring errors. The CP-invariance evidence is test_one_shot_equals_simulated_cp_ranks
+    and test_cp_backward_plumbing_cp4_cp8 below (and the real CP2 run in tests/distributed).
+    """
     from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa
 
     _gold, _ag, _bwd = mods
@@ -295,6 +301,60 @@ def test_one_shot_equals_cp1_path(mods, window, n):
         assert torch.equal(a, b), f"CP1 path {name} differs from the one-shot kernel"
 
 
+class _ReplayAllGather:
+    """Single-GPU stand-in for an NCCL all_gather over ``world`` CP ranks (two passes).
+
+    Pass 1 (record) stores every rank's input of the i-th call and returns a placeholder; pass 2
+    returns the rank-ordered concatenation, which is exactly what all_gather returns. Every rank
+    therefore runs the real runtime code path (_compact_groups -> all_gather -> rank tree ->
+    _expand_groups -> combine) on its own rows.
+    """
+
+    def __init__(self, world: int, rank: int, store: dict, record: bool) -> None:
+        self.world_size, self.rank, self.store, self.record = world, rank, store, record
+        self.calls = 0
+
+    def all_gather(self, t: torch.Tensor) -> torch.Tensor:
+        key = self.calls
+        self.calls += 1
+        if self.record:
+            self.store.setdefault(key, {})[self.rank] = t.clone()
+            return torch.cat([t] * self.world_size, 0)
+        return torch.cat([self.store[key][r] for r in range(self.world_size)], 0)
+
+
+@WINDOWS
+@pytest.mark.parametrize("n, cp", [(2048, 4), (2048, 8), (2100, 4)], ids=str)
+def test_cp_backward_plumbing_cp4_cp8(mods, window, n, cp):
+    """runtime/cp_attention.cp_gated_attention_backward at CP4 / CP8 on one GPU == one-shot.
+
+    Drives the real CP backward of every rank with a replayed all_gather (review finding
+    kernels_attention:R4): dq/dgate rows and dk/dv concatenated over ranks equal the one-shot
+    kernel bitwise, without 4 or 8 GPUs.
+    """
+    from rl_engine.models.muse_glimmer.runtime import cp_attention as cpa
+
+    inp = make_inputs([n], seed=5000 + n)
+    one, (o, lse) = strict_bwd(mods, inp, window)
+    store: dict = {}
+    outs = {}
+    for record in (True, False):
+        for r in range(cp):
+            plan = cpa.CPAttentionPlan(cp, r)
+            s, e = plan.local_token_range(n)
+            got = cpa.cp_gated_attention_backward(
+                inp["q"][s:e].contiguous(), inp["k"], inp["v"], inp["gate"][s:e].contiguous(),
+                o[s:e].contiguous(), lse[s:e].contiguous(), inp["dy"][s:e].contiguous(),
+                inp["pos"][s:e].contiguous(), plan, _ReplayAllGather(cp, r, store, record),
+                window=window,
+            )
+            if not record:
+                outs[r] = got
+    for i, name in enumerate(("dq", "dk", "dv", "dgate")):
+        cat = torch.cat([outs[r][i] for r in range(cp)], 0)
+        assert torch.equal(cat, one[i]), f"CP{cp} {name} differs from the one-shot kernel"
+
+
 # ------------------------------------------------------------------------------- TP shards
 @WINDOWS
 @pytest.mark.parametrize("tp", [2, 4, 8])
@@ -304,6 +364,14 @@ def test_tp_head_shards_equal_tp1_slices(mods, window, tp):
     dq/dgate rows and the per-group dK/dV partials are compared bitwise; the ranks' sub-tree
     roots, combined in the canonical TP tree (runtime/tp_canonical_tree), equal TP1 dk/dv.
     (Replaces the old simulation that re-associated the same tensors: finding bwd:5.)
+
+    The evidence is the per-rank partial equality (real shard calls of the kernel). The final
+    tree assertions follow from it: they repeat the same fp32 adds on bitwise-equal operands in
+    the same association as TP1's kv_partials_subtree (plus exact +0.0 leaves at the other KV
+    head), so they can only fail on a signed-zero edge case; they document the binding recipe
+    (review finding kernels_attention:R8). The association controls in the parity driver
+    (gated_attention_bench parity, controls_association) show that another fold order does
+    change the bits.
     """
     from rl_engine.models.muse_glimmer.runtime.tp_canonical_tree import combine_tree as tp_tree
 
@@ -590,6 +658,49 @@ def test_seq_meta_removes_host_sync(mods, window):
             q, k, inp["v"], inp["gate"], inp["cu_q"].clone(), inp["cu_k"], inp["pos"], window,
             meta,
         )
+
+
+@WINDOWS
+def test_autograd_validates_in_forward_and_reuses_meta(mods, window):
+    """Without seq_meta the autograd forward builds the SequenceMeta (packing validated before
+    the kernel runs, review gated_attention_fwd:R1/R4) and the backward reuses it: no host
+    synchronisation in the backward. A packing the backward would reject fails in the forward.
+    """
+    _gold, ag, bwd = mods
+    inp = make_inputs([300, 64, 2049], seed=14)
+    _y, o, lse = strict_fwd(inp, window)
+    ref = bwd.strict_gated_attention_bwd(
+        inp["q"], inp["k"], inp["v"], inp["gate"], o, lse, inp["dy"], inp["cu_q"], inp["cu_k"],
+        inp["pos"], window=window,
+    )
+    q = inp["q"].clone().requires_grad_(True)
+    v = inp["v"].clone().requires_grad_(True)
+    y = ag.gated_attention(
+        q, inp["k"], v, inp["gate"], inp["cu_q"], inp["cu_k"], inp["pos"], window
+    )
+    dy = inp["dy"]
+    torch.cuda.synchronize()
+    torch.cuda.set_sync_debug_mode("error")
+    try:
+        y.backward(dy)
+    finally:
+        torch.cuda.set_sync_debug_mode("default")
+    assert torch.equal(q.grad, ref[0]) and torch.equal(v.grad, ref[2])
+    bad_pos = inp["pos"].clone()
+    bad_pos[10] = 50  # not contiguous: the backward's rule, enforced before the forward kernel
+    with pytest.raises(ValueError, match="contiguous"):
+        ag.gated_attention(
+            q, inp["k"], v, inp["gate"], inp["cu_q"], inp["cu_k"], bad_pos, window
+        )
+    bad_cu = inp["cu_k"].clone()
+    bad_cu[-1] += 64  # more keys than k holds
+    with pytest.raises(ValueError, match="cu_seqlens_k"):
+        ag.gated_attention(q, inp["k"], v, inp["gate"], inp["cu_q"], bad_cu, inp["pos"], window)
+    with torch.no_grad():  # no grad: the forward wrapper's own host validation
+        with pytest.raises(ValueError, match="cu_seqlens_k"):
+            ag.gated_attention(
+                inp["q"], inp["k"], inp["v"], inp["gate"], inp["cu_q"], bad_cu, inp["pos"], window
+            )
 
 
 # ------------------------------------------------------------------------------- G5
