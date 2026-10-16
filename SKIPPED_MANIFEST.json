@@ -9,6 +9,7 @@
   "pw",
   "shotenv",
   "shots",
+  "shots_rfc",
   "venv",
   "wheels"
  ],
@@ -30,7 +31,8 @@
   "waveA/review2_kernels_attention/merged",
   "waveA/review2_kernels_attention/old_tree",
   "waveA/review_kernels_rope/old",
-  "verifyB_rope_ref/oldtree"
+  "verifyB_rope_ref/oldtree",
+  "cr/oldtree"
  ],
  "skipped_large_files": [
   {

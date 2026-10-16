@@ -40,3 +40,5 @@ RFC edits = `RFC_CHANGES.md` from `tools/make_rfc_changes.py`. Screenshot QA ven
 State 2026-10-16 ~02:30 UTC: POC COMPLETE on feat/museglimmer-poc (pushed to the fork). Real 30B GRPO strict/strict 0/61139 drift (also in the RFC layout rollout TP2 + train TP4, identical LoRA trajectory); report published as private Artifact https://claude.ai/artifact/Jizn9UfL54zENiYaMki6Xf (rebuild with reports/muse_glimmer_poc/blog/build_blog.py, republish the same file). No upstream PR yet — ask before opening one (target test-museglimmer).
 
 Upstream PR policy: Ryan said the upstream PR scope is the Foundation row only. Opened RL-Align/RL-Kernel#558 as a DRAFT (Ryan asked to keep it draft) (base test-museglimmer, head ryankert01:feat/museglimmer-foundation, 8 foundation files, no CI). Later rows go as separate PRs, only when Ryan asks.
+
+Ryan's node is on-prem: everything must live on GitHub. Fork branches: feat/museglimmer-poc, feat/museglimmer-foundation (PR #558, draft), museglimmer-poc-artifacts (session scratchpad, workflow journals, memory, env freezes). Push new session artifacts there too.
