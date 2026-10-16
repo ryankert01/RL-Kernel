@@ -90,9 +90,81 @@ The repo's strict FA4/CuTe attention and SM90 linear-logp kernels do not run on 
 
 *Where:* final_e2e_lora / runtime layout
 
-vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot be installed into one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, fp32 dL/dlogprob and hash-verified LoRA tensors. Also state the training-side TP limit: with 2 KV heads Megatron replicates KV above TP2, which the strict binding currently fails closed on.
+vLLM 0.31 (torch cu130) and Megatron Bridge + TransformerEngine (torch cu129) cannot share one environment, so the E2E row needs a cross-process trainer bridge that moves only token ids, fp32 dL/dlogprob (applied through the surrogate loss sum(lp*g), whose gradient is exactly g) and hash-verified LoRA tensors. Training-side TP4 now works and equals TP1 bit for bit; TP8 is untested and gated.
 
 *Evidence:* rl_engine/models/muse_glimmer/e2e/REPORT_e2e_loop.md
+
+### F12. Two-pass tile kernels must not contract FP operations
+
+*Where:* Numerical requirements / O7
+
+Pass 2 of the O7 tile statistics recomputes zhat; with FP contraction softcap*tanh(..) - m becomes one FMA, the tile maximum's exp(zhat - m) is no longer exactly 1 and near-certain tokens get logp 1-2 ulp above zero (48/1024 generated tokens on the 30B). State that any quantity recomputed in a later pass must be rounded identically (compile those kernels without FP contraction).
+
+*Evidence:* c88607f; docs/contracts O7 note
+
+### F13. The compiler can erase the declared reduction tree
+
+*Where:* O3 / dense_gemm_qualification
+
+With one K iteration per chunk, Triton folded the 8-leaf tree adds into the MMA accumulation chain (3 of 7 adds left) and about half of the K=256/512 outputs deviated from the contract. Require >= 2 iterations per chunk (static_assert) and a check of the compiled IR in the qualification row; drop the claim that BLOCK_K never changes bits.
+
+*Evidence:* reports/muse_glimmer_poc/data/kernels_gemm.json det_gemm_1_iters_probe
+
+### F14. Column-parallel dA must be combined before rounding
+
+*Where:* WS2 TP / backward
+
+Rounding each rank's dA to bf16 before the all-reduce makes 37-41 % of the elements differ from TP1 at TP2/4/8. Each rank must emit its fp32 sub-tree partial; the partials are combined in the canonical tree and rounded once.
+
+*Evidence:* kernels_gemm.json det_gemm_2_tp_probe; megatron_runtime.json (TP1 == TP2 == TP4 grads)
+
+### F15. Build the RoPE table once, on CUDA, with one function
+
+*Where:* O4 qknorm_scaled_rope
+
+The same formula built on CPU and on CUDA differs in about 20 % of the cos/sin entries; HF's CPU-built inv_freq differs from a GPU build in 4 of 64 entries, which changes 924/933 token logprobs. Keep O4's 'built once, cached, same object' and add: record the table's SHA-256 in both runtimes' provenance and fail the run if they differ.
+
+*Evidence:* kernels_rope.json table_cpu_vs_cuda_per_bucket; ablation.json rope_inv_freq_cuda
+
+### F16. LoRA gradients must not depend on micro-batch packing
+
+*Where:* Training side / LoRA
+
+The first binding's LoRA gradients changed with the micro-batch packing (14,860 of 20,480 elements). The POC now computes the token-axis weight gradient per sequence with det_gemm's 256-token rule and folds sequences left to right in sample order; 512/4096/8192-token packings give identical gradients at TP1/2/4. Declare this rule in the contract.
+
+*Evidence:* megatron_runtime.json packing check; runtime/megatron_lora.py LORA_GRAD_RULE
+
+### F17. Strict mode must fail closed, including runtime selection
+
+*Where:* Strict mode definition
+
+The Megatron binding once fell back to torch/cuBLAS when a strict kernel was missing, and vLLM's V1 model runner bypasses the strict sampler path. List the features that strict mode forbids (V1 runner, prefix caching, KV offload/transfer, speculative decoding, ...) and require a hard error instead of a fallback.
+
+*Evidence:* review_wave_a2.json megatron_runtime:R1; wave B vLLM verify NEW-1
+
+### F18. Weight-sync hashes must be recomputed by every worker
+
+*Where:* weight_sync_identity
+
+The rollout first echoed the hash the orchestrator declared. Each TP worker must recompute muse_glimmer_lora_sha256_v1 on the tensors it actually loaded and the sync passes only if all agree; under torchrun every trainer rank's hash is compared too.
+
+*Evidence:* e2e/sync.py; runtime/strict_rollout_engine.py
+
+### F19. Drift metrics need magnitudes and tie-aware argmax
+
+*Where:* Experiments / ablation
+
+'Tokens with different bits' saturates near 100 % on native stacks; also report |dlogp|, full-vocabulary KL and a breakdown by gold-token probability. bf16 soft-capped logits have exact top-1 ties (16 of 933 positions) and 39 of 45 raw argmax flips fall on a tie, so count ties separately or compare fp32 argmax.
+
+*Evidence:* ablation/REPORT_ablation.md
+
+### F20. Say where the sampled token comes from
+
+*Where:* vLLM rollout
+
+The strict vLLM binding reports strict logprobs but still selects tokens from the native bf16 logits (a declared deviation). State whether strict mode must also sample from the strict logits; logprobs are identical either way, token choices across TP were identical in every strict run.
+
+*Evidence:* runtime/REPORT_vllm_runtime_adapter.md
 
 ## Part 2 — line-by-line audit of the RFC text
 

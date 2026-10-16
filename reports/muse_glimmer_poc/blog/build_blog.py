@@ -515,6 +515,11 @@ ABL_ZH = {
     "packed_batch9": "9 条打包", "packed_batch9_reversed": "9 条打包（倒序）", "right_pad_batch9": "右 padding batch", "left_pad_batch9": "左 padding batch",
     "paged_prefill_batch9": "paged KV prefill", "prefill_alone": "单条 prefill", "decode_alone": "单条逐 token decode", "batched_decode9": "9 条批量 decode",
     "strict_vs_hf_baseline": "严格 vs HF（不同实现）",
+    "chunked_prefill_64__vs__prefill_L_minus_1": "分块 prefill 64（对比一次性 L−1）", "chunked_prefill_256__vs__prefill_L_minus_1": "分块 prefill 256（对比一次性 L−1）",
+    "chunked_prefill_1024__vs__prefill_L_minus_1": "分块 prefill 1024（对比一次性 L−1）", "logits_fp32__vs__softcap_fp32": "logits fp32（对比 softcap fp32）",
+    "rope_elementwise_tf32_on__vs__rope_elementwise": "TF32（逐元素 RoPE 下）", "rollout_like_batched_decode_sdpa__vs__rollout_like_batched_decode": "模拟 rollout 下换 SDPA",
+    "rope_inv_freq_cuda": "RoPE 的 inv_freq 在 GPU 上算", "second_gpu_3_vs_7": "换一张 GPU", "new_process_same_gpu_7": "新进程、同一张卡",
+    "batched_decode72_staggered": "72 路连续批处理 decode", "mixed_step72_staggered": "prefill 和 decode 混在同一步",
 }
 
 
@@ -528,11 +533,11 @@ def sec_ablation() -> str:
   {pending("HF 模型单因素消融")}
 </section>"""
     st = a["settings"]
-    hf = [s for s in st if s["engine"] == "hf"]
+    hf = [s for s in st if s["engine"] == "hf" and s.get("n_factors") in (0, 1) and "@" not in s["setting"]]
     hf.sort(key=lambda s: -s["n_bits_differ"])
     n = hf[0]["n_tokens"] if hf else 933
     c1 = hbars([(ABL_ZH.get(s["setting"], s["setting"]), [s["n_bits_differ"]]) for s in hf], [("bit 不同的 token 数", "s-native")],
-               width=860, bar_h=14, xmax=n, value_fmt=lambda v: f"{v:.0f}", title=f"HF transformers 5.17（原生 bf16）：每次只改一个因素，{n} 个 token 里 logprob 的 bit 变了多少")
+               width=860, bar_h=14, xmax=n, value_fmt=lambda v: f"{v:.0f}", title=f"HF transformers 5.17（原生 bf16）：每次只改一个因素（含 null 对照），{n} 个 token 里 logprob 的 bit 变了多少")
     strict = [s for s in st if s["engine"] == "strict"]
     c2 = hbars([(ABL_ZH.get(s["setting"], s["setting"]), [s["n_bits_differ"]]) for s in strict], [("bit 不同的 token 数", "s-ok")],
                width=860, bar_h=12, xmax=n, value_fmt=lambda v: "0（逐 bit 相同）" if v == 0 else f"{v:.0f}",
@@ -559,9 +564,9 @@ def sec_ablation() -> str:
     return f"""
 <section id="ablation">
   <p class="eyebrow">消融</p>
-  <h2>原生栈的漂移从哪来：几乎任何一个执行细节</h2>
-  <div class="prose"><p>在 HF 模型上一次只改一个因素，对同样 9 条序列打分，和基线逐 bit 比较。TF32、RoPE 表怎么构造、换一张卡、换一个进程都不影响结果（null 对照全是 0）；但 batch 怎么拼、有没有 KV cache、prefill 怎么切、注意力用哪个实现、logits 用什么精度，<b>任何一个</b>都会让 98–99% 的 token 变 bit。rollout 引擎恰好同时改了这几个因素。</p></div>
-  {fig(c1, "")}
+  <h2>原生栈的漂移从哪来：bf16 GEMM 或注意力的形状、调度，任何一处变化</h2>
+  <div class="prose"><p>在 HF 模型上一次只改一个因素，对同样 9 条序列打分，和基线逐 bit 比较。重复跑、换一张卡、换一个进程、打开 TF32、RoPE 改成逐元素构造都是 0。但只要 bf16 GEMM 或注意力的形状、调度变了（拼 batch 加 padding、KV cache 逐 token decode、prefill 少一个 token、SDPA 换 eager、cuBLAS 的降精度归约开关），933 个 token 里就有 918–927 个变 bit；在 GPU 上而不是 CPU 上算 RoPE 的 inv_freq，64 个频率里有 4 个不同，也会让 924 个 token 变 bit。分块 prefill 只影响比块更长的序列：对比一次性 prefill，块 1024 只改了那条 2439 token 的长序列（176/933），块 64 改了 925/933。rollout 引擎恰好同时改了这几个因素。</p></div>
+  {fig(c1, "只列真正的单因素设置和 null 对照；同时改两个因素的设置（例如分块 prefill 对比整段 L 个 token 的训练前向）不在这张图里。")}
   {fig(c2, "严格路径在同一组扰动下（拼 batch、padding、paged KV、逐 token decode、分块 prefill、换卡）全部 0。")}
   {fig(c3, "单个 token 的漂移可以到 0.4–1.1 nat，平均约 0.02 nat。")}
   {fig(c4, "") if c4 else ""}
@@ -738,7 +743,7 @@ def sec_verdict() -> str:
     else:
         tiles.append(("pend", "GRPO：运行中", "四种模式的 30B LoRA GRPO 还没有结果。"))
     if a:
-        tiles.append(("bad", "漂移来源：几乎任何执行细节", "拼 batch、KV cache、分块 prefill、注意力实现、logits 精度，任何一个都会让 98–99% 的 token 变 bit。"))
+        tiles.append(("bad", "漂移来源：执行细节", "拼 batch、KV cache decode、prefill 长度、注意力实现、cuBLAS 归约开关、RoPE 在哪构表：任何一个都让 918–927/933 个 token 变 bit。"))
     cards = "".join(f'<div class="vt vt-{k}"><b>{esc(t)}</b><span>{esc(d)}</span></div>' for k, t, d in tiles)
     return f"""
 <section id="verdict">

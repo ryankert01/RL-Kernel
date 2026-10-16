@@ -52,6 +52,31 @@
  [
   "up",
   "消融：原生漂移的来源",
-  "拼 batch、KV cache、分块 prefill、注意力实现、logits 精度，任何一个都让 98–99% 的 token 变 bit；TF32、RoPE 表、换卡、换进程都是 0。"
+  "拼 batch、KV cache decode、prefill 少一个 token、注意力实现、logits 精度、在 GPU 上算 RoPE 频率，任何一个都让 918–927/933 个 token 变 bit；TF32、换卡、换进程是 0。第一轮把“GPU 上算 inv_freq”误判为 0，review 发现那一项根本没在 GPU 上算。"
+ ],
+ [
+  "up",
+  "TP4 也逐 bit 相同",
+  "Megatron TP1 == TP2 == TP4：logprob、1.05 亿个 LoRA 梯度元素、AdamW 后的 LoRA 哈希全部一致；vLLM TP4 引擎 == TP1。"
+ ],
+ [
+  "up",
+  "梯度与打包方式无关",
+  "LoRA 权重梯度改为逐序列计算、按样本顺序左折叠，micro-batch 512/4096/8192 三种打包下梯度完全一样（以前 14,860/20,480 个元素不同）。"
+ ],
+ [
+  "down",
+  "严格模式会悄悄降级",
+  "review 发现 Megatron 绑定在严格内核缺失时会退回 torch/cuBLAS；改成直接报错。vLLM 在退回 V1 model runner 时也会绕过严格路径，同样改成报错。"
+ ],
+ [
+  "up",
+  "rollout 在极端调度下仍然自洽",
+  "跨越 2048 窗口的长序列、chunked prefill、batch 256、KV 池小到发生 13 次抢占：严格 vLLM 的 decode 与 prefill 全部 0 差异。"
+ ],
+ [
+  "up",
+  "最终三方比对",
+  "参考链、vLLM TP1/2/4、Megatron TP1/2/4 共 8 份结果，加 3 份带 LoRA 的 vLLM 结果，全部来自 O7 修复之后、三个独立分支，组内 0/933 不同。"
  ]
 ]
