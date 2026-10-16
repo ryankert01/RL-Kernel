@@ -123,3 +123,6 @@ Wave D (blog: python3 reports/muse_glimmer_poc/blog/build_blog.py, publish as Ar
   as Artifact https://claude.ai/artifact/Jizn9UfL54zENiYaMki6Xf (private). RFC edits: RFC_CHANGES.md (20 findings + 56 audit).
 - Not done / for the community: see data/left_for_community.json (strict CUDA graphs, fused LoRA, TP8 training, Phase B, ...).
   No upstream PR opened (ask the user first; PRs target test-museglimmer; the CI line is kept off the pushed branch).
+- Upstream PR (user: scope = Foundation only): RL-Align/RL-Kernel#558, base test-museglimmer, head
+  ryankert01:feat/museglimmer-foundation (8eee377): the 8 foundation files only (manifest, workload, loader,
+  operator_trace, reference script, fingerprint test + package inits); no CI line. Tests 33 passed with the checkpoint.
