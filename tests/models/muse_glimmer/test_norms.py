@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 RL-Kernel Contributors
 
-"""Muse-Glimmer-30B strict norms (RFC #501 rows normalized_embedding / fused_add_rmsnorm).
+"""Muse-Glimmer-30B strict norms (RFC #501 rows normalized_embedding /
+fused_post_norm_residual_pre_norm).
 
 Contract gates: G1 forward vs fp32/fp64 golden (ws1.json tolerances), G2 batch invariance
 (torch.equal), G4 backward repeat-determinism + allclose vs fp32 autograd, fusion == composition

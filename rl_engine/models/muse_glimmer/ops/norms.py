@@ -3,7 +3,8 @@
 
 """Muse-Glimmer-30B strict norms: fp32 goldens, strict bf16 ops with deterministic backward, trace.
 
-RFC #501 rows ``normalized_embedding`` (contract O1) and ``fused_add_rmsnorm`` (contract O2).
+RFC #501 rows ``normalized_embedding`` (contract O1) and ``fused_post_norm_residual_pre_norm``
+(contract O2).
 
 Public strict interface (bf16 in, bf16 out, fp32 compute, one output cast):
 
@@ -495,17 +496,21 @@ def trace(op: str | None = None, *, hidden: int = HIDDEN) -> dict[str, Any]:
         ),
         "centered_rmsnorm": _op_trace(
             "centered_rmsnorm",
-            "fused_add_rmsnorm",
+            "fused_post_norm_residual_pre_norm",
             "y=xhat*(1+w)",
             hidden,
             {"eps": {"input/pre_feedforward": RMS_NORM_EPS, "post_*": POST_NORM_EPS}},
         ),
         "weighted_rmsnorm": _op_trace(
-            "weighted_rmsnorm", "fused_add_rmsnorm", "y=xhat*w", hidden, {"eps": RMS_NORM_EPS}
+            "weighted_rmsnorm",
+            "fused_post_norm_residual_pre_norm",
+            "y=xhat*w",
+            hidden,
+            {"eps": RMS_NORM_EPS},
         ),
         "residual_add": {
             "op": "residual_add",
-            "rfc_row": "fused_add_rmsnorm",
+            "rfc_row": "fused_post_norm_residual_pre_norm",
             "dtype_in": "bfloat16",
             "dtype_acc": "float32",
             "dtype_out": "bfloat16",
@@ -514,7 +519,7 @@ def trace(op: str | None = None, *, hidden: int = HIDDEN) -> dict[str, Any]:
         },
         "fused_post_norm_residual_pre_norm": _op_trace(
             "fused_post_norm_residual_pre_norm",
-            "fused_add_rmsnorm",
+            "fused_post_norm_residual_pre_norm",
             "post=bf16(bhat*(1+w_post)); r'=bf16(r+post); y=r'hat*(1+w_pre) or r'hat*w_pre",
             hidden,
             {

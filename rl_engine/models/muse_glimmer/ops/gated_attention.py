@@ -3,8 +3,8 @@
 
 """Strict gated attention for Muse-Glimmer-30B — forward wrappers and fp32 golden (O5).
 
-Rows covered: ``global_gated_attention``, ``local_gated_attention_train`` and
-``local_gated_attention_rollout`` of RFC #501. This module owns the FORWARD side only:
+Rows covered: ``global_gated_attention`` and ``local_gated_attention`` of RFC #501. This module
+owns the FORWARD side only:
 
 * :func:`strict_gated_attention_fwd_varlen` — packed (varlen) K/V: training, one-shot and
   chunked prefill.
@@ -624,8 +624,7 @@ def trace() -> dict[str, Any]:
         "op": "gated_attention",
         "rows": [
             "global_gated_attention",
-            "local_gated_attention_train",
-            "local_gated_attention_rollout",
+            "local_gated_attention",
         ],
         "dtype_in": "bf16",
         "dtype_acc": "fp32",

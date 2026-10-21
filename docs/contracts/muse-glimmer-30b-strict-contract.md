@@ -39,7 +39,7 @@ eps = rms_norm_eps; → bf16. No weight, no sqrt(H) scaling.
 Backward: dE[token] rows via sorted-segment accumulation (reuse repo canonical embedding backward);
 the norm VJP is row-local fp32.
 
-### O2 `centered_rmsnorm` / `fused_post_norm_residual_pre_norm`  (row: fused_post_norm_residual_pre_norm; RFC name fused_add_rmsnorm)
+### O2 `centered_rmsnorm` / `fused_post_norm_residual_pre_norm`  (row: fused_post_norm_residual_pre_norm)
 Decoder layer has four norms: input (eps=1e-5), post_attention (eps=1e-8), pre_feedforward
 (eps=1e-5), post_feedforward (eps=1e-8); all are centered: y = x̂ * (1 + w), x̂ = x * rsqrt(mean(x²)+eps),
 computed in fp32 (x→fp32, w→fp32), → bf16. Residual stream r is kept in bf16 (as HF does):
@@ -79,7 +79,7 @@ once by a fixed fp32 torch-CUDA function, cached, identical object on both runti
 rotation in fp32. → bf16 once at the end. Global layers: no rotation, same norm/scale.
 Backward: row-local fp32 VJP (rotation is orthogonal; norm VJP standard).
 
-### O5 `gated_attention`  (rows: global_gated_attention, local_gated_attention_train/rollout)
+### O5 `gated_attention`  (rows: global_gated_attention, local_gated_attention)
 Inputs q̂ (bf16, from O4), K, V (bf16, from O4/O3), gate pre-activation g = attn_gate GEMM output
 (bf16, H_Q×128 channels, from O3 on the input_layernorm output). Softmax scale s = 128^(-1/2) (fp32).
 Mask: global layer: k_pos ≤ q_pos. Local layer: q_pos − W < k_pos ≤ q_pos (W=2048 keys incl. self).

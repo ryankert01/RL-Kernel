@@ -2,7 +2,7 @@
 # Copyright (c) 2026 RL-Kernel Contributors
 """Deterministic Triton backward for the Muse-Glimmer gated GQA attention (contract O5).
 
-Rows: ``global_gated_attention`` (full causal) and ``local_gated_attention_train``
+Rows: ``global_gated_attention`` (full causal) and ``local_gated_attention``
 (sliding window W=2048). Forward semantics (sibling kernel ``gated_attention_fwd``):
 
     s_ij = (q_i . k_j) * 128^-0.5      masked to -inf outside the causal / window mask

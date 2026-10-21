@@ -2,7 +2,8 @@
 # Copyright (c) 2026 RL-Kernel Contributors
 
 """Triton kernels for the Muse-Glimmer-30B strict norms (RFC #501 rows ``normalized_embedding``
-and ``fused_add_rmsnorm``; contract O1/O2 in docs/contracts/muse-glimmer-30b-strict-contract.md).
+and ``fused_post_norm_residual_pre_norm``; contract O1/O2 in
+docs/contracts/muse-glimmer-30b-strict-contract.md).
 
 Shared row arithmetic (every kernel in this file, forward and backward):
 

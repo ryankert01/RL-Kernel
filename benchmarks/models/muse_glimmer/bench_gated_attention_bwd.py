@@ -61,7 +61,7 @@ def main() -> None:
     pos = torch.arange(length, dtype=torch.int32, device=dev)
 
     rows = []
-    for name, window in (("global_gated_attention", None), ("local_gated_attention_train", 2048)):
+    for name, window in (("global_gated_attention", None), ("local_gated_attention", 2048)):
         t0 = time.time()
         _y, o, lse = gold.golden_forward_fixed_order(q, k, v, gate, cu, cu, pos, window=window)
         torch.cuda.synchronize()

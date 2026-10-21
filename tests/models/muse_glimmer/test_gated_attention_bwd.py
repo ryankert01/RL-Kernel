@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 RL-Kernel Contributors
 """Contract gates for the strict Muse-Glimmer gated attention backward (O5, rows
-``global_gated_attention`` / ``local_gated_attention_train``).
+``global_gated_attention`` / ``local_gated_attention``).
 
 G4  deterministic repeat (torch.equal) and accuracy vs the FP64 autograd reference;
 G2  batch invariance of dq/dgate rows and of dk/dv (alone vs packed, several positions);
